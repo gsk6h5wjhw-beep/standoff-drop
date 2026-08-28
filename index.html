@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Standoff Drop</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#07090d;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,sans-serif}
+.wrap{max-width:820px;margin:auto;padding:16px 14px 42px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.logo{font-size:21px;font-weight:950;letter-spacing:-1px}.logo span{color:#8dff58}.balance{background:#11161d;border:1px solid #252d38;padding:9px 12px;border-radius:12px;font-weight:850;font-size:13px}
+h2{font-size:20px;margin:0 0 10px}.case-row{display:flex;gap:10px;overflow-x:auto;padding:2px 1px 12px}
+.case-card{min-width:205px;background:#10141b;border:1px solid #222a35;border-radius:18px;padding:10px;cursor:pointer;transition:.2s}
+.case-card.active{border-color:#8dff58;box-shadow:0 0 22px #8dff5815}.case-card img{width:100%;height:100px;object-fit:contain;display:block}.case-card b{font-size:15px}.case-card small{display:block;color:#77818e;margin-top:3px}
+.hero{margin-top:8px;border:1px solid #263028;background:linear-gradient(145deg,#111711,#0c0f14);border-radius:26px;padding:20px 14px 18px;text-align:center;box-shadow:0 18px 60px #0008}
+.badge{display:inline-block;color:#9cff70;background:#8dff5812;border:1px solid #8dff583d;border-radius:999px;padding:6px 10px;font-size:10px;font-weight:900}
+h1{font-size:34px;margin:12px 0 2px;letter-spacing:-1.8px}.sub{color:#8993a2;font-size:13px;margin-bottom:5px}
+.case-img{width:270px;height:180px;margin:0 auto 5px;display:flex;align-items:center;justify-content:center}.case-img img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 18px 18px #0009);transition:.35s}.case-img.open img{transform:scale(1.06) rotate(-2deg);filter:drop-shadow(0 0 28px #ff6a2044)}
+button{border:0;width:100%;padding:15px;border-radius:14px;background:#8dff58;color:#071007;font-size:15px;font-weight:950;cursor:pointer}button:active{transform:scale(.985)}
+.result{display:none;margin-top:12px;padding:14px;border-radius:15px;background:#0b120d;border:1px solid #8dff5855}.result .rar{font-size:10px;font-weight:950;text-transform:uppercase}.result b{display:block;font-size:20px;margin-top:3px}.result small{color:#9aa3b0}
+.section{margin-top:22px}.sectionhead{display:flex;justify-content:space-between;align-items:end;margin-bottom:10px}.count{font-size:11px;color:#727b89}
+.rail{display:flex;gap:10px;overflow-x:auto;padding:3px 2px 12px;scroll-snap-type:x mandatory}.card{min-width:166px;scroll-snap-align:start;background:#10141b;border:1px solid #222a35;border-radius:16px;padding:10px;position:relative;overflow:hidden}.card:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--r)}
+.skinpic{height:82px;display:flex;align-items:center;justify-content:center;background:#0b0e13;border-radius:11px;margin-bottom:9px}.skinpic img{max-width:100%;max-height:74px;object-fit:contain}.rarity{font-size:9px;text-transform:uppercase;font-weight:950;color:var(--r)}.skinname{font-weight:850;font-size:14px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.price{font-size:11px;color:#7f8997;margin-top:4px}
+.note{text-align:center;color:#59616e;font-size:10px;line-height:1.4;margin:18px 8px}
+</style></head>
+<body><div class="wrap">
+<div class="top"><div class="logo">STANDOFF <span>DROP</span></div><div class="balance">🪙 10 000</div></div>
+<h2>Кейсы</h2><div id="cases" class="case-row"></div>
+<section class="hero"><div class="badge">DEMO • БЕЗ РЕАЛЬНЫХ ДЕНЕГ</div><h1 id="title"></h1><div class="sub" id="subtitle"></div>
+<div id="caseImg" class="case-img"><img id="heroImg" src="" alt=""></div><button onclick="openCase()">ОТКРЫТЬ КЕЙС</button><div id="result" class="result"></div></section>
+<section class="section"><div class="sectionhead"><h2>В кейсе</h2><div class="count" id="count"></div></div><div id="rail" class="rail"></div></section>
+<div class="note">Учебный прототип Standoff Drop. Баланс и предметы виртуальные. Состав Furious сверялся с актуальными справочными данными. cite не является частью сайта.</div>
+</div>
+<script>
+const DATA={"Origin": {"title": "Origin Case", "img": "https://www.standoff-case.guru/assets/cases/id_192.webp", "items": [["M9 Bayonet", "Dragon Glass", "Arcane", "https://www.standoff-case.guru/assets/items/17.webp", "31 000"], ["M9 Bayonet", "Universe", "Arcane", "https://www.standoff-case.guru/assets/items/15.webp", "16 500"], ["M9 Bayonet", "Scratch", "Arcane", "https://www.standoff-case.guru/assets/items/14.webp", "15 400"], ["AKR", "Treasure Hunter", "Arcane", "https://www.standoff-case.guru/assets/items/1044.webp", "6 250"], ["M9 Bayonet", "Ancient", "Arcane", "https://www.standoff-case.guru/assets/items/16.webp", "5 900"], ["G22", "Nest", "Arcane", "https://www.standoff-case.guru/assets/items/1040.webp", "899"], ["AKR12", "Railgun", "Legendary", "https://www.standoff-case.guru/assets/items/1042.webp", "635"], ["M4", "Necromancer", "Legendary", "https://www.standoff-case.guru/assets/items/1041.webp", "584"], ["M16", "Winged", "Legendary", "https://www.standoff-case.guru/assets/items/1039.webp", "485"], ["P90", "Ghoul", "Epic", "https://www.standoff-case.guru/assets/items/1038.webp", "81"], ["P350", "Neon", "Epic", "https://www.standoff-case.guru/assets/items/1043.webp", "77"], ["UMP45", "Cyberpunk", "Epic", "https://www.standoff-case.guru/assets/items/1036.webp", "76"], ["SM1014", "Pathfinder", "Rare", "https://www.standoff-case.guru/assets/items/1037.webp", "24"], ["AWM", "Phoenix", "Rare", "https://www.standoff-case.guru/assets/items/1038.webp", "21"], ["AKR12", "Pixel Camouflage", "Rare", "https://www.standoff-case.guru/assets/items/1042.webp", "20"], ["Deagle", "Predator", "Rare", "https://www.standoff-case.guru/assets/items/1065.webp", "5"]]}, "Furious": {"title": "Furious Case", "img": "https://www.standoff-case.guru/assets/cases/id_193.webp", "items": [["Karambit", "Claw", "Arcane", "https://www.standoff-case.guru/assets/items/29.webp", "7 700"], ["Karambit", "Dragon Glass", "Arcane", "https://www.standoff-case.guru/assets/items/30.webp", "4 750"], ["Karambit", "Universe", "Arcane", "https://www.standoff-case.guru/assets/items/28.webp", "4 300"], ["Karambit", "Scratch", "Arcane", "https://www.standoff-case.guru/assets/items/31.webp", "3 400"], ["FAMAS", "Fury", "Arcane", "https://www.standoff-case.guru/assets/items/1052.webp", "419"], ["P350", "Forest Spirit", "Arcane", "https://www.standoff-case.guru/assets/items/26.webp", "380"], ["SM1014", "Necromancer", "Legendary", "https://www.standoff-case.guru/assets/items/1125.webp", "115"], ["AKR", "Sport", "Epic", "https://www.standoff-case.guru/assets/items/1049.webp", "62"], ["AWM", "Gear", "Legendary", "https://www.standoff-case.guru/assets/items/1051.webp", "47"], ["UMP45", "Winged", "Legendary", "https://www.standoff-case.guru/assets/items/1050.webp", "40"], ["FAMAS", "Beagle", "Epic", "https://www.standoff-case.guru/assets/items/1048.webp", "5"], ["M40", "Quake", "Epic", "https://www.standoff-case.guru/assets/items/1047.webp", "4"], ["M4", "PRO", "Rare", "https://www.standoff-case.guru/assets/items/1045.webp", "2"], ["AWM", "Scratch", "Rare", "https://www.standoff-case.guru/assets/items/1046.webp", "2"], ["Desert Eagle", "Red Dragon", "Rare", "https://www.standoff-case.guru/assets/items/1035.webp", "1.5"], ["UMP45", "Shark", "Rare", "https://www.standoff-case.guru/assets/items/1064.webp", "1"]]}};
+const COLORS={Arcane:'#ff3b3b',Legendary:'#ffd43b',Epic:'#b65cff',Rare:'#4b9dff',Uncommon:'#55d47a',Common:'#b9c1cb'};
+let current='Origin';
+const cases=document.getElementById('cases');
+Object.entries(DATA).forEach(([key,c],i)=>{
+ cases.insertAdjacentHTML('beforeend',`<div class="case-card ${i===0?'active':''}" data-key="${key}" onclick="selectCase('${key}')"><img src="${c.img}" alt="${c.title}"><b>${c.title}</b><small>${c.items.length} предметов</small></div>`);
+});
+function selectCase(key){
+ current=key;document.querySelectorAll('.case-card').forEach(x=>x.classList.toggle('active',x.dataset.key===key));
+ const c=DATA[key];document.getElementById('title').textContent=c.title;document.getElementById('subtitle').textContent=`${c.items.length} предметов • только виртуальный дроп`;
+ document.getElementById('heroImg').src=c.img;document.getElementById('heroImg').alt=c.title;document.getElementById('count').textContent=`${c.items.length} предметов`;
+ const rail=document.getElementById('rail');rail.innerHTML='';
+ c.items.forEach(s=>rail.insertAdjacentHTML('beforeend',`<div class="card" style="--r:${COLORS[s[2]]||'#fff'}"><div class="skinpic"><img src="${s[3]}" alt="${s[0]} ${s[1]}"></div><div class="rarity">${s[2]}</div><div class="skinname">${s[0]} «${s[1]}»</div><div class="price">${s[4]} 🪙</div></div>`));
+ document.getElementById('result').style.display='none';
+}
+function openCase(){
+ const box=document.getElementById('caseImg'),r=document.getElementById('result');box.classList.remove('open');void box.offsetWidth;box.classList.add('open');r.style.display='none';
+ setTimeout(()=>{
+  const pool=DATA[current].items.filter(s=>s[2]!=='Arcane');
+  const arc=DATA[current].items.filter(s=>s[2]==='Arcane');
+  let weighted=[]; pool.forEach(s=>{let n=s[2]==='Rare'?53:s[2]==='Epic'?30:15;for(let i=0;i<n;i++)weighted.push(s)});
+  arc.forEach(s=>{for(let i=0;i<2;i++)weighted.push(s)});
+  const s=weighted[Math.floor(Math.random()*weighted.length)];
+  r.innerHTML=`<div class="rar" style="color:${COLORS[s[2]]}">${s[2]}</div><b>${s[0]} «${s[1]}»</b><small>${s[4]} 🪙 • предмет получен</small>`;r.style.display='block';
+ },650);
+}
+selectCase('Origin');
+</script></body></html>
