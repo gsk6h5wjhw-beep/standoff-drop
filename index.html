@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b12">
+<title>Standoff Drop</title>
+<style>
+:root{--bg:#070910;--panel:#0e1220;--panel2:#151a2b;--line:#252b40;--text:#f4f6ff;--muted:#8d95ad;--accent:#8b5cf6;--accent2:#22d3ee;--good:#35e29a;--danger:#ff5577;--gold:#ffd166}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -10%,#27204a 0,#0b0d17 32%,#070910 70%);color:var(--text);font:14px Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button{font:inherit;color:inherit;border:0;cursor:pointer}.app{min-height:100vh}.top{height:66px;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;padding:0 18px;background:rgba(7,9,16,.82);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}.logo{font-weight:900;font-size:20px;letter-spacing:-.5px}.logo b{color:var(--accent2)}.nav{display:flex;gap:6px}.nav button,.iconbtn{background:transparent;padding:10px 12px;border-radius:10px;color:var(--muted)}.nav button.active,.nav button:hover,.iconbtn:hover{background:var(--panel2);color:#fff}.grow{flex:1}.balance{background:var(--panel2);border:1px solid var(--line);padding:9px 12px;border-radius:11px}.login{background:linear-gradient(135deg,var(--accent),#5b7cff);padding:10px 15px;border-radius:11px;font-weight:800}.page{max-width:1240px;margin:auto;padding:22px 18px 90px}.hero{display:grid;grid-template-columns:1.3fr .7fr;gap:18px;margin-bottom:22px}.heroCard,.panel{background:linear-gradient(145deg,rgba(20,24,40,.96),rgba(10,13,23,.96));border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 60px rgba(0,0,0,.24)}.heroCard{padding:26px;min-height:210px;position:relative;overflow:hidden}.heroCard:after{content:"";position:absolute;width:260px;height:260px;right:-70px;top:-90px;background:radial-gradient(circle,#7c3aed66,transparent 65%)}h1{font-size:38px;margin:0 0 8px;letter-spacing:-1.5px}.sub{color:var(--muted);max-width:600px;line-height:1.55}.cta{margin-top:18px;background:linear-gradient(135deg,#8b5cf6,#4f8cff);padding:12px 18px;border-radius:12px;font-weight:900}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}.stat{background:#0a0d16;border:1px solid var(--line);border-radius:12px;padding:12px}.stat strong{display:block;font-size:18px}.stat span{color:var(--muted);font-size:11px}.wallet{padding:20px}.wallet h3{margin:0 0 16px}.wallet .big{font-size:34px;font-weight:900}.mini{color:var(--good);font-size:12px}.sectionHead{display:flex;align-items:center;justify-content:space-between;margin:22px 0 12px}.sectionHead h2{margin:0;font-size:21px}.tabs{display:flex;gap:7px;overflow:auto;padding-bottom:4px}.tab{white-space:nowrap;padding:9px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--muted)}.tab.active{color:#fff;border-color:#6f54bb;background:#1a1730}.cases{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.case{padding:12px;background:linear-gradient(145deg,#151a2a,#0d111d);border:1px solid var(--line);border-radius:15px;transition:.2s}.case:hover{transform:translateY(-3px);border-color:#55448d}.art{height:120px;border-radius:11px;background:radial-gradient(circle at 60% 35%,#8b5cf655,transparent 30%),linear-gradient(145deg,#252b48,#0c0f19);display:flex;align-items:center;justify-content:center;font-size:42px;margin-bottom:10px}.case .name{font-weight:800}.price{display:flex;justify-content:space-between;align-items:center;margin-top:8px;color:var(--gold)}.open{background:#222a42;border-radius:8px;padding:7px 9px;color:#fff}.games{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}.game{padding:15px;border:1px solid var(--line);background:var(--panel);border-radius:14px;text-align:center}.game b{display:block;margin-bottom:5px}.game span{font-size:11px;color:var(--muted)}.view{display:none}.view.active{display:block}.gameView{max-width:900px;margin:auto}.gameTitle{display:flex;align-items:center;gap:10px}.back{background:var(--panel2);padding:9px 12px;border-radius:10px}.gameBox{padding:20px;margin-top:15px}.roulette,.upgradeArea,.ladder,.mines{min-height:360px;display:flex;align-items:center;justify-content:center}.reel{display:flex;gap:10px;overflow:hidden}.item{width:145px;height:110px;background:#171c2d;border:1px solid var(--line);border-radius:12px;display:grid;place-items:center;font-weight:800}.upgradeGrid{display:grid;grid-template-columns:1fr 120px 1fr;gap:16px;align-items:center;width:100%}.slot{height:170px;border:1px dashed #4a5270;border-radius:15px;display:grid;place-items:center;background:#0a0d16}.arrow{font-size:28px;color:var(--accent2)}.form{display:grid;gap:10px;margin-top:15px}.input{background:#090c15;border:1px solid var(--line);padding:12px;border-radius:10px;color:#fff}.action{background:linear-gradient(135deg,var(--accent),#4f8cff);padding:12px;border-radius:11px;font-weight:900}.ladderGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;width:100%}.step{aspect-ratio:1;border:1px solid var(--line);background:#121727;border-radius:10px;display:grid;place-items:center;color:var(--muted)}.step.win{border-color:#267f66;background:#113026;color:var(--good)}.step.current{border-color:#8b5cf6;box-shadow:0 0 25px #8b5cf633;color:#fff}.mineGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:min(520px,100%)}.mine{aspect-ratio:1;background:#151a2b;border:1px solid var(--line);border-radius:10px;font-size:20px}.mine.safe{background:#123428;border-color:#267f66}.mine.boom{background:#421b29;border-color:#ff5577}.chat{position:fixed;right:18px;bottom:18px;z-index:30}.chatBtn{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4f8cff);font-weight:900;box-shadow:0 10px 35px #0008}.chatBox{display:none;position:absolute;right:0;bottom:66px;width:320px;background:#0d111d;border:1px solid var(--line);border-radius:15px;overflow:hidden;box-shadow:0 20px 60px #0009}.chatBox.open{display:block}.chatHead{padding:13px;border-bottom:1px solid var(--line);font-weight:800}.msgs{height:260px;overflow:auto;padding:12px}.msg{padding:8px 10px;background:#171c2d;border-radius:10px;margin-bottom:7px}.msg small{display:block;color:var(--muted);margin-bottom:3px}.chatInput{display:flex;border-top:1px solid var(--line)}.chatInput input{flex:1;background:transparent;border:0;padding:12px;color:#fff;outline:0}.chatInput button{padding:12px;background:#171c2d}.modal{position:fixed;inset:0;background:#0009;display:none;place-items:center;z-index:50;padding:18px}.modal.open{display:grid}.modalCard{width:min(460px,100%);background:#0e1220;border:1px solid var(--line);border-radius:18px;padding:20px}.close{float:right;background:#1a1f30;padding:7px 10px;border-radius:8px}.toast{position:fixed;left:50%;bottom:25px;transform:translateX(-50%);background:#161b2b;border:1px solid var(--line);padding:11px 15px;border-radius:10px;display:none;z-index:80}.toast.show{display:block}@media(max-width:900px){.nav{display:none}.hero{grid-template-columns:1fr}.cases{grid-template-columns:repeat(2,1fr)}.games{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr}.upgradeGrid{grid-template-columns:1fr}.ladderGrid{grid-template-columns:repeat(4,1fr)}h1{font-size:31px}.top{padding:0 12px}.page{padding:15px 12px 80px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <div class="logo">STANDOFF <b>DROP</b></div>
+  <nav class="nav">
+    <button class="active" data-view="home">Кейсы</button><button data-view="games">Игры</button><button data-view="inventory">Инвентарь</button>
+  </nav>
+  <div class="grow"></div><div class="balance">💎 <span id="balance">1 250</span> G</div><button class="login" onclick="openModal('login')">Войти</button>
+</header>
+
+<main class="page">
+<section id="home" class="view active">
+  <div class="hero">
+    <div class="heroCard"><h1>Открывай. Улучшай. Забирай.</h1><div class="sub">Standoff Drop — оригинальный демо-интерфейс для кейсов и мини-игр. Все ставки здесь виртуальные: реальные платежи и выводы отключены.</div><button class="cta" onclick="scrollToCases()">Открыть кейс</button><div class="stats"><div class="stat"><strong>9 240+</strong><span>игроков онлайн</span></div><div class="stat"><strong>184 000+</strong><span>открытий</span></div><div class="stat"><strong>42 700+</strong><span>игр</span></div></div></div>
+    <div class="panel wallet"><h3>Твой баланс</h3><div class="big">💎 <span id="balance2">1 250</span> G</div><div class="mini">+250 G демо-бонус</div><button class="action" style="width:100%;margin-top:18px" onclick="openModal('deposit')">Пополнить демо-баланс</button></div>
+  </div>
+  <div class="sectionHead"><h2 id="casesTitle">Кейсы</h2><div class="tabs" id="caseTabs"></div></div>
+  <div class="cases" id="cases"></div>
+  <div class="sectionHead"><h2>Мини-игры</h2></div><div class="games" id="gameCards"></div>
+</section>
+
+<section id="games" class="view">
+  <div class="gameView"><div class="gameTitle"><button class="back" onclick="showView('home')">←</button><div><h2 style="margin:0">Мини-игры</h2><span class="sub">Виртуальные ставки</span></div></div><div id="gamePanel" class="panel gameBox"></div></div>
+</section>
+
+<section id="inventory" class="view">
+  <div class="sectionHead"><h2>Инвентарь</h2><button class="action" onclick="sellAll()">Продать всё</button></div>
+  <div class="cases" id="inventoryList"></div>
+</section>
+</main>
+
+<div class="chat">
+ <div class="chatBox" id="chatBox"><div class="chatHead">💬 Чат Standoff Drop</div><div class="msgs" id="msgs"><div class="msg"><small>DropBot</small>Добро пожаловать! Здесь только демо-баланс.</div><div class="msg"><small>nex_1137</small>Кто сегодня апает нож?</div><div class="msg"><small>Shadow</small>Я иду в лесенку 😈</div></div><div class="chatInput"><input id="chatInput" placeholder="Сообщение..."><button onclick="sendChat()">➤</button></div></div>
+ <button class="chatBtn" onclick="document.getElementById('chatBox').classList.toggle('open')">💬</button>
+</div>
+
+<div class="modal" id="modal"><div class="modalCard"><button class="close" onclick="closeModal()">✕</button><div id="modalContent"></div></div></div>
+<div class="toast" id="toast"></div>
+<script>
+const cases=[
+["Проклятый остров",19],["Райское извержение",19],["Розовый оазис",39],["Гавайский отдых",59],["Ядовитая флора",99],["Тропическое наслаждение",199],["Гнев тики",399],["Проклятый тотем",699],["Кахуна'ра",1499],
+["Сладкая серия: Twix",65],["Snickers",70],["Bounty",75],["KitKat",135],
+["Sparkling Gaze",39],["Northern Lights",99],["Pink Shot",159],["Wavesong",219],["Vermillion",279],["Hanami",339],["Ronin",399],["Amber koi",459],
+["Секретарша",99],["Стюардесса",99],["Официантка",99],["Стримерша",99],
+["Support",5],["Lurker",10],["Entry Fragger",15],["Captain",25],
+["Деревня",9],["Лаборатория",19],["Sakura",29],["Rust",39],["Dune",39],["Zone 9",44],["Province",55],["Sandstone",59],["ARENA",64],["ZONE 7",79],["BREEZ",84],["TRAINING OUTSIDE",99],["LAKESIDE",105],["CALYPSO",119],
+["Sharp",150],["Scorpion",150],["Revenge",190],["Empire",240],["Rival",330],["Fable",400],["Возрождение",1000],["Furious",1400],["Project Z9",6600],
+["Супер эконом",1],["Эконом",2],["Всё или ничего",10],["AKR vs M4",179],["Ножевой",2600],["Запретный",5000],
+["Серебро",500],["Золото",1000],["Платина",2500],["Рубин",5000],["Бриллиант",10000],
+["Сёмга",30],["Поплавок",30],["Стекловата",30],["Черемша",30],
+["Культурный отдых",28],["Первая любовь",32],["Три полоски",36],["Темка",40],
+["САМСА",33],["ПЛОВ",53],["МАНТЫ",83],["ТАНДЫР",163],
+["Сын маминой подруги",99],["Базовый минимум",199],["Че так дорого?!",299],["Биткоин",399],
+["Hamster",9],["Курица",24],["Шашлык",35],["Скуф",42],["Альтушка",69],["Патрики",299],["Mercedes CLS",666],["BMW M5",777],
+["En1gmatik",69],["Black Sky",69],["TicTac",69],["Aboven",69],["RAPEN",69],["Сайлес",69],["Kent.apk",69],["Папа Гриб",69],["BERSER_NT",69],
+["BMW M3",1000],["Cybertruck",1500],["Supra FF",2000],["Dodge FF",2500],["Nissan FF2",3000],["G63",3500],["Ferrari",4000],["Lamborghini",5000],
+["Дикий Огурец",19],["Чилловый парень",19],["Я и мой бро",23],["СКЕБОБ",23],["БУ",27],["Ок, Джарвис",27],["Покой в богатстве",32],["Отцовский менталитет",32],
+["Сапфир",1000],["Рубин",3000],["Изумруд",5000],["Эферион",7000],
+["Неймар",400],["Мбаппе",425],["Месси",475],["Роналдо",475],["Зидан",500],["Яшин",525],["Марадона",575],["Пеле",600],
+["Тайлер Дерден",15],["Райан Гослинг",35],["Капитан Джек Воробей",55],["Скала",75],["Джон Уик",95],["Доминик Торетто",115],["Волтер Вайт",135],["Ди Каприо",155],
+["Нейтронная звезда",27],["Чёрная дыра",37],["Туманность",67],["Тёмная материя",87],
+["Эльфийка",139],["Невинность",139],["Чулочная служба",139],["Бикини",139],["Загадка хозяйки",219],["Нежное утро",219],["Ножки",219],
+["Нуба",25],["Токсик",69],["Читер",149],["Киберспортсмен",279],
+["Мэгуми Фусигуро",59],["Макима",59],["Химмель",59],["Танджиро",59],["Тетрадь смерти",99],["JOJO",99],["Почита",99],["1000-7",99],
+["Mr Beast",19],["Ye",39],["Дональд Трамп",69],["Илон Маск",99],
+["Синий",29],["Зелёный",39],["Красный",79],["Чёрный",89],
+["Бронзовый бык",17],["Серебряный бык",49],["Золотой бык",169],["Платиновый бык",599],
+["Доктор Ливси",9],["Сигма",9],["Скам",9],["Томас Шелби",9],["Бархатные Тяги",14],["Болото",14],["Доге",14],["Майк Вазовски",14],
+["Проклятый дублон",99],["Русалки",129],["Райский остров",249],["Сокровища ветерана",349],["Кракен",549],["Легенда морей",649],["Корабль призрак",777],["Сундук Капитана Быка",999],
+["Вода",4],["Воздух",7],["Земля",12],["Огонь",13]
+];
+const categories=["Все","Проклятый остров","Сладкая серия","Японский стиль","Милые Дамы","Роли","Карты","Classic","Выбор Игроков","Особенная коллекция","Не спеша","Пацанский кодекс","Вкусы Азии","Это База","Кенты","Короли дорог","Актуальное","Камни превосходства","Футбол","Кино","Космос","Тяночки","Скилл","Аниме","Легенды","Цвета","Быки","хи-хи ха-ха","Остров сокровищ","Стихии"];
+let currentCat="Все", bal=1250, inv=[];
+function money(n){return n.toLocaleString("ru-RU")}
+function renderTabs(){document.getElementById("caseTabs").innerHTML=categories.map(c=>`<button class="tab ${c===currentCat?'active':''}" onclick="setCat('${c.replaceAll("'","\\'")}')">${c}</button>`).join("")}
+function renderCases(){
+ let arr=cases;
+ if(currentCat!=="Все"){let key=currentCat.toLowerCase();arr=cases.filter(x=>x[0].toLowerCase().includes(key.replace("стиль","").replace("коллекция","").replace("игроков","").replace("рол","").replace("футбол","").replace("кино","").replace("космос","").replace("кентов","")));}
+ document.getElementById("cases").innerHTML=arr.slice(0,80).map((c,i)=>`<div class="case"><div class="art">${["🔪","⚡","☄️","🦂","🌙","💠"][i%6]}</div><div class="name">${c[0]}</div><div class="price"><span>💎 ${money(c[1])}</span><button class="open" onclick="openCase('${c[0].replaceAll("'","\\'")}',${c[1]})">Открыть</button></div></div>`).join("");
+}
+function setCat(c){currentCat=c;renderTabs();renderCases()}
+function scrollToCases(){document.getElementById("casesTitle").scrollIntoView({behavior:"smooth"})}
+function showView(id){document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));document.getElementById(id).classList.add("active");if(id==="games")renderGameMenu();if(id==="inventory")renderInventory();window.scrollTo({top:0,behavior:"smooth"})}
+document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>showView(b.dataset.view));
+function sync(){document.getElementById("balance").textContent=money(bal);document.getElementById("balance2").textContent=money(bal)}
+function toast(t){let x=document.getElementById("toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2200)}
+function openCase(name,cost){
+ if(bal<cost){toast("Недостаточно демо-G");return}
+ bal-=cost;sync();
+ const skins=["AKR12 «Geometric»","M4 «Samurai»","P90 «Revenant»","F/S «Demonic Fog»","Desert Eagle «Dragon Glass»","Sticker «Thunderbolt Gold»","Kunai «Cold Flame»","Karambit «Universe»"];
+ const won=skins[Math.floor(Math.random()*skins.length)];
+ inv.push(won);renderInventory();
+ openModal("case",`<h2>Кейс «${name}»</h2><div class="slot" style="margin:18px 0;font-size:20px">✨ ${won}</div><button class="action" style="width:100%" onclick="closeModal()">Забрать в инвентарь</button>`);
+}
+function renderGameMenu(){document.getElementById("gamePanel").innerHTML=`<div class="games">${["Апгрейд","Сапёр","Лесенка","Башня","Колесо","Рулетка","Краш","Контракты"].map(x=>`<button class="game" onclick="launchGame('${x}')"><b>${x}</b><span>Открыть режим</span></button>`).join("")}</div>`}
+function launchGame(name){
+ let body="";
+ if(name==="Апгрейд") body=`<h2>Апгрейд</h2><p class="sub">Выбери предмет и цель. Шанс рассчитывается локально для демо.</p><div class="upgradeArea"><div class="upgradeGrid"><div class="slot">🔪<br>Твой предмет</div><div class="arrow">→</div><div class="slot">💎<br>Цель</div></div></div><div class="form"><input class="input" id="upBet" value="100" type="number"><button class="action" onclick="doUpgrade()">Апгрейд</button></div>`;
+ else if(name==="Сапёр") body=`<h2>Сапёр</h2><p class="sub">Открой безопасные клетки. Бомбы генерируются случайно для этой сессии.</p><div class="mines" id="mineArea"><div class="mineGrid">${Array.from({length:25},(_,i)=>`<button class="mine" onclick="mineClick(this)">?</button>`).join("")}</div></div><div class="form"><input class="input" id="mineBet" value="50" type="number"></div>`;
+ else if(name==="Лесенка") body=`<h2>Лесенка</h2><p class="sub">Поднимайся по уровням и забирай выигрыш в любой момент.</p><div class="ladder"><div class="ladderGrid">${Array.from({length:24},(_,i)=>`<button class="step ${i===0?'current':''}" onclick="ladderStep(this,${i})">${i+1}</button>`).join("")}</div></div><button class="action" style="width:100%" onclick="toast('Выигрыш забран')">Забрать выигрыш</button>`;
+ else body=`<h2>${name}</h2><div class="roulette"><div class="item">🎲 Случайный результат</div></div><div class="form"><input class="input" id="genericBet" value="50" type="number"><button class="action" onclick="genericGame('${name}')">Играть</button></div>`;
+ document.getElementById("gamePanel").innerHTML=body;
+}
+function spend(n){n=Number(n);if(!n||n<1||bal<n){toast("Недостаточно демо-G");return false}bal-=n;sync();return true}
+function doUpgrade(){let n=document.getElementById("upBet").value;if(!spend(n))return;toast(Math.random()<.45?"Апгрейд успешен! ×1.8":"Апгрейд не удался");if(Math.random()<.45){bal+=Math.floor(n*1.8);sync()}}
+function mineClick(el){if(el.dataset.done)return;el.dataset.done=1;if(Math.random()<.18){el.classList.add("boom");el.textContent="💥";toast("Мина! Раунд завершён")}else{el.classList.add("safe");el.textContent="💎";toast("Безопасно! Множитель вырос")}}
+function ladderStep(el,i){document.querySelectorAll(".step").forEach((x,j)=>{if(j<=i)x.classList.add("win")});el.classList.add("current");toast("Уровень "+(i+1)+" пройден")}
+function genericGame(name){let n=document.getElementById("genericBet").value;if(!spend(n))return;let win=Math.random()<.48;if(win){let prize=Math.floor(n*(1.2+Math.random()*2.8));bal+=prize;sync();toast(name+": выигрыш "+money(prize)+" G")}else toast(name+": ставка проиграна")}
+function renderInventory(){document.getElementById("inventoryList").innerHTML=inv.length?inv.map((x,i)=>`<div class="case"><div class="art">🔪</div><div class="name">${x}</div><div class="price"><span>Предмет #${i+1}</span><button class="open" onclick="sellItem(${i})">Продать</button></div></div>`).join(""):`<div class="panel" style="grid-column:1/-1;padding:35px;text-align:center;color:var(--muted)">Инвентарь пуст. Открой кейс выше.</div>`}
+function sellItem(i){bal+=120;inv.splice(i,1);sync();renderInventory();toast("Предмет продан за 120 G")}
+function sellAll(){if(!inv.length)return toast("Инвентарь пуст");bal+=inv.length*120;inv=[];sync();renderInventory();toast("Все предметы проданы")}
+function openModal(type,extra){
+ let c=document.getElementById("modalContent");
+ if(type==="login")c=`<h2>Вход</h2><p class="sub">Демо-режим: аккаунт не создаётся.</p><div class="form"><input class="input" placeholder="Никнейм"><button class="action" onclick="closeModal();toast('Демо-вход выполнен')">Войти</button></div>`;
+ else if(type==="deposit")c=`<h2>Пополнение</h2><p class="sub">Реальные платежи отключены. Добавь виртуальные G для тестирования интерфейса.</p><button class="action" style="width:100%;margin-top:15px" onclick="bal+=1000;sync();closeModal();toast('+1000 G')">Добавить 1000 G</button>`;
+ else c=extra;
+ document.getElementById("modal").classList.add("open")
+}
+function closeModal(){document.getElementById("modal").classList.remove("open")}
+function sendChat(){let i=document.getElementById("chatInput"),t=i.value.trim();if(!t)return;document.getElementById("msgs").insertAdjacentHTML("beforeend",`<div class="msg"><small>Ты</small>${t.replaceAll("<","&lt;")}</div>`);i.value=""}
+renderTabs();renderCases();renderGameMenu();sync();
+</script>
+</div>
+</body>
+</html>
