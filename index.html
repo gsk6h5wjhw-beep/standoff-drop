@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RbxBox — фан-сайт</title>
+<style>
+:root{--bg:#0b0d10;--card:#15191e;--card2:#1b2026;--text:#f4f6f8;--muted:#9ba4ad;--green:#19d36b;--green2:#0da950;--line:#293039;--red:#ff5d68}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -10%,#202831 0,#0b0d10 48%);color:var(--text);font-family:Inter,Arial,sans-serif;min-height:100vh}
+button{font:inherit;border:0;cursor:pointer}.wrap{max-width:1180px;margin:auto;padding:0 20px}
+header{position:sticky;top:0;z-index:10;background:rgba(11,13,16,.9);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.nav{height:70px;display:flex;align-items:center;gap:28px}.logo{font-weight:900;font-size:25px;letter-spacing:-1px}.logo span{color:var(--green)}
+nav{display:flex;gap:20px;flex:1}nav a{color:#cbd1d6;text-decoration:none;font-weight:700;font-size:14px}
+.balance{background:#12171b;border:1px solid #303840;border-radius:12px;padding:10px 14px;font-weight:900;color:var(--green)}
+.deposit{background:var(--green);color:#06150c;padding:11px 15px;border-radius:11px;font-weight:900}
+.hero{padding:65px 0 35px;text-align:center}.badge{display:inline-block;border:1px solid #334039;background:#111713;color:#77eaa5;padding:7px 12px;border-radius:99px;font-size:12px;font-weight:800}
+h1{font-size:clamp(42px,7vw,76px);line-height:.95;margin:18px 0 14px;letter-spacing:-4px}.hero p{max-width:650px;margin:auto;color:var(--muted);line-height:1.6}
+.section-title{display:flex;justify-content:space-between;align-items:end;margin:34px 0 16px}.section-title h2{margin:0;font-size:26px}.section-title small{color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.case{background:linear-gradient(180deg,#191e23,#111418);border:1px solid var(--line);border-radius:17px;padding:14px;transition:.2s}.case:hover{transform:translateY(-4px);border-color:#46515b}.art{height:150px;border-radius:12px;display:grid;place-items:center;font-size:62px;background:linear-gradient(135deg,#222a31,#11151a);margin-bottom:13px}.case h3{margin:0 0 5px}.case p{margin:0 0 14px;color:var(--muted);font-size:13px}.case-foot{display:flex;align-items:center;justify-content:space-between}.price{font-weight:900;color:#ffd34e}.open{background:#252d34;color:#fff;border-radius:9px;padding:9px 12px;font-weight:800}.open:hover{background:var(--green);color:#06150c}
+.history{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:60px}.panel{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:18px}.drop{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.drop:last-child{border:0}.mini{width:48px;height:48px;border-radius:9px;display:grid;place-items:center;background:#232a31;font-size:25px}.drop b{display:block}.drop span{color:var(--muted);font-size:12px}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:30;align-items:center;justify-content:center;padding:18px}.modal{width:min(500px,100%);background:#15191e;border:1px solid #35404a;border-radius:18px;padding:24px;box-shadow:0 25px 90px #000}.modal h2{margin-top:0}.close{float:right;background:none;color:#9ca5ad;font-size:25px}.field{margin:15px 0}.field label{display:block;color:#aeb6bd;font-size:13px;margin-bottom:7px}.field input{width:100%;padding:13px;background:#0d1013;border:1px solid #323a42;border-radius:10px;color:#fff;outline:0}.field input:focus{border-color:var(--green)}.submit{width:100%;background:var(--green);padding:13px;border-radius:10px;font-weight:900}
+.notice{position:fixed;right:18px;bottom:18px;z-index:50;background:#18231d;border:1px solid #2e6845;border-radius:13px;padding:15px 18px;box-shadow:0 15px 45px #000;display:none}.notice b{color:#70eea2;display:block;margin-bottom:4px}.notice span{color:#c5cdc9;font-size:13px}
+.spinner{height:180px;overflow:hidden;position:relative;background:#0e1215;border-radius:12px;border:1px solid #303840;margin:12px 0}.track{display:flex;gap:8px;position:absolute;left:0;top:35px;transition:transform 3.5s cubic-bezier(.12,.8,.14,1)}.item{width:120px;height:110px;flex:none;background:#20272d;border-radius:10px;display:grid;place-items:center;font-size:42px;overflow:hidden}.item img{width:100%;height:100%;object-fit:contain;padding:5px}.pointer{position:absolute;top:0;bottom:0;left:50%;width:3px;background:var(--green);box-shadow:0 0 18px var(--green)}
+@media(max-width:850px){.cases{grid-template-columns:repeat(2,1fr)}nav{display:none}.history{grid-template-columns:1fr}}@media(max-width:500px){.cases{grid-template-columns:1fr}.nav{gap:8px}.balance{font-size:12px;padding:9px}.deposit{font-size:12px;padding:9px}h1{letter-spacing:-2px}}
+
+.art img{max-width:92%;max-height:138px;object-fit:contain;border-radius:10px;filter:drop-shadow(0 8px 15px rgba(0,0,0,.35))}
+.inventory-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-height:55vh;overflow:auto;padding-right:4px}
+.inv-item{background:#0e1215;border:1px solid #303840;border-radius:12px;padding:10px;text-align:center}
+.inv-item img{width:100%;height:120px;object-fit:contain;border-radius:9px;background:#171c21}
+.inv-item b{display:block;margin-top:8px;font-size:13px}.inv-item span{font-size:11px;color:#8f99a2}
+@media(max-width:500px){.inventory-grid{grid-template-columns:repeat(2,1fr)}.inv-item img{height:100px}}
+
+.reward-pop{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.78);backdrop-filter:blur(5px)}
+.reward-card{width:min(430px,90vw);text-align:center;background:linear-gradient(180deg,#18201d,#101417);border:1px solid #3f7655;border-radius:22px;padding:28px;box-shadow:0 0 80px rgba(25,211,107,.18);animation:rewardIn .55s cubic-bezier(.2,.9,.2,1)}
+.reward-card.show{animation:rewardIn .55s cubic-bezier(.2,.9,.2,1)}
+.reward-card .rarity{font-size:12px;letter-spacing:2px;color:#72efa2;font-weight:900}
+.reward-card .reward-img{height:210px;display:grid;place-items:center;margin:8px 0 12px}
+.reward-card .reward-img img{max-width:95%;max-height:200px;object-fit:contain;filter:drop-shadow(0 18px 28px rgba(0,0,0,.5));animation:itemReveal .75s .1s both cubic-bezier(.15,1.4,.3,1)}
+.reward-card h2{margin:0 0 5px;font-size:25px}.reward-card p{margin:0 0 18px;color:#aab4ae}
+.confetti{position:absolute;width:7px;height:12px;left:50%;top:50%;opacity:0;animation:confetti 1.4s ease-out forwards}
+@keyframes rewardIn{from{opacity:0;transform:scale(.82) translateY(18px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes itemReveal{from{opacity:0;transform:scale(.35) rotate(-12deg)}70%{transform:scale(1.1) rotate(3deg)}to{opacity:1;transform:scale(1) rotate(0)}}
+@keyframes confetti{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(650deg)}}
+</style>
+</head>
+<body>
+<header><div class="wrap nav"><div class="logo">Rbx<span>Box</span></div><nav><a href="#cases">Кейсы</a><a href="#drops">Мои дропы</a><a href="#info">О проекте</a><a href="javascript:openInventory()">Инвентарь</a></nav><div class="balance">◈ <span id="balance">88 941</span> R$</div><button class="deposit" onclick="openDeposit()">Пополнить</button></div></header>
+
+<main class="wrap">
+<section class="hero"><div class="badge">FAN PROJECT • ВИРТУАЛЬНЫЕ ROBUX</div><h1>Открывай.<br><span style="color:var(--green)">Лови дроп.</span></h1><p>Развлекательный макет в стиле игровых дроп-сайтов. Все Robux и предметы на этой странице — виртуальные и не связаны с Roblox.</p></section>
+
+<div class="section-title" id="cases"><h2>Популярные кейсы</h2><small>Шанс зависит от редкости предмета</small></div>
+<section class="cases">
+<div class="case"><div class="art"><img src="https://pngset.com/images/prison-clipart-jailbreak-roblox-orange-hoodie-jotaro-t-shirt-roblox-clothing-coat-jacket-table-transparent-png-2526972.png" alt="Roblox clothing"></div><h3>Starter Drop</h3><p>Головные уборы и аксессуары</p><div class="case-foot"><span class="price">50 R$</span><button class="open" onclick="openCase('Starter Drop',50)">Открыть</button></div></div>
+<div class="case"><div class="art"><img src="https://www.pngfind.com/pngs/m/605-6057939_top-roblox-runway-model-toy-hd-png-download.png" alt="Roblox avatar items"></div><h3>Outfit Box</h3><p>Одежда для твоего аватара</p><div class="case-foot"><span class="price">250 R$</span><button class="open" onclick="openCase('Outfit Box',250)">Открыть</button></div></div>
+<div class="case"><div class="art"><img src="https://devforum-uploads.s3.dualstack.us-east-2.amazonaws.com/uploads/original/5X/d/8/8/1/d881c20afd71603a14f0c17618a22fb15f0df8a2.png" alt="Roblox avatar accessories"></div><h3>Avatar Case</h3><p>Редкие образы и лица</p><div class="case-foot"><span class="price">750 R$</span><button class="open" onclick="openCase('Avatar Case',750)">Открыть</button></div></div>
+<div class="case"><div class="art"><img src="https://pbs.twimg.com/media/Dm8GkrNU4AAgk6E.jpg" alt="Roblox clothing catalog"></div><h3>Legendary</h3><p>Максимально редкие дропы</p><div class="case-foot"><span class="price">2 500 R$</span><button class="open" onclick="openCase('Legendary',2500)">Открыть</button></div></div>
+</section>
+
+<div class="section-title" id="drops"><h2>Последние дропы</h2><small>Только в этом демо</small></div>
+<section class="history">
+<div class="panel"><div class="drop"><div class="mini">🕶️</div><div><b>Neon Shades</b><span>Legendary • только что</span></div></div><div class="drop"><div class="mini">👟</div><div><b>Street Sneakers</b><span>Rare • 1 мин назад</span></div></div><div class="drop"><div class="mini">🧥</div><div><b>Black Hoodie</b><span>Epic • 3 мин назад</span></div></div></div>
+<div class="panel" id="info"><h3>Это не настоящий Roblox-сервис</h3><p style="color:var(--muted);line-height:1.6">RbxBox — полностью локальная демо-страница. Она не принимает платежи, не меняет настоящий баланс Roblox и не отправляет данные куда-либо. Пополнение и открытие кейсов работают только внутри этой страницы.</p></div>
+</section>
+</main>
+
+<div class="modal-bg" id="depositModal"><div class="modal"><button class="close" onclick="closeModal('depositModal')">×</button><h2>Пополнить виртуальный баланс</h2><p style="color:var(--muted)">Введите ник и количество виртуальных Robux (до 500).</p><div class="field"><label>Ник пользователя</label><input id="username" placeholder="Например, Player123"></div><div class="field"><label>Количество Robux</label><input id="amount" type="number" min="1" max="500" placeholder="500"></div><button class="submit" onclick="deposit()">Пополнить счёт</button></div></div>
+
+<div class="modal-bg" id="caseModal"><div class="modal"><button class="close" onclick="closeModal('caseModal')">×</button><h2 id="caseTitle">Кейс</h2><div class="spinner"><div class="pointer"></div><div class="track" id="track"></div></div><div id="caseResult" style="text-align:center;color:#aeb6bd;min-height:25px"></div><button class="submit" id="again" style="display:none" onclick="closeModal('caseModal')">Забрать</button></div></div>
+
+
+<div class="modal-bg" id="inventoryModal">
+  <div class="modal">
+    <button class="close" onclick="closeModal('inventoryModal')">×</button>
+    <h2>Инвентарь</h2>
+    <p style="color:var(--muted)">Предметы автоматически появляются здесь после открытия кейса.</p>
+    <div class="inventory-grid" id="inventoryGrid"></div>
+    <div id="emptyInventory" style="text-align:center;color:#8f99a2;padding:25px">Инвентарь пока пуст.</div>
+  </div>
+</div>
+
+<div class="reward-pop" id="rewardPop">
+  <div class="reward-card" id="rewardCard">
+    <div class="rarity" id="rewardRarity">ПРЕДМЕТ ПОЛУЧЕН</div>
+    <div class="reward-img" id="rewardImg"></div>
+    <h2 id="rewardName">Предмет</h2>
+    <p>✓ Добавлено в инвентарь</p>
+    <button class="submit" onclick="closeReward()">Забрать предмет</button>
+  </div>
+</div>
+<div class="notice" id="notice"><b id="noticeTitle"></b><span id="noticeText"></span></div>
+<script>
+let balance=88941;
+let inventory=[];
+let audioCtx=null;
+let tickTimer=null;
+let lastTick=0;
+
+function initAudio(){
+  try{
+    if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') audioCtx.resume();
+  }catch(e){}
+}
+function tone(freq,duration,type='square',volume=.035,when=0){
+  if(!audioCtx)return;
+  const now=audioCtx.currentTime+when;
+  const osc=audioCtx.createOscillator();
+  const gain=audioCtx.createGain();
+  osc.type=type; osc.frequency.setValueAtTime(freq,now);
+  gain.gain.setValueAtTime(.0001,now);
+  gain.gain.exponentialRampToValueAtTime(volume,now+.006);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(now);osc.stop(now+duration+.02);
+}
+function playTick(){
+  initAudio();
+  tone(1550,.035,'square',.028);
+  tone(720,.045,'triangle',.012,.008);
+}
+function playWin(){
+  initAudio();
+  [523,659,784,1047].forEach((f,i)=>tone(f,.18,'sine',.055,i*.09));
+  tone(1319,.45,'triangle',.035,.36);
+}
+function showNotice(t,x){noticeTitle.textContent=t;noticeText.textContent=x;notice.style.display='block';clearTimeout(window.nt);window.nt=setTimeout(()=>notice.style.display='none',3500)}
+function openDeposit(){depositModal.style.display='flex'}
+function closeModal(id){document.getElementById(id).style.display='none'}
+function closeReward(){rewardPop.style.display='none'}
+function showReward(d){
+  rewardName.textContent=d.name;
+  rewardRarity.textContent=(d.rarity||'RARE').toUpperCase()+' • ПРЕДМЕТ ПОЛУЧЕН';
+  rewardImg.innerHTML=`<img src="${d.img}" alt="${d.name}" onerror="this.outerHTML='<div style="font-size:80px">🎁</div>'">`;
+  rewardPop.style.display='flex';
+  rewardCard.classList.remove('show');void rewardCard.offsetWidth;rewardCard.classList.add('show');
+  for(let i=0;i<24;i++){
+    const c=document.createElement('i');c.className='confetti';
+    c.style.setProperty('--x',`${Math.round(Math.random()*520-260)}px`);
+    c.style.setProperty('--y',`${Math.round(Math.random()*460-230)}px`);
+    c.style.animationDelay=`${Math.random()*.18}s`;
+    rewardPop.appendChild(c);setTimeout(()=>c.remove(),1700);
+  }
+  playWin();
+}
+function deposit(){let u=username.value.trim(), a=Number(amount.value);if(!u){showNotice('Нужен ник','Введите ник пользователя.');return}if(!Number.isInteger(a)||a<1||a>500){showNotice('Неверная сумма','Можно добавить от 1 до 500 виртуальных R$.');return}balance+=a;document.getElementById('balance').textContent=fmt(balance);closeModal('depositModal');showNotice('Баланс пополнен',`Для ${u} добавлено ${fmt(a)} виртуальных R$. Перезайдите в демо.`);username.value='';amount.value=''}
+function fmt(n){return n.toLocaleString('ru-RU').replace(/\u00a0/g,' ')}
+
+function openInventory(){renderInventory();inventoryModal.style.display='flex'}
+function renderInventory(){
+  inventoryGrid.innerHTML='';
+  emptyInventory.style.display=inventory.length?'none':'block';
+  inventory.forEach((d,i)=>{
+    const el=document.createElement('div');el.className='inv-item';
+    el.innerHTML=`<img src="${d.img}" alt="${d.name}" onerror="this.style.display='none'"><b>${d.name}</b><span>${d.rarity} • дроп #${i+1}</span>`;
+    inventoryGrid.appendChild(el);
+  });
+}
+function openCase(name,cost){
+  initAudio();
+  if(balance<cost){showNotice('Недостаточно R$','Пополните виртуальный баланс и попробуйте снова.');return}
+  balance-=cost;document.getElementById('balance').textContent=fmt(balance);
+  caseTitle.textContent=name;caseResult.textContent='Кейс открывается…';again.style.display='none';track.innerHTML='';
+  const sequence=[];
+  for(let i=0;i<22;i++) sequence.push(drops[Math.floor(Math.random()*drops.length)]);
+  const chosen=drops[Math.floor(Math.random()*drops.length)];
+  sequence[18]=chosen;
+  sequence.forEach(d=>{
+    const el=document.createElement('div');el.className='item';
+    el.innerHTML=`<img src="${d.img}" alt="${d.name}" onerror="this.parentNode.textContent='🎁'">`;
+    track.appendChild(el);
+  });
+  caseModal.style.display='flex';track.style.transition='none';track.style.transform='translateX(0)';
+  clearInterval(tickTimer);
+  let count=0;
+  tickTimer=setInterval(()=>{playTick();count++;if(count>12){clearInterval(tickTimer);tickTimer=setInterval(playTick,115)}},115);
+  setTimeout(()=>{
+    clearInterval(tickTimer);tickTimer=setInterval(playTick,145);
+    const target=18*128;
+    track.style.transition='transform 3.5s cubic-bezier(.12,.8,.14,1)';
+    track.style.transform=`translateX(calc(50% - ${target}px))`;
+    setTimeout(()=>{
+      clearInterval(tickTimer);playTick();
+      setTimeout(()=>{
+        inventory.unshift(chosen);
+        caseResult.innerHTML=`Выпало: <b style="color:#fff">${chosen.name}</b><br><span style="font-size:12px;color:#7eeaa6">✓ Предмет добавлен в инвентарь</span>`;
+        again.style.display='block';renderInventory();closeModal('caseModal');
+        setTimeout(()=>showReward(chosen),180);
+      },130);
+    },3550);
+  },120);
+}
+</script>
+</body></html>
