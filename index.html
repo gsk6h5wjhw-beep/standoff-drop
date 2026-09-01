@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>МГОК — студенческий портал</title>
+<meta name="description" content="Концепт сайта МГОК: расписание, афиши, новости и студенческие сервисы.">
+<style>
+:root{
+  --blue:#086cff;--blue2:#0750cf;--cyan:#22c9f3;--navy:#062b75;
+  --bg:#eefdff;--card:#fff;--text:#10264d;--muted:#66809f;--line:#c9eff9;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+button,input{font:inherit} button{cursor:pointer}
+a{text-decoration:none;color:inherit}
+.container{max-width:1180px;margin:auto;padding:0 20px}
+
+/* HEADER */
+header{position:sticky;top:0;z-index:50;background:rgba(238,253,255,.94);backdrop-filter:blur(14px);border-bottom:2px solid var(--line)}
+.nav{height:74px;display:flex;align-items:center;gap:28px}
+.logo{font-weight:1000;font-size:34px;letter-spacing:-3px;color:var(--blue);margin-right:auto}
+.nav a{font-size:14px;font-weight:900}
+.nav a:hover{color:var(--blue)}
+.nav-cta{border:0;background:var(--blue);color:#fff;border-radius:12px;padding:12px 17px;font-weight:900}
+.menu{display:none;border:0;background:var(--card);font-size:25px}
+
+/* HERO */
+.hero{padding:44px 0 30px}
+.hero-grid{display:grid;grid-template-columns:1.35fr .65fr;gap:22px}
+.hero-main{min-height:425px;border-radius:30px;padding:38px;position:relative;overflow:hidden;color:#fff;background:linear-gradient(135deg,var(--cyan),var(--blue));box-shadow:0 22px 50px rgba(8,108,255,.22)}
+.hero-main:before,.hero-main:after{content:"";position:absolute;border:42px solid rgba(255,255,255,.13);border-radius:50%}
+.hero-main:before{width:260px;height:260px;right:-95px;top:-120px}
+.hero-main:after{width:300px;height:300px;right:-100px;bottom:-190px}
+.pill{display:inline-block;background:#fff;color:var(--blue);padding:8px 12px;border-radius:999px;font-size:12px;font-weight:1000}
+h1{font-size:clamp(70px,12vw,142px);line-height:.78;letter-spacing:-10px;margin:32px 0 22px;position:relative;z-index:2}
+.hero-text{max-width:590px;font-size:17px;line-height:1.5;font-weight:800;position:relative;z-index:2}
+.hero-buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:25px;position:relative;z-index:3}
+.btn{display:inline-block;padding:14px 18px;border-radius:13px;font-weight:1000}
+.btn-white{background:#fff;color:var(--blue)}
+.btn-outline{border:2px solid rgba(255,255,255,.7);color:#fff}
+.hero-side{display:grid;gap:16px}
+.stat{background:#fff;border:2px solid var(--line);border-radius:25px;padding:23px;min-height:130px;display:flex;flex-direction:column;justify-content:space-between}
+.stat b{font-size:42px;color:var(--blue)}
+.stat span{font-weight:900}
+
+/* SECTIONS */
+section{padding:30px 0 60px}
+.section-head{display:flex;justify-content:space-between;align-items:end;gap:15px;margin-bottom:20px}
+h2{margin:0;font-size:34px;letter-spacing:-1.5px}
+.muted{color:var(--muted);font-weight:700}
+
+/* SCHEDULE */
+.schedule{background:#fff;border:2px solid var(--line);border-radius:25px;overflow:hidden}
+.days{display:flex;overflow:auto;border-bottom:2px solid #e5f7fb}
+.day{min-width:140px;padding:17px 18px;border:0;background:#fff;text-align:left;font-weight:1000;color:var(--text)}
+.day small{display:block;color:var(--muted);margin-top:4px}
+.day.active{background:var(--blue);color:#fff}
+.day.active small{color:#d9efff}
+.lessons{min-height:330px}
+.lesson{display:grid;grid-template-columns:78px 1fr auto;gap:17px;align-items:center;padding:19px 20px;border-bottom:1px solid #e5f4f8}
+.lesson:last-child{border:0}
+.time{font-weight:1000;color:var(--blue)}
+.subject{font-weight:1000;font-size:17px}
+.teacher{font-size:13px;color:var(--muted);font-weight:700;margin-top:4px}
+.room{background:#eaf8ff;color:var(--navy);border-radius:9px;padding:8px 11px;font-weight:1000}
+
+/* POSTERS */
+.posters{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.poster{min-height:300px;border-radius:25px;padding:25px;color:#fff;position:relative;overflow:hidden;box-shadow:0 14px 30px rgba(8,108,255,.12)}
+.poster:nth-child(1){background:linear-gradient(145deg,#09bde9,#086cff)}
+.poster:nth-child(2){background:linear-gradient(145deg,#0750cf,#1ac9ef)}
+.poster:nth-child(3){background:linear-gradient(145deg,#15c5ee,#063d9e)}
+.poster:after{content:"";position:absolute;width:180px;height:180px;border:30px solid rgba(255,255,255,.13);border-radius:50%;right:-65px;bottom:-80px}
+.poster-date{font-size:12px;font-weight:1000;opacity:.9}
+.poster h3{font-size:40px;line-height:.92;letter-spacing:-2px;margin:35px 0 15px;max-width:280px}
+.poster p{font-weight:800;line-height:1.4;max-width:270px}
+.poster button{margin-top:18px;border:0;border-radius:11px;background:#fff;color:var(--blue);padding:10px 13px;font-weight:1000}
+
+/* NEWS */
+.news{display:grid;grid-template-columns:1.5fr 1fr;gap:18px}
+.news-card{background:#fff;border:2px solid var(--line);border-radius:24px;padding:24px}
+.news-card h3{font-size:24px;margin:10px 0}
+.news-card p{color:var(--muted);line-height:1.5;font-weight:700}
+.news-list{display:grid;gap:12px}
+.news-item{background:#fff;border:2px solid var(--line);border-radius:20px;padding:18px}
+.news-item b{color:var(--blue);font-size:12px}.news-item strong{display:block;margin-top:7px}
+
+/* SPECIALTIES */
+.specialties{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.spec{background:#fff;border:2px solid var(--line);border-radius:20px;padding:20px;min-height:155px}
+.spec .num{font-size:13px;color:var(--blue);font-weight:1000}
+.spec h3{font-size:19px;margin:28px 0 0}
+
+/* FOOTER */
+footer{background:#062b75;color:#fff;padding:38px 0}
+.footer-grid{display:flex;justify-content:space-between;gap:30px}
+footer .logo{color:#fff}
+footer p{color:#b9d8ff;font-weight:700}
+.footer-links{display:flex;gap:20px;flex-wrap:wrap;font-weight:800}
+
+/* MODAL */
+.modal{display:none;position:fixed;inset:0;background:rgba(2,20,55,.62);z-index:100;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modal-box{background:#fff;border-radius:25px;max-width:560px;width:100%;padding:28px;position:relative}
+.close{position:absolute;right:15px;top:12px;border:0;background:#eefaff;border-radius:10px;font-size:24px}
+.modal-box h3{font-size:30px;margin:0 35px 10px 0}
+.modal-box p{color:var(--muted);font-weight:700;line-height:1.55}
+
+/* RESPONSIVE */
+@media(max-width:850px){
+  .navlinks{display:none}.menu{display:block}
+  .nav{height:66px}.nav-cta{display:none}
+  .hero-grid,.news{grid-template-columns:1fr}
+  .hero-main{min-height:400px}
+  .posters{grid-template-columns:1fr}
+  .specialties{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:520px){
+  .container{padding:0 14px}
+  h2{font-size:28px}
+  .hero{padding-top:25px}.hero-main{padding:25px;border-radius:22px}
+  h1{font-size:78px;letter-spacing:-6px}
+  .lesson{grid-template-columns:65px 1fr}.room{display:none}
+  .specialties{grid-template-columns:1fr}
+  .footer-grid{display:block}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container nav">
+    <a class="logo" href="#">МГОК</a>
+    <nav class="navlinks">
+      <a href="#schedule">Расписание</a>
+      <a href="#posters">Афиша</a>
+      <a href="#news">Новости</a>
+      <a href="#specialties">Направления</a>
+    </nav>
+    <button class="nav-cta" onclick="openModal('Приёмная комиссия','Это демонстрационный сайт. Здесь можно разместить настоящую форму приёма документов и контакты.')">Поступить</button>
+    <button class="menu" onclick="alert('Меню: Расписание · Афиша · Новости · Направления')">☰</button>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="container hero-grid">
+    <div class="hero-main">
+      <span class="pill">Студенческий портал</span>
+      <h1>МГОК</h1>
+      <p class="hero-text">Место, где учёба превращается в практику, идеи — в проекты, а обычный учебный день — в историю.</p>
+      <div class="hero-buttons">
+        <a class="btn btn-white" href="#schedule">Смотреть расписание</a>
+        <a class="btn btn-outline" href="#posters">Афиша</a>
+      </div>
+    </div>
+    <div class="hero-side">
+      <div class="stat"><b>24/7</b><span>Доступ к студенческим сервисам</span></div>
+      <div class="stat"><b>∞</b><span>Идей для проектов и мероприятий</span></div>
+      <div class="stat"><b>01</b><span>Место, с которого начинается твоя профессия</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="schedule">
+  <div class="container">
+    <div class="section-head">
+      <div><h2>Расписание</h2><div class="muted">Демонстрационный вариант — замени данные на свои</div></div>
+    </div>
+    <div class="schedule">
+      <div class="days">
+        <button class="day active" data-day="0">Пн<small>1 сентября</small></button>
+        <button class="day" data-day="1">Вт<small>2 сентября</small></button>
+        <button class="day" data-day="2">Ср<small>3 сентября</small></button>
+        <button class="day" data-day="3">Чт<small>4 сентября</small></button>
+        <button class="day" data-day="4">Пт<small>5 сентября</small></button>
+      </div>
+      <div class="lessons" id="lessons"></div>
+    </div>
+  </div>
+</section>
+
+<section id="posters">
+  <div class="container">
+    <div class="section-head"><div><h2>Афиша</h2><div class="muted">События, которые можно поставить на главную</div></div></div>
+    <div class="posters">
+      <article class="poster">
+        <div class="poster-date">05 СЕНТЯБРЯ · 16:00</div>
+        <h3>ДЕНЬ ПЕРВОКУРСНИКА</h3>
+        <p>Знакомство, музыка, команды и первый большой студенческий движ.</p>
+        <button onclick="openModal('День первокурсника','05 сентября, 16:00. Место проведения и программа — добавь свои данные.')">Подробнее</button>
+      </article>
+      <article class="poster">
+        <div class="poster-date">12 СЕНТЯБРЯ · 18:30</div>
+        <h3>МГОК<br>FEST</h3>
+        <p>Сцена, творческие номера, конкурсы и встреча студенческих команд.</p>
+        <button onclick="openModal('МГОК FEST','12 сентября, 18:30. Добавь адрес, программу и форму регистрации.')">Подробнее</button>
+      </article>
+      <article class="poster">
+        <div class="poster-date">18 СЕНТЯБРЯ · 15:00</div>
+        <h3>КАРЬЕРА<br>НА СТАРТЕ</h3>
+        <p>Встреча с работодателями и мини-ярмарка практик и стажировок.</p>
+        <button onclick="openModal('Карьера на старте','18 сентября, 15:00. Добавь список компаний и аудиторию.')">Подробнее</button>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="news">
+  <div class="container">
+    <div class="section-head"><div><h2>Новости МГОК</h2><div class="muted">Пример блока новостей для будущего наполнения</div></div></div>
+    <div class="news">
+      <article class="news-card">
+        <span class="pill">Главное</span>
+        <h3>Новый учебный сезон начинается здесь</h3>
+        <p>Собери на этой странице всё самое нужное: объявления, расписание, студенческие проекты, конкурсы, фотографии и важные даты.</p>
+        <button class="btn btn-white" style="background:var(--blue);color:#fff;border:0" onclick="openModal('Новость','Здесь можно открыть полноценную новость, фотографию и подробный текст.')">Читать</button>
+      </article>
+      <div class="news-list">
+        <div class="news-item"><b>01.09.2026</b><strong>Добро пожаловать в новый учебный год!</strong></div>
+        <div class="news-item"><b>03.09.2026</b><strong>Открыта запись на студенческие клубы</strong></div>
+        <div class="news-item"><b>08.09.2026</b><strong>Старт конкурса проектов МГОК</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="specialties">
+  <div class="container">
+    <div class="section-head"><div><h2>Направления</h2><div class="muted">Карточки можно заменить на реальные программы МГОК</div></div></div>
+    <div class="specialties">
+      <article class="spec"><div class="num">01 / TECH</div><h3>IT и цифровые технологии</h3></article>
+      <article class="spec"><div class="num">02 / ENGINEERING</div><h3>Машиностроение</h3></article>
+      <article class="spec"><div class="num">03 / DESIGN</div><h3>Дизайн и медиа</h3></article>
+      <article class="spec"><div class="num">04 / BUSINESS</div><h3>Экономика и управление</h3></article>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="container footer-grid">
+    <div><div class="logo">МГОК</div><p>Концепт студенческого сайта.<br>Неофициальный макет для GitHub.</p></div>
+    <div class="footer-links"><a href="#schedule">Расписание</a><a href="#posters">Афиша</a><a href="#news">Новости</a><a href="#specialties">Направления</a></div>
+  </div>
+</footer>
+
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <button class="close" onclick="closeModal()">×</button>
+    <h3 id="modalTitle"></h3>
+    <p id="modalText"></p>
+    <button class="nav-cta" onclick="closeModal()">Понятно</button>
+  </div>
+</div>
+
+<script>
+const data = [
+  [
+    ['09:00','Математика','Иванова Е.А.','301'],
+    ['10:40','Информатика','Петров А.С.','214'],
+    ['12:30','История','Соколова М.В.','118'],
+    ['14:20','Проектная работа','Куратор группы','305']
+  ],
+  [
+    ['09:00','Физика','Орлов Д.И.','202'],
+    ['10:40','Русский язык','Кузнецова Н.В.','116'],
+    ['12:30','Основы профессии','Волков И.С.','305']
+  ],
+  [
+    ['09:00','Информатика','Петров А.С.','214'],
+    ['10:40','Обществознание','Соколова М.В.','118'],
+    ['12:30','Физическая культура','Орлов Д.И.','Спортзал'],
+    ['14:20','Проектная работа','Куратор группы','305']
+  ],
+  [
+    ['09:00','Математика','Иванова Е.А.','301'],
+    ['10:40','Основы профессии','Волков И.С.','305'],
+    ['12:30','Английский язык','Кузнецова Н.В.','116']
+  ],
+  [
+    ['09:00','Практика','Волков И.С.','Лаб. 2'],
+    ['10:40','Информатика','Петров А.С.','214'],
+    ['12:30','Классный час','Куратор группы','305']
+  ]
+];
+
+function renderSchedule(day=0){
+  document.querySelectorAll('.day').forEach((b,i)=>b.classList.toggle('active',i===day));
+  document.getElementById('lessons').innerHTML=data[day].map(x=>`
+    <div class="lesson">
+      <div class="time">${x[0]}</div>
+      <div><div class="subject">${x[1]}</div><div class="teacher">${x[2]}</div></div>
+      <div class="room">${x[3]}</div>
+    </div>`).join('');
+}
+document.querySelectorAll('.day').forEach(b=>b.addEventListener('click',()=>renderSchedule(+b.dataset.day)));
+renderSchedule();
+
+function openModal(title,text){
+  document.getElementById('modalTitle').textContent=title;
+  document.getElementById('modalText').textContent=text;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+</script>
+</body>
+</html>
