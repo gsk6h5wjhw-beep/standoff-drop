@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#080912">
+<title>STANDOFF DROP — Demo</title>
+<style>
+:root{
+  --bg:#080910;--panel:#10111b;--panel2:#151624;--line:#292b3b;
+  --text:#f4f2f7;--muted:#85869a;--purple:#cf43ff;--purple2:#9d35ff;
+  --gold:#ffc52f;--green:#35e0b2;--red:#ff3e4d;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:#05060b;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",Arial,sans-serif}
+body{min-height:100vh;overflow-x:hidden}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.app{width:100%;max-width:760px;margin:auto;min-height:100vh;background:
+ radial-gradient(500px 240px at 50% 13%,rgba(119,31,181,.08),transparent 70%),
+ linear-gradient(#080910,#080910);padding-bottom:96px}
+.top{height:145px;padding:27px 28px 12px;display:flex;align-items:flex-start;justify-content:space-between}
+.brand{font-weight:900;line-height:.8;letter-spacing:-1.5px;font-size:25px}
+.brand b{display:block;color:#e9e8ed}
+.brand i{display:block;color:var(--purple);font-style:italic;font-size:30px;letter-spacing:-2px;transform:skew(-8deg);margin-top:5px}
+.wallet{display:flex;align-items:center;gap:8px}
+.balance{height:62px;min-width:215px;border:1px solid #3b3d4b;border-radius:15px;background:#0b0c13;display:flex;align-items:center;justify-content:center;gap:11px;font-weight:800;font-size:19px}
+.coin{color:var(--gold);font-size:26px;font-weight:900}
+.plus{width:46px;height:46px;border-radius:10px;background:#ffd15a;color:#111;display:grid;place-items:center;font-size:31px;line-height:1}
+.avatar{width:66px;height:66px;margin-left:10px;border-radius:50%;border:1px solid #cf72e8;background:
+ radial-gradient(circle at 50% 30%,#f9dfe9 0 15%,transparent 16%),
+ radial-gradient(circle at 48% 53%,#191923 0 28%,transparent 29%),
+ linear-gradient(145deg,#f5eff7,#b39bd4 40%,#191727 41%);position:relative;overflow:hidden;box-shadow:0 0 16px rgba(190,55,255,.18)}
+.avatar:after{content:"";position:absolute;inset:10px 8px 0;border-radius:50% 50% 42% 42%;border-top:6px solid #e6d9ec;transform:rotate(-8deg)}
+.hero{margin:5px 24px 0;height:266px;border:1px solid #343747;border-radius:15px;overflow:hidden;position:relative;background:
+ radial-gradient(180px 150px at 78% 55%,rgba(185,60,255,.24),transparent 70%),
+ linear-gradient(110deg,#11121d,#10101a 55%,#151021)}
+.hero:before{content:"";position:absolute;width:290px;height:160px;right:8px;top:34px;border-radius:25px 22px 32px 24px;transform:perspective(500px) rotateY(-16deg) rotateZ(-2deg);
+ background:linear-gradient(145deg,#56516b,#201d2c 35%,#0c0c13 78%);box-shadow:-18px 22px 50px rgba(0,0,0,.5),inset 0 0 0 2px #746c86}
+.hero:after{content:"STANDOFF\nDROP";white-space:pre;position:absolute;right:72px;top:83px;color:#e7dff0;font-weight:900;font-size:19px;line-height:.95;text-align:center;transform:rotate(-3deg)}
+.heroText{position:absolute;left:36px;top:58px;z-index:2}
+.heroText h1{font-size:25px;margin:0 0 10px;font-weight:800;letter-spacing:-.6px}
+.heroText p{margin:0;color:var(--purple);font-size:20px;font-weight:900}
+.openHero{position:absolute;left:36px;bottom:45px;background:#1b1a29;border:1px solid #414054;border-radius:10px;padding:15px 22px;font-weight:800;z-index:3}
+.openHero span{color:#d76cff;font-size:25px;margin-left:18px;vertical-align:-2px}
+.dots{position:absolute;bottom:-23px;left:0;right:0;display:flex;justify-content:center;gap:17px}
+.dot{width:23px;height:6px;border-radius:8px;background:#4a4b57}.dot.active{background:#c943ff}
+.section{padding:53px 28px 0}
+.sectionHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.section h2{margin:0;font-size:22px;color:#aaa9bc;letter-spacing:-.4px}
+.all{color:#88899b;font-size:16px}
+.all span{font-size:27px;vertical-align:-2px;margin-left:5px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
+.card{background:linear-gradient(180deg,#151622,#11121d);border:1px solid #2d2e3e;border-radius:13px;min-height:238px;padding:17px 10px 11px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.12)}
+.card h3{font-size:16px;margin:0 0 15px;white-space:nowrap}
+.caseArt{height:105px;display:grid;place-items:center;position:relative;margin-bottom:10px}
+.case{width:145px;height:69px;border-radius:13px 13px 9px 9px;position:relative;box-shadow:0 13px 18px rgba(0,0,0,.34),inset 0 2px 2px rgba(255,255,255,.12);transform:perspective(500px) rotateX(3deg)}
+.case:before{content:"";position:absolute;left:7px;right:7px;top:7px;height:15px;border-radius:7px;background:rgba(255,255,255,.08);box-shadow:inset 0 1px rgba(255,255,255,.15)}
+.case:after{content:"";position:absolute;left:7px;right:7px;bottom:8px;height:8px;border-radius:5px;background:rgba(0,0,0,.25)}
+.case .logo{position:absolute;inset:20px 0 0;display:grid;place-items:center;font-weight:1000;font-style:italic;font-size:18px;text-shadow:0 2px 3px #000}
+.case .lock{position:absolute;right:8px;top:23px;width:8px;height:24px;border-radius:3px;background:#d6b77e}
+.c1{background:linear-gradient(150deg,#514d43,#161519 72%)}.c2{background:linear-gradient(150deg,#425f8f,#111c32 75%)}.c3{background:linear-gradient(150deg,#366d6b,#102728 75%)}
+.c4{background:linear-gradient(150deg,#a17818,#1c170b 75%)}.c5{background:linear-gradient(150deg,#a72c2d,#261014 75%)}.c6{background:linear-gradient(150deg,#6f4e87,#21162c 75%)}
+.c7{background:linear-gradient(150deg,#774b45,#201416 75%)}.c8{background:linear-gradient(150deg,#466c9f,#10192c 75%)}.c9{background:linear-gradient(150deg,#a88a2d,#231b08 75%)}
+.price{border-top:1px solid #2c2e3c;padding-top:12px;color:var(--gold);font-size:18px;font-weight:900}
+.upgrade{margin:28px 24px 0;border:1px solid #2e3040;border-radius:14px;min-height:120px;background:linear-gradient(105deg,#171824,#11121d);display:flex;align-items:center;padding:20px 26px;gap:20px}
+.upIcon{font-size:42px;color:#9da1b7}.upText{flex:1}.upText b{display:block;font-size:17px;margin-bottom:7px}.upText span{color:#87899a;font-size:14px;line-height:1.25}.upBtn{background:#252436;border:1px solid #3c3b50;border-radius:9px;padding:16px 19px;font-size:14px;font-weight:900;white-space:nowrap}.upBtn span{color:#d86aff;font-size:23px;margin-left:10px}
+.nav{position:fixed;left:0;right:0;bottom:0;height:91px;background:rgba(9,10,17,.97);border-top:1px solid #20222f;z-index:30;display:flex;justify-content:center}
+.navin{width:100%;max-width:760px;display:grid;grid-template-columns:repeat(5,1fr)}
+.navBtn{background:transparent;color:#66697e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:700;position:relative}
+.navBtn .ico{font-size:27px;line-height:1}.navBtn.active{color:#d34cff}.navBtn.active:before{content:"";position:absolute;top:0;left:13px;right:13px;height:2px;background:#c73dff;box-shadow:0 0 15px #c73dff}
+.page{display:none}.page.active{display:block}
+.toast{position:fixed;top:18px;left:50%;transform:translate(-50%,-20px);opacity:0;pointer-events:none;background:#171824;border:1px solid #3b3d4e;border-radius:12px;padding:12px 17px;z-index:100;font-weight:700;transition:.25s}.toast.show{opacity:1;transform:translate(-50%,0)}
+.modal{position:fixed;inset:0;background:rgba(3,4,8,.88);backdrop-filter:blur(8px);z-index:50;display:none;align-items:center;justify-content:center;padding:18px}.modal.show{display:flex}
+.box{width:min(680px,100%);max-height:90vh;overflow:auto;background:#0d0e17;border:1px solid #343646;border-radius:18px;padding:20px;box-shadow:0 20px 80px #000}
+.modalHead{display:flex;justify-content:space-between;align-items:center}.modalHead h2{margin:0;font-size:22px}.close{width:40px;height:40px;border-radius:10px;background:#1b1c28;font-size:24px}
+.roulette{height:175px;margin:18px 0;border:1px solid #2d2e3e;border-radius:14px;overflow:hidden;position:relative;background:#0a0b12}
+.roulette:before{content:"";position:absolute;z-index:4;top:0;bottom:0;left:50%;width:2px;background:#d84cff;box-shadow:0 0 18px #d84cff}
+.track{height:100%;display:flex;gap:8px;align-items:center;position:absolute;left:0;transition:transform 4.2s cubic-bezier(.08,.75,.12,1)}
+.reward{flex:0 0 125px;height:132px;border:1px solid #303243;border-radius:10px;background:#151622;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.reward .mini{font-size:42px}.reward b{font-size:12px;text-align:center}.rarity{font-size:10px;color:#999}
+.spin{width:100%;height:52px;border-radius:11px;background:linear-gradient(90deg,#a92eff,#e34cff);font-weight:900;font-size:17px;box-shadow:0 8px 30px rgba(196,44,255,.2)}.spin:disabled{opacity:.45}
+.caseInfo{display:flex;justify-content:space-between;align-items:center;color:#9b9caf;margin-bottom:15px}.caseInfo strong{color:#ffc52f;font-size:17px}
+.items{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:15px}.item{background:#151622;border:1px solid #292b39;border-radius:9px;padding:8px;text-align:center;min-height:86px}.item .mini{font-size:31px}.item b{font-size:10px;display:block;margin-top:4px}
+.inventoryGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.inv{background:#12131d;border:1px solid #292b39;border-radius:12px;padding:16px;min-height:120px}.inv .mini{font-size:45px}.inv b{display:block;margin-top:7px}.inv small{color:#85879a}
+.balanceText{color:var(--gold);font-weight:900}.empty{text-align:center;color:#7f8192;padding:55px 15px}
+@media(max-width:560px){
+ .top{height:145px;padding:27px 24px 12px}.balance{min-width:128px;width:128px;height:50px;font-size:14px;gap:5px}.plus{width:37px;height:37px;font-size:25px}.avatar{width:57px;height:57px}
+ .hero{margin:5px 24px 0;height:266px}.heroText{left:35px}.hero:before{width:245px;right:-22px}.hero:after{right:44px;font-size:16px}
+ .grid{grid-template-columns:repeat(3,1fr);gap:9px}.card{min-height:220px;padding:15px 5px 10px}.card h3{font-size:14px}.case{width:112px;height:57px}.caseArt{height:94px}.price{font-size:16px}
+ .upgrade{padding:18px;margin-left:24px;margin-right:24px}.upBtn{padding:13px 10px}.upText span{font-size:12px}
+ .section{padding-left:24px;padding-right:24px}.items{grid-template-columns:repeat(3,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><b>STANDOFF</b><i>DROP</i></div>
+    <div class="wallet">
+      <div class="balance"><span class="coin">G</span><span id="balance">15 620</span><button class="plus" id="addGold">+</button></div>
+      <div class="avatar"></div>
+    </div>
+  </header>
+
+  <main>
+    <section id="casesPage" class="page active">
+      <div class="hero">
+        <div class="heroText"><h1>ОТКРЫВАЙ КЕЙСЫ</h1><p>ПОЛУЧАЙ ЛУЧШИЕ СКИНЫ</p></div>
+        <button class="openHero" onclick="openCase(0)">ОТКРЫТЬ КЕЙСЫ <span>→</span></button>
+        <div class="dots"><i class="dot active"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+      </div>
+      <section class="section">
+        <div class="sectionHead"><h2>КЕЙСЫ</h2><button class="all" onclick="scrollToCases()">Все кейсы <span>›</span></button></div>
+        <div class="grid" id="caseGrid"></div>
+      </section>
+      <div class="upgrade">
+        <div class="upIcon">⚔</div><div class="upText"><b>АПГРЕЙД СКИНОВ</b><span>Улучшай скины и получай более<br>редкие предметы</span></div>
+        <button class="upBtn" onclick="showPage('upgrade')">ПЕРЕЙТИ В АПГРЕЙД <span>→</span></button>
+      </div>
+    </section>
+
+    <section id="upgradePage" class="page">
+      <section class="section"><div class="sectionHead"><h2>АПГРЕЙД</h2></div>
+      <div class="upgrade" style="margin:0">
+        <div class="upIcon">⚔</div><div class="upText"><b>ДЕМО-АПГРЕЙД</b><span>Выбери предмет и попробуй улучшить его. Баланс ненастоящий.</span></div>
+      </div>
+      <div class="empty">Демо-механика апгрейда готова для расширения.</div></section>
+    </section>
+
+    <section id="battlePage" class="page">
+      <section class="section"><div class="sectionHead"><h2>BATTLE</h2></div>
+      <div class="upgrade" style="margin:0;display:block">
+        <b style="font-size:20px">CASE BATTLE</b><p style="color:#88899b">Собери бой и открой несколько кейсов подряд.</p>
+        <button class="spin" style="margin-top:10px" onclick="startBattle()">СОЗДАТЬ ДЕМО-БОЙ</button>
+      </div>
+      <div class="empty" id="battleLog">Боев пока нет.</div></section>
+    </section>
+
+    <section id="inventoryPage" class="page">
+      <section class="section"><div class="sectionHead"><h2>ИНВЕНТАРЬ</h2></div>
+      <div id="inventoryGrid" class="inventoryGrid"></div></section>
+    </section>
+
+    <section id="profilePage" class="page">
+      <section class="section"><div class="sectionHead"><h2>ПРОФИЛЬ</h2></div>
+      <div class="upgrade" style="margin:0">
+        <div class="avatar" style="flex:none"></div><div class="upText"><b>Игрок</b><span>Демо-профиль<br>Баланс: <span class="balanceText" id="profileBalance">15 620 G</span></span></div>
+      </div>
+      <div class="empty">STANDOFF DROP • DEMO VERSION</div></section>
+    </section>
+  </main>
+</div>
+
+<nav class="nav"><div class="navin">
+  <button class="navBtn active" data-page="cases" onclick="showPage('cases')"><span class="ico">▰</span>КЕЙСЫ</button>
+  <button class="navBtn" data-page="upgrade" onclick="showPage('upgrade')"><span class="ico">⌃</span>АПГРЕЙД</button>
+  <button class="navBtn" data-page="battle" onclick="showPage('battle')"><span class="ico">⚔</span>BATTLE</button>
+  <button class="navBtn" data-page="inventory" onclick="showPage('inventory')"><span class="ico">♙</span>ИНВЕНТАРЬ</button>
+  <button class="navBtn" data-page="profile" onclick="showPage('profile')"><span class="ico">●</span>ПРОФИЛЬ</button>
+</div></nav>
+
+<div id="toast" class="toast"></div>
+
+<div id="caseModal" class="modal">
+ <div class="box">
+  <div class="modalHead"><h2 id="modalTitle">Fable Case</h2><button class="close" onclick="closeModal()">×</button></div>
+  <div class="caseInfo"><span>Стоимость открытия</span><strong id="modalPrice">G 100</strong></div>
+  <div class="roulette"><div id="track" class="track"></div></div>
+  <button id="spinBtn" class="spin" onclick="spinCase()">ОТКРЫТЬ КЕЙС • <span id="spinPrice">100 G</span></button>
+  <div id="caseItems" class="items"></div>
+ </div>
+</div>
+
+<script>
+const cases=[
+ {name:"Fable Case",price:100,cls:"c1",logo:"ϟ",items:["M4A1 • Fable","AKR • Fable","USP • Fable","AWM • Fable","G22 • Fable","P350 • Fable","M4A1 • Fable Gold","Karambit • Fable"]},
+ {name:"Rival Case",price:100,cls:"c2",logo:"RIVAL",items:["AKR • Rival","M4 • Rival","AWM • Rival","USP • Rival","M16 • Rival","G22 • Rival","Butterfly • Rival","M4 • Rival Gold"]},
+ {name:"Origin Case",price:100,cls:"c3",logo:"✦",items:["AKR • Origin","M4 • Origin","USP • Origin","AWM • Origin","M40 • Origin","G22 • Origin","Kunai • Origin","M4 • Origin Gold"]},
+ {name:"Scorpion Case",price:120,cls:"c4",logo:"♏",items:["AKR • Scorpion","M4 • Scorpion","AWM • Scorpion","USP • Scorpion","P350 • Scorpion","G22 • Scorpion","Karambit • Scorpion","AKR • Scorpion Gold"]},
+ {name:"Furious Case",price:120,cls:"c5",logo:"FURIOUS",items:["AKR • Furious","M4 • Furious","AWM • Furious","USP • Furious","M40 • Furious","G22 • Furious","Butterfly • Furious","AWM • Furious Gold"]},
+ {name:"Neon Case",price:150,cls:"c6",logo:"NEON",items:["AKR • Neon","M4 • Neon","AWM • Neon","USP • Neon","P350 • Neon","G22 • Neon","Kunai • Neon","M4 • Neon Gold"]},
+ {name:"Samurai Case",price:150,cls:"c7",logo:"✥",items:["AKR • Samurai","M4 • Samurai","AWM • Samurai","USP • Samurai","M40 • Samurai","G22 • Samurai","Karambit • Samurai","AKR • Samurai Gold"]},
+ {name:"Sharp Case",price:150,cls:"c8",logo:"SHARP",items:["AKR • Sharp","M4 • Sharp","AWM • Sharp","USP • Sharp","P350 • Sharp","G22 • Sharp","Butterfly • Sharp","M4 • Sharp Gold"]},
+ {name:"Legendary Case",price:200,cls:"c9",logo:"♛",items:["AKR • Legendary","M4 • Legendary","AWM • Legendary","USP • Legendary","M40 • Legendary","G22 • Legendary","Karambit • Legendary","M4 • Legendary Gold"]}
+];
+let gold=15620, inventory=[], selected=0, spinning=false;
+const $=id=>document.getElementById(id);
+function fmt(n){return n.toLocaleString("ru-RU").replace(/\u00a0/g," ")}
+function renderCases(){
+ $("caseGrid").innerHTML=cases.map((c,i)=>`<article class="card" onclick="openCase(${i})">
+   <h3>${c.name}</h3><div class="caseArt"><div class="case ${c.cls}"><div class="logo">${c.logo}</div><div class="lock"></div></div></div>
+   <div class="price"><span class="coin" style="font-size:20px">G</span> ${c.price}</div></article>`).join("");
+}
+function updateBalance(){ $("balance").textContent=fmt(gold); $("profileBalance").textContent=fmt(gold)+" G"; }
+function openCase(i){selected=i;const c=cases[i];$("modalTitle").textContent=c.name;$("modalPrice").textContent="G "+c.price;$("spinPrice").textContent=c.price+" G";$("spinBtn").disabled=false;buildTrack();$("caseItems").innerHTML=c.items.map((x,j)=>`<div class="item"><div class="mini">${["🔫","🔫","🎯","🔫","◈","🔫","🗡️","♛"][j]}</div><b>${x}</b></div>`).join("");$("caseModal").classList.add("show");}
+function closeModal(){if(!spinning)$("caseModal").classList.remove("show")}
+function buildTrack(){
+ const c=cases[selected], arr=[];for(let r=0;r<32;r++)arr.push(...c.items);
+ $("track").style.transition="none";$("track").style.transform="translateX(0)";
+ $("track").innerHTML=arr.map((x,i)=>`<div class="reward"><div class="mini">${["🔫","🔫","🎯","🔫","◈","🔫","🗡️","♛"][i%8]}</div><b>${x}</b><span class="rarity">${i%8===7?"LEGENDARY":"RARE"}</span></div>`).join("");
+}
+function beep(freq,dur,type="sine",vol=.045){
+ try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const a=new C(),o=a.createOscillator(),g=a.createGain();o.type=type;o.frequency.value=freq;g.gain.value=vol;o.connect(g);g.connect(a.destination);o.start();g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+dur);o.stop(a.currentTime+dur);setTimeout(()=>a.close(),dur*1000+100)}catch(e){}
+}
+function spinCase(){
+ if(spinning)return;const c=cases[selected];
+ if(gold<c.price){toast("Недостаточно золота");beep(130,.12,"square");return}
+ gold-=c.price;updateBalance();spinning=true;$("spinBtn").disabled=true;
+ const track=$("track"), itemW=133, winnerIndex=24*8+Math.floor(Math.random()*8), center=window.innerWidth<560?180:300;
+ const shift=-(winnerIndex*itemW-center+60);
+ track.style.transition="transform 4.2s cubic-bezier(.08,.75,.12,1)";track.style.transform=`translateX(${shift}px)`;
+ let ticks=0;const timer=setInterval(()=>{ticks++;beep(180+ticks*9,.035,"square",.025);if(ticks>26)clearInterval(timer)},145);
+ setTimeout(()=>{
+   const item=c.items[winnerIndex%8];inventory.unshift(item);renderInventory();
+   toast("Выпало: "+item);beep(740,.18,"sine",.07);setTimeout(()=>beep(990,.22,"sine",.05),90);
+   spinning=false;$("spinBtn").disabled=false;
+ },4300);
+}
+function renderInventory(){
+ $("inventoryGrid").innerHTML=inventory.length?inventory.map((x,i)=>`<div class="inv"><div class="mini">${["🔫","🎯","◈","🗡️"][i%4]}</div><b>${x}</b><small>Получено из кейса</small></div>`).join(""):`<div class="empty" style="grid-column:1/-1">Инвентарь пуст.<br>Открой кейс, чтобы получить первый предмет.</div>`;
+}
+function showPage(p){
+ document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(p+"Page").classList.add("active");
+ document.querySelectorAll(".navBtn").forEach(x=>x.classList.toggle("active",x.dataset.page===p));
+ window.scrollTo({top:0,behavior:"smooth"});
+ if(p==="inventory")renderInventory();
+}
+function startBattle(){
+ if(gold<300){toast("Для демо-боя нужно 300 G");return}
+ gold-=300;updateBalance();$("battleLog").innerHTML=`<div style="background:#12131d;border:1px solid #292b39;border-radius:12px;padding:18px;text-align:left"><b>CASE BATTLE #001</b><p style="color:#8b8d9f">Игрок 1 против Игрока 2</p><p>3 кейса открываются одновременно.</p><button class="spin" onclick="openCase(${Math.floor(Math.random()*cases.length)})">ОТКРЫТЬ РАУНД</button></div>`;beep(520,.12,"triangle");}
+function toast(t){$("toast").textContent=t;$("toast").classList.add("show");clearTimeout(window.__t);window.__t=setTimeout(()=>$("toast").classList.remove("show"),1900)}
+function scrollToCases(){window.scrollTo({top:330,behavior:"smooth"})}
+$("addGold").onclick=()=>{gold+=1000;updateBalance();toast("+1000 G (демо)");beep(600,.1)}
+renderCases();renderInventory();updateBalance();
+</script>
+</body>
+</html>
