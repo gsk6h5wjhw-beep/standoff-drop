@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Шурш — Messenger</title>
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--text:#15171c;--muted:#737987;--line:#e7e9ee;--accent:#635bff;--accent2:#5148e8;--bubble:#635bff;--bubbleText:#fff}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+    button,input{font:inherit} button{cursor:pointer;border:0}.hidden{display:none!important}
+    .auth{min-height:100vh;display:grid;place-items:center;padding:24px}.auth-card{width:min(420px,100%);background:var(--card);border:1px solid var(--line);border-radius:24px;padding:34px;box-shadow:0 18px 60px #20242d12;text-align:center}
+    .logo{width:58px;height:58px;border-radius:18px;background:var(--accent);color:white;display:grid;place-items:center;font-size:28px;font-weight:800;margin:0 auto 18px}
+    h1,h2,h3,p{margin-top:0}.auth-card h1{margin-bottom:8px}.auth-card p{color:var(--muted);line-height:1.5}
+    .google{width:100%;padding:13px 16px;border-radius:12px;background:#111;color:#fff;font-weight:700;margin-top:12px}.google:hover{background:#222}
+    .app{height:100vh;display:grid;grid-template-columns:330px 1fr}.sidebar{background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+    .side-head{padding:20px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;margin-bottom:18px}.brand .logo{margin:0;width:36px;height:36px;border-radius:11px;font-size:18px}
+    .search{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:12px;outline:none;background:#f8f9fb}.search:focus{border-color:#aaa}
+    .section-title{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:16px 20px 8px}
+    .chat-list{overflow:auto;flex:1}.chat-item{display:flex;align-items:center;gap:12px;padding:12px 18px;width:100%;background:#fff;text-align:left}.chat-item:hover,.chat-item.active{background:#f3f4ff}.chat-item .meta{min-width:0;flex:1}.chat-item strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.preview{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}.time{font-size:11px;color:var(--muted)}
+    .avatar{width:44px;height:44px;border-radius:50%;background:#e8e9ee;object-fit:cover;display:grid;place-items:center;font-weight:800;flex:0 0 auto}.avatar.small{width:38px;height:38px}.avatar.big{width:82px;height:82px;font-size:25px}
+    .side-foot{padding:12px;border-top:1px solid var(--line)}.me{display:flex;align-items:center;gap:10px;padding:8px}.me .meta{min-width:0;flex:1}.me strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.muted{color:var(--muted);font-size:13px}
+    .icon-btn{width:38px;height:38px;border-radius:10px;background:transparent;font-size:19px}.icon-btn:hover{background:#f0f1f5}
+    .main{min-width:0;display:flex;flex-direction:column}.empty{margin:auto;text-align:center;color:var(--muted)}.empty h2{color:var(--text)}
+    .chat-head{height:72px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 22px;gap:12px}.chat-head .meta{flex:1}.chat-head strong{display:block}.messages{flex:1;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:7px}.msg{max-width:min(70%,620px);padding:10px 13px;border-radius:17px;line-height:1.4;word-break:break-word}.msg.mine{align-self:flex-end;background:var(--bubble);color:var(--bubbleText);border-bottom-right-radius:5px}.msg.theirs{align-self:flex-start;background:#fff;border:1px solid var(--line);border-bottom-left-radius:5px}.msg time{display:block;font-size:10px;opacity:.65;margin-top:4px}.composer{padding:14px 18px;background:#fff;border-top:1px solid var(--line);display:flex;gap:10px}.composer input{flex:1;padding:12px 14px;border:1px solid var(--line);border-radius:14px;outline:none}.send{padding:0 19px;border-radius:13px;background:var(--accent);color:#fff;font-weight:700}.send:disabled{opacity:.5;cursor:not-allowed}
+    .panel{position:fixed;inset:0;background:#0006;display:grid;place-items:center;padding:20px}.modal{width:min(480px,100%);background:#fff;border-radius:22px;padding:24px;box-shadow:0 25px 80px #0003}.modal-head{display:flex;align-items:center;justify-content:space-between}.field{margin:15px 0}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:7px}.field input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:11px;outline:none}.primary{padding:11px 15px;border-radius:11px;background:var(--accent);color:#fff;font-weight:700}.danger{padding:10px 13px;border-radius:11px;background:#fff0f0;color:#c73535;font-weight:700}.result{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:12px}.result .meta{flex:1}.toast{position:fixed;left:50%;bottom:25px;transform:translateX(-50%);background:#17191e;color:#fff;padding:11px 16px;border-radius:12px;box-shadow:0 10px 30px #0003;z-index:10}
+    @media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{display:flex}.main{display:none}.app.chat-open .sidebar{display:none}.app.chat-open .main{display:flex}.side-head{padding:14px}.messages{padding:14px}.msg{max-width:85%}.chat-head{padding:0 14px}}
+  
+body.dark{--bg:#101114;--card:#181a1f;--text:#f4f5f7;--muted:#9da3af;--line:#2a2d34}.dark .sidebar,.dark .chat-head,.dark .composer,.dark .msg.theirs,.dark .modal,.dark .auth-card,.dark .chat-item{background:var(--card)}.dark .chat-item:hover,.dark .chat-item.active{background:#23243a}.dark .search,.dark .composer input,.dark .field input{background:#111318;color:var(--text)}
+.chat-head{position:relative}.chat-head .center-user{position:absolute;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;max-width:48%;text-align:center}.chat-head .center-user .avatar{display:none}.chat-head .center-user strong,.chat-head .center-user span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.chat-head .left-chat{display:flex;align-items:center}.more-btn{margin-left:auto}.send{width:46px;height:46px;padding:0;border-radius:50%;font-size:21px;display:grid;place-items:center}.msg{position:relative;animation:msgIn .18s ease-out}.presence{font-size:12px;color:var(--muted)}.online{color:#2fa866}.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);gap:12px}.settings-row select,.settings-row button{padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text)}@keyframes msgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(max-width:760px){.chat-head{height:64px;padding:0 10px}.chat-head .center-user{max-width:55%}.messages{padding:10px}.composer{padding:8px 10px;padding-bottom:max(8px,env(safe-area-inset-bottom))}.composer input{min-width:0}.send{width:44px;height:44px}}
+</style>
+</head>
+<body>
+
+<div id="authView" class="auth">
+  <div class="auth-card">
+    <div class="logo">Ш</div>
+    <h1>Шурш</h1>
+    <p>Простой мессенджер для своих. Войди через Google и создай свой профиль.</p>
+    <button id="googleBtn" class="google">Продолжить с Google</button>
+    <p class="muted" style="margin-top:15px">Firebase Authentication + Firestore + Storage</p>
+  </div>
+</div>
+
+<div id="appView" class="app hidden">
+  <aside class="sidebar">
+    <div class="side-head">
+      <div class="brand"><div class="logo">Ш</div> Шурш <button id="settingsBtn" class="icon-btn" style="margin-left:auto">⚙️</button></div>
+      <input id="searchInput" class="search" placeholder="Поиск по username…" autocomplete="off">
+      <div id="searchResults"></div>
+    </div>
+    <div class="section-title">Чаты</div>
+    <div id="chatList" class="chat-list"></div>
+    <div class="side-foot">
+      <div class="me">
+        <img id="myAvatar" class="avatar small" alt="">
+        <div class="meta"><strong id="myName">—</strong><span id="myUsername" class="muted">@—</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="emptyState" class="empty">
+      <h2>Выбери чат</h2>
+      <p>Найди друга по @username и начни переписку.</p>
+    </div>
+    <div id="chatView" class="hidden" style="display:flex;flex-direction:column;height:100%">
+      <div class="chat-head"><div class="left-chat"><button id="backBtn" class="icon-btn">←</button></div><div class="center-user"><img id="chatAvatar" class="avatar small" alt=""><strong id="chatName">—</strong><span id="chatUsername" class="presence">@—</span></div><button id="moreBtn" class="icon-btn more-btn" type="button">•••</button></div>
+      <div id="messages" class="messages"></div>
+      <form id="composer" class="composer">
+        <input id="messageInput" placeholder="Напиши сообщение…" autocomplete="off" maxlength="4000">
+        <button id="sendBtn" class="send" type="submit" aria-label="Отправить">➤</button>
+      </form>
+    </div>
+  </main>
+</div>
+
+<div id="profilePanel" class="panel hidden">
+  <div class="modal">
+    <div class="modal-head"><h2 id="profileTitle">Профиль</h2><button class="icon-btn" data-close="profilePanel">✕</button></div>
+    <div style="display:flex;align-items:center;gap:16px;margin:10px 0 20px">
+      <img id="profileAvatarPreview" class="avatar big" alt="">
+      <div><button id="avatarBtn" class="primary" type="button">Загрузить аватар</button><input id="avatarFile" type="file" accept="image/*" hidden></div>
+    </div>
+    <div class="field"><label>Имя</label><input id="nameInput" maxlength="40" placeholder="Как тебя зовут?"></div>
+    <div class="field"><label>Username</label><input id="usernameInput" maxlength="24" placeholder="например, alex_123"><div id="usernameHint" class="muted" style="margin-top:6px"></div></div>
+    <div class="settings-row"><span>Тема</span><select id="themeSelect"><option value="system">Системная</option><option value="light">Светлая</option><option value="dark">Тёмная</option></select></div><div class="settings-row"><span>Уведомления</span><button id="notifyBtn" type="button">Разрешить</button></div><div class="settings-row"><span>Показывать моё время посещения</span><input id="lastSeenToggle" type="checkbox" checked></div><div class="field"><label>Исключения (username через запятую)</label><input id="lastSeenExceptions" placeholder="например, alex, max"></div><button id="saveProfile" class="primary">Сохранить профиль</button>
+    <button id="logoutBtn" class="danger" style="margin-left:8px">Выйти</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, setPersistence, browserLocalPersistence, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc,
+    query, where, orderBy, onSnapshot, serverTimestamp, runTransaction, limit
+  } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+  import {
+    getStorage, ref, uploadBytes, getDownloadURL
+  } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-storage.js";
+
+  // ==========================
+  // ВСТАВЬ СЮДА СВОЙ FIREBASE CONFIG
+  // Firebase Console -> Project settings -> Your apps -> Web app
+  // ==========================
+  const firebaseConfig = {
+    apiKey: "AIzaSyC79CsYTIjr2lahLJv2U1HX_1laEU7-31E",
+    authDomain: "shursh-messenger.firebaseapp.com",
+    projectId: "shursh-messenger",
+    storageBucket: "shursh-messenger.firebasestorage.app",
+    messagingSenderId: "1063665415609",
+    appId: "1:1063665415609:web:d5069aef0e640e23f2b268",
+    measurementId: "G-9TSG5MHTJ8"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+  const provider = new GoogleAuthProvider();
+
+  const $ = id => document.getElementById(id);
+  const authView = $("authView"), appView = $("appView");
+  let me = null, myProfile = null, activeChatId = null, activeOther = null;
+  let unsubChats = null, unsubMessages = null, searchTimer = null;
+
+  function toast(text){
+    $("toast").textContent = text;
+    $("toast").classList.remove("hidden");
+    clearTimeout(window.__toast);
+    window.__toast = setTimeout(()=>$("toast").classList.add("hidden"),2500);
+  }
+  function avatar(el, profile){
+    el.src = profile?.photoURL || "";
+    el.alt = profile?.name || "";
+    el.onerror = () => { el.removeAttribute("src"); el.style.background="#e8e9ee"; el.dataset.initial=(profile?.name||"?").slice(0,1).toUpperCase(); el.parentElement?.classList?.add("x"); };
+  }
+  function initials(name){ return (name||"?").trim().slice(0,1).toUpperCase(); }
+  function setAvatar(el, profile){
+    el.style.display="grid";
+    if(profile?.photoURL){ el.src=profile.photoURL; el.style.objectFit="cover"; }
+    else { el.removeAttribute("src"); el.style.objectFit="initial"; el.textContent=initials(profile?.name); }
+  }
+  function fmt(ts){
+    if(!ts?.toDate) return "";
+    const d=ts.toDate(), now=new Date();
+    return d.toDateString()===now.toDateString()
+      ? d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})
+      : d.toLocaleDateString([], {day:"2-digit",month:"2-digit"});
+  }
+  function validUsername(v){ return /^[a-zA-Z0-9_]{3,24}$/.test(v); }
+
+  function applyTheme(){const t=localStorage.getItem("shursh-theme")||"system";document.body.classList.toggle("dark",t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches));if($("themeSelect"))$("themeSelect").value=t;}
+  applyTheme(); matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if((localStorage.getItem("shursh-theme")||"system")==="system")applyTheme()});
+  function notifySound(){try{const C=AudioContext||webkitAudioContext,c=new C(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.value=.05;o.connect(g).connect(c.destination);o.start();o.stop(c.currentTime+.12)}catch{}}
+  function presenceText(p){if(!p)return "";if(p.online)return "в сети";if(!p.lastSeen?.toDate)return "был недавно";const d=p.lastSeen.toDate();return "был в "+d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});}
+  async function touchPresence(){if(me&&myProfile)try{await updateDoc(doc(db,"users",me.uid),{online:true,lastSeen:serverTimestamp()})}catch{}}
+  function startPresence(){touchPresence();setInterval(touchPresence,25000);document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")touchPresence()});}
+  async function enableNotifications(){if(!("Notification" in window))return toast("Браузер не поддерживает уведомления");const p=await Notification.requestPermission();toast(p==="granted"?"Уведомления включены":"Уведомления запрещены");}
+  $("themeSelect").onchange=()=>{localStorage.setItem("shursh-theme",$("themeSelect").value);applyTheme()}; $("notifyBtn").onclick=enableNotifications;
+  function savePrivacy(){localStorage.setItem("shursh-lastseen",JSON.stringify({enabled:$("lastSeenToggle").checked,exceptions:$("lastSeenExceptions").value.split(",").map(x=>x.trim().replace(/^@/,"").toLowerCase()).filter(Boolean)}))}
+  $("lastSeenToggle").onchange=savePrivacy;$("lastSeenExceptions").oninput=savePrivacy;
+  try{const x=JSON.parse(localStorage.getItem("shursh-lastseen")||"{}");$("lastSeenToggle").checked=x.enabled!==false;$("lastSeenExceptions").value=(x.exceptions||[]).join(", ")}catch{}
+  function canShowLastSeen(p){try{const x=JSON.parse(localStorage.getItem("shursh-lastseen")||"{}");return x.enabled!==false&&!((x.exceptions||[]).includes((p?.username||"").toLowerCase()))}catch{return true}}
+  $("googleBtn").onclick = async ()=>{const btn=$("googleBtn");btn.disabled=true;btn.textContent="Открываем Google…";try{await setPersistence(auth,browserLocalPersistence);if(/iPhone|iPad|Android/i.test(navigator.userAgent)){await signInWithRedirect(auth,provider);return}await signInWithPopup(auth,provider)}catch(e){console.error(e);toast("Не удалось войти: "+(e.message||"ошибка"));btn.disabled=false;btn.textContent="Продолжить с Google"}};
+  getRedirectResult(auth).catch(e=>console.error("Google redirect:",e));
+
+  onAuthStateChanged(auth, async user=>{
+    me = user;
+    if(!user){
+      authView.classList.remove("hidden"); appView.classList.add("hidden");
+      if(unsubChats) unsubChats(); if(unsubMessages) unsubMessages();
+      return;
+    }
+    authView.classList.add("hidden"); appView.classList.remove("hidden");
+    const snap = await getDoc(doc(db,"users",user.uid));
+    if(!snap.exists()){
+      openProfile(true);
+    } else {
+      myProfile = snap.data();
+      renderMe();
+      subscribeChats();
+      startPresence();
+    }
+  });
+
+  function renderMe(){
+    $("myName").textContent = myProfile.name || "Без имени";
+    $("myUsername").textContent = "@"+(myProfile.username || "");
+    setAvatar($("myAvatar"), myProfile);
+  }
+
+  function openProfile(first=false){
+    $("profilePanel").classList.remove("hidden");
+    $("profileTitle").textContent = first ? "Создай профиль" : "Настройки";
+    $("nameInput").value = myProfile?.name || me?.displayName || "";
+    $("usernameInput").value = myProfile?.username || "";
+    setAvatar($("profileAvatarPreview"), myProfile || {name:me?.displayName});
+    $("logoutBtn").classList.toggle("hidden", first);
+  }
+  $("settingsBtn").onclick=()=>openProfile(false);
+  document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.add("hidden"));
+  $("avatarBtn").onclick=()=>$("avatarFile").click();
+  $("avatarFile").onchange=()=>{
+    const f=$("avatarFile").files[0];
+    if(f){ const url=URL.createObjectURL(f); $("profileAvatarPreview").src=url; }
+  };
+
+  $("saveProfile").onclick = async ()=>{
+    const name=$("nameInput").value.trim();
+    const username=$("usernameInput").value.trim().toLowerCase();
+    if(name.length<1) return toast("Введи имя");
+    if(!validUsername(username)) return toast("Username: 3–24 символа, только a-z, 0-9 и _");
+    const btn=$("saveProfile"); btn.disabled=true;
+    try{
+      const userRef=doc(db,"users",me.uid);
+      const usernameRef=doc(db,"usernames",username);
+      const oldUsername=myProfile?.username || null;
+
+      await runTransaction(db, async tx=>{
+        const taken=await tx.get(usernameRef);
+        if(taken.exists() && taken.data().uid!==me.uid) throw new Error("USERNAME_TAKEN");
+        const userSnap=await tx.get(userRef);
+        if(oldUsername && oldUsername!==username){
+          const oldRef=doc(db,"usernames",oldUsername);
+          const oldSnap=await tx.get(oldRef);
+          if(oldSnap.exists() && oldSnap.data().uid===me.uid) tx.delete(oldRef);
+        }
+        tx.set(usernameRef,{uid:me.uid});
+        tx.set(userRef,{
+          uid:me.uid, name, username,
+          email:me.email || "",
+          photoURL: myProfile?.photoURL || me.photoURL || "",
+          updatedAt:serverTimestamp(),
+          createdAt:userSnap.exists()?userSnap.data().createdAt:serverTimestamp()
+        },{merge:true});
+      });
+
+      let photoURL=myProfile?.photoURL || me.photoURL || "";
+      const file=$("avatarFile").files[0];
+      if(file){
+        if(file.size>5*1024*1024) throw new Error("Аватар должен быть меньше 5 МБ");
+        const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+        const r=ref(storage,`avatars/${me.uid}.${ext}`);
+        await uploadBytes(r,file,{contentType:file.type});
+        photoURL=await getDownloadURL(r);
+        await updateDoc(doc(db,"users",me.uid),{photoURL,updatedAt:serverTimestamp()});
+      }
+
+      myProfile={...(myProfile||{}),uid:me.uid,name,username,photoURL};
+      renderMe(); $("profilePanel").classList.add("hidden"); subscribeChats();
+      toast("Профиль сохранён");
+    }catch(e){
+      toast(e.message==="USERNAME_TAKEN" ? "Этот username уже занят" : (e.message||"Не удалось сохранить"));
+    }finally{btn.disabled=false}
+  };
+
+  $("logoutBtn").onclick=()=>signOut(auth);
+
+  // Поиск: сначала ищем reservation-документ usernames/{username},
+  // поэтому поиск не зависит от индекса Firestore.
+  $("searchInput").oninput = ()=>{
+    clearTimeout(searchTimer);
+    const val=$("searchInput").value.trim().replace(/^@/,"").toLowerCase();
+    if(!val){$("searchResults").innerHTML="";return}
+    searchTimer=setTimeout(()=>searchUser(val),250);
+  };
+  async function searchUser(username){
+    if(username===myProfile?.username){$("searchResults").innerHTML="";return}
+    try{
+      const u=await getDoc(doc(db,"usernames",username));
+      if(!u.exists()){ $("searchResults").innerHTML='<div class="muted" style="padding:10px 2px">Пользователь не найден</div>'; return; }
+      const p=await getDoc(doc(db,"users",u.data().uid));
+      if(!p.exists()) return;
+      const x=p.data();
+      $("searchResults").innerHTML="";
+      const row=document.createElement("div"); row.className="result";
+      const av=document.createElement("img"); av.className="avatar small"; setAvatar(av,x);
+      const meta=document.createElement("div"); meta.className="meta";
+      meta.innerHTML=`<strong>${escapeHtml(x.name||"Без имени")}</strong><div class="muted">@${escapeHtml(x.username)}</div>`;
+      const b=document.createElement("button"); b.className="primary"; b.textContent="Написать";
+      b.onclick=()=>startChat(x);
+      row.append(av,meta,b); $("searchResults").append(row);
+    }catch(e){console.error(e)}
+  }
+
+  function chatIdFor(a,b){ return [a,b].sort().join("_"); }
+  async function startChat(other){
+    try {
+      const id = chatIdFor(me.uid, other.uid);
+      const chatRef = doc(db, "chats", id);
+
+      await setDoc(chatRef, {
+        participantIds: [me.uid, other.uid],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastMessage: ""
+      }, { merge: true });
+
+      $("searchInput").value = "";
+      $("searchResults").innerHTML = "";
+      await openChat(id, other);
+    } catch (e) {
+      console.error("Ошибка создания чата:", e);
+      toast("Не удалось открыть чат");
+    }
+  }
+
+  function subscribeChats(){
+    if(unsubChats) unsubChats();
+    const q=query(collection(db,"chats"),where("participantIds","array-contains",me.uid),limit(100));
+    unsubChats=onSnapshot(q, async snap=>{
+      const rows=await Promise.all(snap.docs.map(async d=>{
+        const data=d.data(), otherId=data.participantIds.find(x=>x!==me.uid);
+        const p=await getDoc(doc(db,"users",otherId));
+        return {id:d.id,data,p:p.exists()?p.data():{uid:otherId,name:"Пользователь",username:""}};
+      }));
+      rows.sort((a,b)=>(b.data.updatedAt?.toMillis?.()||0)-(a.data.updatedAt?.toMillis?.()||0));
+      $("chatList").innerHTML="";
+      if(!rows.length){$("chatList").innerHTML='<div class="muted" style="padding:20px">Пока чатов нет.<br>Найди друга выше.</div>';return}
+      rows.forEach(r=>{
+        const el=document.createElement("button"); el.className="chat-item"+(r.id===activeChatId?" active":"");
+        const av=document.createElement("img"); av.className="avatar"; setAvatar(av,r.p);
+        const meta=document.createElement("div"); meta.className="meta";
+        const last=escapeHtml(r.data.lastMessage||"");
+        meta.innerHTML=`<strong>${escapeHtml(r.p.name||"Без имени")}</strong><div class="preview">${last||"Новый чат"}</div>`;
+        const t=document.createElement("div"); t.className="time"; t.textContent=fmt(r.data.updatedAt);
+        el.append(av,meta,t); el.onclick=()=>openChat(r.id,r.p); $("chatList").append(el);
+      });
+    });
+  }
+
+  async function openChat(id,other){
+    activeChatId=id; activeOther=other;
+    $("emptyState").classList.add("hidden"); $("chatView").classList.remove("hidden"); appView.classList.add("chat-open");
+    $("chatName").textContent=other.name||"Без имени"; $("chatUsername").textContent=canShowLastSeen(other)?presenceText(other):"был недавно"; setAvatar($("chatAvatar"),other);
+    if(unsubMessages) unsubMessages();
+    const q=query(collection(db,"chats",id,"messages"),orderBy("createdAt","asc"),limit(500));
+    unsubMessages=onSnapshot(q,snap=>{
+      $("messages").innerHTML="";
+      snap.docs.forEach(d=>{
+        const m=d.data(), el=document.createElement("div");
+        el.className="msg "+(m.senderId===me.uid?"mine":"theirs");
+        const time=fmt(m.createdAt);
+        el.innerHTML=`${escapeHtml(m.text||"")}<time>${time}</time>`;
+        $("messages").append(el);
+      });
+      if(snap.docChanges().some(c=>c.type==="added"&&c.doc.data().senderId!==me.uid)){ if(document.hidden){try{notifySound()}catch{} if(window.Notification?.permission==="granted"){const m=snap.docChanges().find(c=>c.type==="added"&&c.doc.data().senderId!==me.uid)?.doc.data();if(m)new Notification(activeOther?.name||"Шурш",{body:m.text||"Новое сообщение"})}} }
+      $("messages").scrollTop=$("messages").scrollHeight;
+    });
+    document.querySelectorAll(".chat-item").forEach(x=>x.classList.remove("active"));
+  }
+  $("backBtn").onclick=()=>{appView.classList.remove("chat-open");activeChatId=null;$("chatView").classList.add("hidden");$("emptyState").classList.remove("hidden");if(unsubMessages)unsubMessages()};
+
+  $("composer").onsubmit=async e=>{
+    e.preventDefault();
+    const text=$("messageInput").value.trim();
+    if(!text || !activeChatId) return;
+    $("sendBtn").disabled=true;
+    try{
+      const chatRef=doc(db,"chats",activeChatId);
+      await addDoc(collection(chatRef,"messages"),{text,senderId:me.uid,createdAt:serverTimestamp()});
+      await updateDoc(chatRef,{lastMessage:text,updatedAt:serverTimestamp(),lastSenderId:me.uid});
+      $("messageInput").value="";
+    }catch(e){toast("Сообщение не отправилось")}
+    finally{$("sendBtn").disabled=false}
+  };
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+  }
+</script>
+</body>
+</html>
