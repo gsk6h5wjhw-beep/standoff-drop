@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Renovation House</title>
+<style>
+  :root{ --ui:#e8eef6; --acc:#6cc4ff; --bg:#0a0e14; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ui);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none}
+  canvas{display:block;position:fixed;inset:0}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    z-index:10;pointer-events:auto}
+  .screen.active{display:flex}
+  #menu{background:radial-gradient(ellipse at 50% 70%,rgba(6,12,20,.35),rgba(6,12,20,.9) 70%);}
+  #menu h1{font-size:clamp(28px,6vw,64px);letter-spacing:.25em;margin:0 0 6px;font-weight:300;
+    text-shadow:0 4px 30px rgba(0,0,0,.8)}
+  #menu .sub{opacity:.65;letter-spacing:.4em;font-size:12px;margin-bottom:36px}
+  .btns{display:flex;flex-direction:column;gap:12px;width:min(340px,80vw)}
+  button{font:inherit;color:var(--ui);background:rgba(20,30,45,.55);border:1px solid rgba(120,180,255,.35);
+    padding:14px 22px;border-radius:10px;cursor:pointer;letter-spacing:.15em;font-size:14px;
+    backdrop-filter:blur(8px);transition:.15s}
+  button:hover{background:rgba(60,110,180,.55);border-color:var(--acc);transform:translateY(-1px)}
+  button.primary{background:linear-gradient(180deg,rgba(90,150,220,.85),rgba(50,90,150,.85));border-color:var(--acc)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .panel{position:fixed;inset:0;background:rgba(4,8,14,.85);backdrop-filter:blur(14px);z-index:20;
+    display:none;overflow-y:auto;padding:24px}
+  .panel.active{display:block}
+  .panel h2{margin:0 0 20px;font-weight:300;letter-spacing:.3em;font-size:22px;text-align:center}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 6px;
+    border-bottom:1px solid rgba(120,180,255,.12);font-size:14px}
+  .row select,.row input[type=range]{background:rgba(20,30,45,.6);color:var(--ui);border:1px solid rgba(120,180,255,.3);
+    padding:6px 10px;border-radius:6px;font:inherit;font-size:13px;min-width:130px}
+  .panel .inner{max-width:520px;margin:0 auto}
+  .close{position:fixed;top:16px;right:16px;width:40px;height:40px;padding:0;border-radius:50%;font-size:20px}
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:5;display:none}
+  #hud.active{display:block}
+  .hud-tl,.hud-tr{position:absolute;top:14px;padding:10px 14px;background:rgba(10,16,24,.55);
+    border:1px solid rgba(120,180,255,.25);border-radius:8px;font-size:13px;letter-spacing:.08em;backdrop-filter:blur(6px)}
+  .hud-tl{left:14px} .hud-tr{right:14px;font-weight:600;color:#b8e89a}
+  .hud-tl .t{font-size:22px;letter-spacing:.15em;margin-bottom:2px}
+  .hud-tl .d{opacity:.75;font-size:11px;letter-spacing:.3em}
+  #tools{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;
+    background:rgba(10,16,24,.55);padding:8px;border-radius:12px;border:1px solid rgba(120,180,255,.25);
+    backdrop-filter:blur(6px);pointer-events:auto}
+  .tool{width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border-radius:8px;font-size:20px;cursor:pointer;transition:.12s;border:1px solid transparent}
+  .tool.active{background:rgba(100,180,255,.25);border-color:var(--acc)}
+  .tool .k{font-size:9px;opacity:.6;margin-top:2px}
+  #hint{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);font-size:13px;letter-spacing:.15em;
+    background:rgba(10,16,24,.6);padding:8px 16px;border-radius:20px;opacity:0;transition:.2s;
+    border:1px solid rgba(120,180,255,.3)}
+  #hint.show{opacity:1}
+  #missions{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(10,16,24,.6);
+    padding:12px 18px;border-radius:10px;border:1px solid rgba(120,180,255,.25);font-size:12px;
+    backdrop-filter:blur(6px);min-width:220px}
+  #missions h4{margin:0 0 8px;font-size:11px;letter-spacing:.3em;opacity:.7;font-weight:400}
+  #missions .m{display:flex;justify-content:space-between;gap:12px;padding:3px 0;opacity:.85}
+  #missions .m.done{color:#9be09b;text-decoration:line-through;opacity:.5}
+  #mobile{position:fixed;inset:0;pointer-events:none;z-index:6;display:none}
+  #mobile.active{display:block}
+  #stick{position:absolute;left:24px;bottom:24px;width:130px;height:130px;border-radius:50%;
+    background:rgba(20,30,45,.35);border:2px solid rgba(120,180,255,.3);pointer-events:auto}
+  #stick .nub{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
+    background:rgba(120,180,255,.55)}
+  .mbtn{position:absolute;width:64px;height:64px;border-radius:50%;background:rgba(20,30,45,.55);
+    border:1px solid rgba(120,180,255,.4);pointer-events:auto;display:flex;align-items:center;justify-content:center;
+    font-size:11px;letter-spacing:.1em;text-align:center;padding:0}
+  #mUse{right:24px;bottom:110px;width:80px;height:80px;font-size:12px}
+  #mTool{right:110px;bottom:30px}
+  #mJump{right:24px;bottom:30px}
+  #loader{position:fixed;inset:0;background:#0a0e14;z-index:100;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:16px}
+  #loader .b{width:200px;height:3px;background:rgba(120,180,255,.2);border-radius:2px;overflow:hidden}
+  #loader .b i{display:block;height:100%;width:30%;background:var(--acc);animation:load 1.1s infinite ease-in-out}
+  @keyframes load{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+  .mp-input{background:rgba(20,30,45,.6);color:var(--ui);border:1px solid rgba(120,180,255,.3);
+    padding:12px 16px;border-radius:8px;font:inherit;font-size:20px;letter-spacing:.4em;text-align:center;
+    width:100%;text-transform:uppercase;margin-bottom:14px}
+  .players{list-style:none;padding:0;margin:0;max-width:340px;margin:0 auto 20px}
+  .players li{padding:10px;border-bottom:1px solid rgba(120,180,255,.15);display:flex;align-items:center;gap:10px}
+  .avatar{width:28px;height:28px;border-radius:50%;background:rgba(120,180,255,.3)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="loader"><div style="letter-spacing:.4em;opacity:.7;font-size:12px">LOADING</div><div class="b"><i></i></div></div>
+
+<!-- MAIN MENU -->
+<div id="menu" class="screen">
+  <h1>RENOVATION&nbsp;HOUSE</h1>
+  <div class="sub">SINGLE · MULTIPLAYER</div>
+  <div class="btns">
+    <button id="btnContinue" style="display:none">ПРОДОЛЖИТЬ</button>
+    <button id="btnPlay" class="primary">ИГРАТЬ</button>
+    <button id="btnMP">ИГРАТЬ МУЛЬТИПЛЕЕР</button>
+    <button id="btnSettings">НАСТРОЙКИ</button>
+    <button id="btnLogin">ВОЙТИ ЧЕРЕЗ GOOGLE</button>
+  </div>
+  <div id="userInfo" style="margin-top:24px;font-size:12px;opacity:.7"></div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settingsPanel" class="panel">
+  <button class="close" onclick="document.getElementById('settingsPanel').classList.remove('active')">×</button>
+  <div class="inner">
+    <h2>НАСТРОЙКИ</h2>
+    <h4 style="opacity:.6;letter-spacing:.3em;font-size:11px;margin:20px 0 6px">GRAPHICS</h4>
+    <div class="row"><span>Пресет</span>
+      <select id="sPreset"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>ULTRA</option><option>CUSTOM</option></select></div>
+    <div class="row"><span>Разрешение</span>
+      <select id="sRes"><option>AUTO</option><option>50</option><option>75</option><option>100</option><option>125</option></select></div>
+    <div class="row"><span>Тени</span>
+      <select id="sShadow"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>ULTRA</option></select></div>
+    <div class="row"><span>Отражения</span>
+      <select id="sRefl"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>ULTRA</option></select></div>
+    <div class="row"><span>Bloom</span><input id="sBloom" type="checkbox" checked></div>
+    <div class="row"><span>Туман</span><input id="sFog" type="checkbox" checked></div>
+    <div class="row"><span>Ambient Occlusion</span><input id="sAO" type="checkbox" checked></div>
+    <div class="row"><span>Частицы</span><input id="sPart" type="checkbox" checked></div>
+    <div class="row"><span>Дальность прорисовки</span><input id="sView" type="range" min="80" max="400" value="200"></div>
+
+    <h4 style="opacity:.6;letter-spacing:.3em;font-size:11px;margin:20px 0 6px">AUDIO</h4>
+    <div class="row"><span>Master</span><input id="aMaster" type="range" min="0" max="100" value="70"></div>
+    <div class="row"><span>Music</span><input id="aMusic" type="range" min="0" max="100" value="30"></div>
+    <div class="row"><span>Effects</span><input id="aFX" type="range" min="0" max="100" value="80"></div>
+    <div class="row"><span>Ambient</span><input id="aAmb" type="range" min="0" max="100" value="60"></div>
+
+    <h4 style="opacity:.6;letter-spacing:.3em;font-size:11px;margin:20px 0 6px">CONTROLS</h4>
+    <div class="row"><span>Чувствительность</span><input id="cSens" type="range" min="20" max="200" value="100"></div>
+    <div class="row"><span>Invert Y</span><input id="cInvY" type="checkbox"></div>
+    <div class="row"><span>Подсказки</span><input id="cHints" type="checkbox" checked></div>
+    <div style="text-align:center;margin-top:26px">
+      <button class="primary" id="sSave">ПРИМЕНИТЬ</button>
+    </div>
+  </div>
+</div>
+
+<!-- MP PANEL -->
+<div id="mpPanel" class="panel">
+  <button class="close" onclick="document.getElementById('mpPanel').classList.remove('active')">×</button>
+  <div class="inner">
+    <h2>MULTIPLAYER</h2>
+    <div id="mpStatus" style="text-align:center;font-size:12px;opacity:.7;margin-bottom:20px"></div>
+    <div id="mpMain">
+      <div class="btns" style="width:100%">
+        <button class="primary" id="mpCreate">СОЗДАТЬ КОМНАТУ</button>
+        <div style="height:8px"></div>
+        <div style="font-size:11px;letter-spacing:.3em;opacity:.6;text-align:center;margin:10px 0">ИЛИ</div>
+        <input id="mpCode" class="mp-input" placeholder="ВВЕДИТЕ КОД" maxlength="6">
+        <button id="mpJoin">ПОДКЛЮЧИТЬСЯ</button>
+      </div>
+    </div>
+    <div id="mpLobby" style="display:none">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="letter-spacing:.3em;font-size:11px;opacity:.6">ROOM</div>
+        <div id="lobbyCode" style="font-size:34px;letter-spacing:.4em;font-weight:300;margin:6px 0">------</div>
+        <div style="font-size:13px;opacity:.7"><span id="lobbyCount">1</span> / 10 PLAYERS</div>
+      </div>
+      <ul class="players" id="lobbyList"></ul>
+      <div style="text-align:center">
+        <button class="primary" id="mpStart" style="display:none">НАЧАТЬ ИГРУ</button>
+        <div id="mpWait" style="font-size:12px;opacity:.6;display:none">ОЖИДАНИЕ ХОЗЯИНА...</div>
+        <button id="mpLeave" style="margin-top:10px">ВЫЙТИ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-tl"><div class="t" id="hDay">DAY 1</div><div class="d" id="hDate">MONDAY</div><div class="d" id="hTime" style="margin-top:4px;font-size:14px;opacity:1">08:00</div></div>
+  <div class="hud-tr"><span id="hMoney">$0</span></div>
+  <div id="missions">
+    <h4>RESTORE THIS HOUSE</h4>
+    <div id="missionList"></div>
+  </div>
+  <div id="tools"></div>
+  <div id="hint"></div>
+</div>
+
+<!-- MOBILE -->
+<div id="mobile">
+  <div id="stick"><div class="nub"></div></div>
+  <button class="mbtn" id="mUse">E</button>
+  <button class="mbtn" id="mJump">JUMP</button>
+  <button class="mbtn" id="mTool">TOOL</button>
+</div>
+
+<!-- Firebase config (замени на свой) -->
+<script id="firebase-config" type="application/json">
+{
+  "apiKey": "REPLACE_ME",
+  "authDomain": "REPLACE_ME.firebaseapp.com",
+  "projectId": "REPLACE_ME",
+  "databaseURL": "https://REPLACE_ME-default-rtdb.firebaseio.com",
+  "appId": "REPLACE_ME"
+}
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============================================================
+   STATE
+============================================================ */
+const $ = id => document.getElementById(id);
+const isTouch = matchMedia('(hover: none)').matches || 'ontouchstart' in window;
+
+const Settings = {
+  preset:'HIGH', resolution:'AUTO', shadows:'HIGH', reflections:'MEDIUM',
+  bloom:true, fog:true, ao:true, particles:true, viewDistance:200,
+  audio:{ master:70, music:30, fx:80, ambient:60 },
+  controls:{ sens:100, invertY:false, hints:true }
+};
+const Save = {
+  money:0, day:1, timeOfDay:8.0, dayIdx:0,
+  cleaned:{ floor:0, wall:0, glass:0, grass:0, trash:0 },
+  missions:{ trash:false, grass:false, glass:false, floor:false, wall:false }
+};
+const DAYS = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'];
+const DAY_LEN_SEC = 15*60; // 15 min day
+const NIGHT_LEN_SEC = 8*60; // 8 min night
+
+/* ============================================================
+   LOAD SAVE
+============================================================ */
+try{
+  const raw = localStorage.getItem('rh_save');
+  if(raw){ const s = JSON.parse(raw); Object.assign(Save, s);
+    if(s.settings) Object.assign(Settings, s.settings);
+    if(s.controls) Object.assign(Settings.controls, s.controls);
+    if(s.audio) Object.assign(Settings.audio, s.audio);
+  }
+}catch(e){}
+
+function persist(){
+  try{ localStorage.setItem('rh_save', JSON.stringify({
+    ...Save, settings:Settings, controls:Settings.controls, audio:Settings.audio
+  })); }catch(e){}
+}
+
+/* ============================================================
+   RENDERER + SCENE
+============================================================ */
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.08, 800);
+
+/* ---------- Sky (gradient sphere) ---------- */
+const skyUniforms = {
+  top:{value:new THREE.Color(0x3a78c2)}, bot:{value:new THREE.Color(0xbfd8e8)},
+  sunDir:{value:new THREE.Vector3(0.4,0.7,0.3)}, sunCol:{value:new THREE.Color(0xfff0c0)},
+  sunPow:{value:0.0}
+};
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(400, 32, 16),
+  new THREE.ShaderMaterial({
+    side:THREE.BackSide, depthWrite:false, uniforms:skyUniforms,
+    vertexShader:`varying vec3 vW; void main(){ vW = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader:`
+      uniform vec3 top,bot,sunCol,sunDir; uniform float sunPow; varying vec3 vW;
+      void main(){
+        float h = clamp(vW.y*0.5+0.5,0.0,1.0);
+        vec3 col = mix(bot, top, pow(h,0.9));
+        float s = max(dot(normalize(vW), normalize(sunDir)), 0.0);
+        col += sunCol * pow(s, 12.0) * sunPow;
+        col += sunCol * pow(s, 200.0) * sunPow * 2.0;
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  })
+);
+scene.add(sky);
+
+/* ---------- Lights ---------- */
+const sunLight = new THREE.DirectionalLight(0xfff0d0, 2.2);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 1; sunLight.shadow.camera.far = 120;
+sunLight.shadow.camera.left=-40; sunLight.shadow.camera.right=40;
+sunLight.shadow.camera.top=40; sunLight.shadow.camera.bottom=-40;
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+scene.add(sunLight.target);
+
+const moonLight = new THREE.DirectionalLight(0x88aaff, 0.0);
+scene.add(moonLight);
+
+const hemi = new THREE.HemisphereLight(0x88aacc, 0x2a2018, 0.9);
+scene.add(hemi);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.15);
+scene.add(ambient);
+
+/* ---------- Fog ---------- */
+scene.fog = new THREE.Fog(0x9bb3c7, 40, Settings.viewDistance);
+
+/* ============================================================
+   TEXTURES (procedural canvas)
+============================================================ */
+function makeCanvas(size, fn){
+  const c = document.createElement('canvas'); c.width=c.height=size;
+  const ctx = c.getContext('2d'); fn(ctx, size);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; t.colorSpace=THREE.SRGBColorSpace;
+  return t;
+}
+function noise(ctx, size, base, amount, count){
+  ctx.fillStyle=base; ctx.fillRect(0,0,size,size);
+  for(let i=0;i<count;i++){
+    const x=Math.random()*size, y=Math.random()*size, r=Math.random()*amount+1;
+    const a = 0.05+Math.random()*0.15;
+    ctx.fillStyle = `rgba(0,0,0,${a})`;
+    ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+  }
+}
+const texGrass = makeCanvas(256,(c,s)=>{ noise(c,s,'#4a6a32',4,1800); });
+texGrass.repeat.set(40,40);
+const texDirt = makeCanvas(256,(c,s)=>{ noise(c,s,'#5c4a38',6,1200); });
+const texWood = makeCanvas(256,(c,s)=>{ c.fillStyle='#8a6b48'; c.fillRect(0,0,s,s);
+  for(let i=0;i<40;i++){ c.fillStyle=`rgba(60,40,20,${0.05+Math.random()*0.1})`;
+    c.fillRect(0, i*6, s, 3); } });
+texWood.repeat.set(3,3);
+const texWall = makeCanvas(256,(c,s)=>{ noise(c,s,'#c9bfae',3,900); });
+const texWallRepair = makeCanvas(256,(c,s)=>{ noise(c,s,'#f2e8d8',2,300); });
+
+/* ============================================================
+   WORLD
+============================================================ */
+const worldRoot = new THREE.Group(); scene.add(worldRoot);
+
+// ground
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(200, 200),
+  new THREE.MeshStandardMaterial({ map:texGrass, roughness:1, metalness:0 })
+);
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true;
+worldRoot.add(ground);
+
+// driveway / road
+const roadMat = new THREE.MeshStandardMaterial({ color:0x2a2a2e, roughness:1 });
+const road = new THREE.Mesh(new THREE.PlaneGeometry(200, 6), roadMat);
+road.rotation.x=-Math.PI/2; road.position.set(0,0.01,-22); road.receiveShadow=true;
+worldRoot.add(road);
+// road lines
+for(let i=0;i<30;i++){
+  const line = new THREE.Mesh(new THREE.PlaneGeometry(3,0.2), new THREE.MeshBasicMaterial({color:0xf2e8c0}));
+  line.rotation.x=-Math.PI/2; line.position.set(-90 + i*6.5, 0.02, -22);
+  worldRoot.add(line);
+}
+
+// trees
+const treeTrunkMat = new THREE.MeshStandardMaterial({color:0x4a3020, roughness:1});
+const treeLeafMat = new THREE.MeshStandardMaterial({color:0x2e5522, roughness:1});
+function tree(x,z,s=1){
+  const g = new THREE.Group();
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.22,2.4,6), treeTrunkMat);
+  tr.position.y=1.2; tr.castShadow=true; g.add(tr);
+  for(let i=0;i<3;i++){
+    const l = new THREE.Mesh(new THREE.SphereGeometry(1.1 + i*0.1, 8, 6), treeLeafMat);
+    l.position.set((Math.random()-0.5)*0.4, 2.2 + i*0.55, (Math.random()-0.5)*0.4);
+    l.castShadow=true; g.add(l);
+  }
+  g.position.set(x,0,z); g.scale.setScalar(s);
+  worldRoot.add(g); return g;
+}
+const treePos = [[-18,-10,1.3],[18,-12,1.1],[-28,4,1.4],[28,6,1.2],[-14,-28,1.2],[16,-30,1.3],[-34,-18,1.5],[35,-22,1.4]];
+treePos.forEach(p=>tree(...p));
+
+// neighbors (simple boxes)
+function neighborHouse(x,z,rot){
+  const g=new THREE.Group();
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(7,3,6),
+    new THREE.MeshStandardMaterial({color:0xb0a693, roughness:1}));
+  wall.position.y=1.5; wall.castShadow=true; wall.receiveShadow=true; g.add(wall);
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(5.4,2,4),
+    new THREE.MeshStandardMaterial({color:0x70352a, roughness:1}));
+  roof.position.y=4; roof.rotation.y=Math.PI/4; roof.castShadow=true; g.add(roof);
+  g.position.set(x,0,z); g.rotation.y=rot;
+  worldRoot.add(g);
+}
+neighborHouse(-30,-45,0.2); neighborHouse(28,-44,-0.3); neighborHouse(-58,-8,1.6); neighborHouse(58,10,-1.5);
+
+// lamps
+for(let i=0;i<8;i++){
+  const x=-40 + i*11;
+  const lamp = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,4,6),
+    new THREE.MeshStandardMaterial({color:0x2a2a2a, roughness:0.7, metalness:0.6}));
+  pole.position.y=2; pole.castShadow=true; lamp.add(pole);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25,8,6),
+    new THREE.MeshStandardMaterial({color:0xffffcc, emissive:0xffcc66, emissiveIntensity:1}));
+  head.position.y=4.05; lamp.add(head);
+  lamp.position.set(x,0,-19);
+  worldRoot.add(lamp);
+}
+
+/* ============================================================
+   HOUSE
+============================================================ */
+const house = new THREE.Group();
+worldRoot.add(house);
+
+const H = { W:8, D:8, WH:2.9, T:0.15 };
+
+const wallMat = new THREE.MeshStandardMaterial({ map:texWall, roughness:0.95 });
+const wallRepaired = new THREE.MeshStandardMaterial({ map:texWallRepair, roughness:0.9 });
+const floorMat = new THREE.MeshStandardMaterial({ map:texWood, roughness:0.9 });
+const roofMat  = new THREE.MeshStandardMaterial({ color:0x5a3a28, roughness:1 });
+
+// floor
+const floor = new THREE.Mesh(new THREE.BoxGeometry(H.W, 0.1, H.D), floorMat);
+floor.position.y = 0.05; floor.receiveShadow=true;
+house.add(floor);
+
+// ceiling
+const ceil = new THREE.Mesh(new THREE.BoxGeometry(H.W, 0.1, H.D),
+  new THREE.MeshStandardMaterial({color:0xf0e8d8, roughness:1}));
+ceil.position.y = H.WH; ceil.receiveShadow=true;
+house.add(ceil);
+
+// walls (with opening for door on front)
+const wallSpecs = [
+  // [x,z,w,d] front wall split by door
+  { x:-2.6, z:-H.D/2, w:H.W/2-0.6, d:H.T, wall:true },
+  { x: 2.6, z:-H.D/2, w:H.W/2-0.6, d:H.T, wall:true },
+  // back
+  { x: 0, z: H.D/2, w:H.W, d:H.T, wall:true },
+  // left
+  { x:-H.W/2, z:0, w:H.T, d:H.D, wall:true },
+  // right
+  { x: H.W/2, z:0, w:H.T, d:H.D, wall:true },
+];
+wallSpecs.forEach(s=>{
+  const m = new THREE.Mesh(new THREE.BoxGeometry(s.w, H.WH, s.d), wallMat.clone());
+  m.position.set(s.x, H.WH/2, s.z);
+  m.castShadow=true; m.receiveShadow=true;
+  m.userData.isWall = true;
+  house.add(m);
+});
+
+// windows (glass planes)
+const glassMat = new THREE.MeshPhysicalMaterial({
+  color:0xaaccdd, roughness:0.15, metalness:0, transmission:0.85,
+  transparent:true, opacity:0.55, side:THREE.DoubleSide
+});
+const windowSpecs = [
+  { x:-2.6, y:1.6, z:-H.D/2-0.01, ry:0 },
+  { x: 2.6, y:1.6, z:-H.D/2-0.01, ry:0 },
+  { x:-H.W/2-0.01, y:1.6, z:0, ry:Math.PI/2 },
+  { x: H.W/2+0.01, y:1.6, z:0, ry:-Math.PI/2 },
+];
+const windows = [];
+windowSpecs.forEach(s=>{
+  const g = new THREE.Group();
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(2.2,1.6,0.06),
+    new THREE.MeshStandardMaterial({color:0x3a2a1a, roughness:0.8}));
+  g.add(frame);
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(2,1.4), glassMat.clone());
+  glass.position.z = 0.04;
+  glass.userData.isGlass = true;
+  g.add(glass);
+  g.position.set(s.x, s.y, s.z); g.rotation.y = s.ry;
+  house.add(g); windows.push(glass);
+  // cut hole in wall? For visual simplicity the wall behind is solid; we accept overlap.
+});
+
+// door
+const doorMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2,2.3,0.08),
+  new THREE.MeshStandardMaterial({color:0x4a2e1a, roughness:0.85}));
+doorMesh.position.set(0, 1.15, -H.D/2 - 0.02);
+doorMesh.castShadow = true;
+house.add(doorMesh);
+doorMesh.userData.door = true;
+doorMesh.userData.open = false;
+doorMesh.userData.targetRot = 0;
+
+// roof
+const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(H.W,H.D)*0.85, 2.2, 4),
+  roofMat);
+roof.position.y = H.WH + 1.1;
+roof.rotation.y = Math.PI/4;
+roof.castShadow = true;
+house.add(roof);
+
+// house position
+house.position.set(0, 0, 12); // in front of road
+
+/* ---------- Interior lights ---------- */
+const interiorLampGroup = new THREE.Group();
+house.add(interiorLampGroup);
+const interiorLight = new THREE.PointLight(0xffd8a0, 0, 12, 2);
+interiorLight.position.set(0, H.WH-0.3, 0);
+interiorLampGroup.add(interiorLight);
+const bulbMesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6),
+  new THREE.MeshStandardMaterial({ color:0xffffff, emissive:0xffd8a0, emissiveIntensity:0.2 }));
+bulbMesh.position.copy(interiorLight.position);
+interiorLampGroup.add(bulbMesh);
+let interiorLightOn = false;
+
+/* ============================================================
+   DIRT / CLEANING SYSTEM
+============================================================ */
+const dirtGroup = new THREE.Group(); scene.add(dirtGroup);
+const dirtItems = []; // { mesh, type, hp, maxHp }
+
+const dirtMat = (color, opacity) => new THREE.MeshStandardMaterial({
+  color, roughness:1, transparent:true, opacity
+});
+
+function addFloorDirt(x,z,color=0x2a1d10, hp=1){
+  const m = new THREE.Mesh(new THREE.CircleGeometry(0.35+Math.random()*0.25, 12),
+    dirtMat(color, 0.85));
+  m.rotation.x=-Math.PI/2;
+  m.position.set(x, 0.11, z);
+  m.userData = { isDirt:true, type:'floor', hp, maxHp:hp };
+  dirtGroup.add(m); dirtItems.push(m);
+  return m;
+}
+function addWallDirt(x,y,z,ry,hp=1){
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.6+Math.random()*0.5, 0.5+Math.random()*0.4),
+    dirtMat(0x30302c, 0.8));
+  m.position.set(x,y,z); m.rotation.y = ry;
+  m.userData = { isDirt:true, type:'wall', hp, maxHp:hp };
+  dirtGroup.add(m); dirtItems.push(m);
+  return m;
+}
+function addGlassDirt(glass, hp=1){
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.35),
+    dirtMat(0x000000, 0.55));
+  m.position.copy(glass.getWorldPosition(new THREE.Vector3()));
+  // align with glass world rotation
+  const wq = glass.getWorldQuaternion(new THREE.Quaternion());
+  m.quaternion.copy(wq);
+  const dir = new THREE.Vector3(0,0,1).applyQuaternion(wq);
+  m.position.addScaledVector(dir, 0.06);
+  m.userData = { isDirt:true, type:'glass', hp, maxHp:hp, glass };
+  dirtGroup.add(m); dirtItems.push(m);
+  return m;
+}
+function addTrash(x,z){
+  const g = new THREE.Group();
+  const pieces = 3+Math.floor(Math.random()*3);
+  for(let i=0;i<pieces;i++){
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.08,0.2),
+      new THREE.MeshStandardMaterial({ color: Math.random()<0.5?0x7a6a3a:0x504030, roughness:1}));
+    p.position.set((Math.random()-0.5)*0.5, 0.05, (Math.random()-0.5)*0.5);
+    p.rotation.y = Math.random()*Math.PI;
+    p.castShadow = true;
+    g.add(p);
+  }
+  g.position.set(x, 0, z);
+  g.userData = { isDirt:true, type:'trash', hp:1, maxHp:1, isTrashGroup:true };
+  // make children clickable too
+  g.traverse(c=>{ if(c.isMesh) c.userData.dirtRoot = g; });
+  dirtGroup.add(g); dirtItems.push(g);
+  return g;
+}
+function addGrassPatch(x,z){
+  const g = new THREE.Group();
+  const blades = 30;
+  for(let i=0;i<blades;i++){
+    const b = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.5+Math.random()*0.4, 3),
+      new THREE.MeshStandardMaterial({ color:0x3a6a26, roughness:1 }));
+    b.position.set((Math.random()-0.5)*1.4, 0.25, (Math.random()-0.5)*1.4);
+    g.add(b);
+  }
+  g.position.set(x, 0, z);
+  g.userData = { isDirt:true, type:'grass', hp:1, maxHp:1 };
+  g.traverse(c=>{ if(c.isMesh) c.userData.dirtRoot = g; });
+  dirtGroup.add(g); dirtItems.push(g);
+  return g;
+}
+
+/* ---------- Populate dirt on house ---------- */
+const hx = house.position.x, hz = house.position.z;
+// floor dust
+for(let i=0;i<10;i++){
+  addFloorDirt(hx + (Math.random()-0.5)*(H.W-1), hz + (Math.random()-0.5)*(H.D-1));
+}
+// wall grime
+for(let i=0;i<8;i++){
+  const side = Math.floor(Math.random()*4);
+  let x,y=h => y=1.2+Math.random()*1.2, z, ry=0;
+  if(side===0){ x=hx + (Math.random()-0.5)*(H.W-1); z=hz - H.D/2 + 0.08; ry=0; }
+  else if(side===1){ x=hx + (Math.random()-0.5)*(H.W-1); z=hz + H.D/2 - 0.08; ry=Math.PI; }
+  else if(side===2){ x=hx - H.W/2 + 0.08; z=hz + (Math.random()-0.5)*(H.D-1); ry=Math.PI/2; }
+  else { x=hx + H.W/2 - 0.08; z=hz + (Math.random()-0.5)*(H.D-1); ry=-Math.PI/2; }
+  addWallDirt(x, 1.0+Math.random()*1.2, z, ry);
+}
+// glass smudge
+windows.forEach(g=> addGlassDirt(g));
+// trash
+for(let i=0;i<7;i++){
+  addTrash(hx + (Math.random()-0.5)*(H.W+4), hz + (Math.random()-0.5)*(H.D+6) + 3);
+}
+// grass patches (front yard)
+for(let i=0;i<8;i++){
+  addGrassPatch(hx + (Math.random()-0.5)*14, hz - 6 - Math.random()*4);
+}
+
+/* ============================================================
+   PLAYER + CAMERA
+============================================================ */
+const player = {
+  pos: new THREE.Vector3(0, 1.7, -6),
+  vel: new THREE.Vector3(),
+  yaw: 0, pitch: 0,
+  height: 1.7, speed: 3.4, sprint: 5.4,
+  onGround: true, bob: 0,
+  inMenu: true,
+  holdingUse: false
+};
+
+/* ---------- Tools ---------- */
+const TOOLS = [
+  { id:'hand',   name:'HAND',    icon:'✋', accepts:['trash'] },
+  { id:'broom',  name:'BROOM',   icon:'🧹', accepts:['floor'] },
+  { id:'mop',    name:'MOP',     icon:'🧽', accepts:['floor'] },
+  { id:'vacuum', name:'VACUUM',  icon:'🌀', accepts:['floor','trash'] },
+  { id:'window', name:'WINDOW',  icon:'💧', accepts:['glass'] },
+  { id:'sponge', name:'SPONGE',  icon:'🧴', accepts:['wall'] },
+  { id:'mower',  name:'MOWER',   icon:'🌿', accepts:['grass'] },
+  { id:'bag',    name:'BAG',     icon:'🗑️', accepts:[] },
+  { id:'hammer', name:'HAMMER',  icon:'🔨', accepts:['trash'] },
+  { id:'brush',  name:'BRUSH',   icon:'🖌️', accepts:['wall'] }
+];
+let currentTool = 1; // broom by default
+
+/* ---------- Tool viewmodel (visible hands) ---------- */
+const viewModelRoot = new THREE.Group();
+camera.add(viewModelRoot);
+scene.add(camera);
+
+function buildViewModel(){
+  viewModelRoot.clear();
+  const tool = TOOLS[currentTool];
+  const skinMat = new THREE.MeshStandardMaterial({ color:0xe0b088, roughness:0.8 });
+  const handleMat = new THREE.MeshStandardMaterial({ color:0x6a4a2a, roughness:0.7 });
+  const metalMat = new THREE.MeshStandardMaterial({ color:0xaaaaaa, roughness:0.4, metalness:0.8 });
+
+  // right hand always
+  const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.2,0.08), skinMat);
+  rightHand.position.set(0.22,-0.22,-0.35);
+  rightHand.rotation.z = -0.3;
+  viewModelRoot.add(rightHand);
+
+  if(tool.id==='broom' || tool.id==='mop'){
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,1.6,6), handleMat);
+    handle.position.set(0.22,-0.4,-0.45);
+    handle.rotation.x = Math.PI*0.4;
+    handle.rotation.z = -0.2;
+    viewModelRoot.add(handle);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.06,0.15),
+      new THREE.MeshStandardMaterial({ color:0x8a6a3a, roughness:1 }));
+    head.position.set(0.5,-0.85,-0.85);
+    head.rotation.z = -0.2;
+    viewModelRoot.add(head);
+  } else if(tool.id==='vacuum'){
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.5,8), metalMat);
+    body.position.set(0.22,-0.35,-0.4);
+    body.rotation.x = Math.PI*0.5;
+    viewModelRoot.add(body);
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.7,6),
+      new THREE.MeshStandardMaterial({color:0x333333, roughness:0.6}));
+    tube.position.set(0.28,-0.5,-0.75);
+    tube.rotation.x = Math.PI*0.55;
+    viewModelRoot.add(tube);
+  } else if(tool.id==='window' || tool.id==='sponge'){
+    const bottle = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.2,0.08),
+      new THREE.MeshStandardMaterial({ color:0x5ca0d0, roughness:0.4, transparent:true, opacity:0.85 }));
+    bottle.position.set(0.22,-0.3,-0.4);
+    viewModelRoot.add(bottle);
+  } else if(tool.id==='mower'){
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.2,0.45),
+      new THREE.MeshStandardMaterial({color:0xd63a2a, roughness:0.5, metalness:0.4}));
+    body.position.set(0.2,-0.5,-0.55);
+    viewModelRoot.add(body);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.7,6), metalMat);
+    handle.position.set(0.22,-0.15,-0.3);
+    handle.rotation.x = -0.4;
+    viewModelRoot.add(handle);
+  } else if(tool.id==='hammer'){
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.22), metalMat);
+    h.position.set(0.22,-0.3,-0.35);
+    viewModelRoot.add(h);
+    const hm = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.35,6), handleMat);
+    hm.position.set(0.25,-0.35,-0.45);
+    hm.rotation.z = 0.6;
+    viewModelRoot.add(hm);
+  } else if(tool.id==='brush'){
+    const roller = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.25,8),
+      new THREE.MeshStandardMaterial({color:0xe8e0d0, roughness:0.9}));
+    roller.position.set(0.22,-0.32,-0.38);
+    roller.rotation.z = Math.PI/2;
+    viewModelRoot.add(roller);
+    const hd = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.3,6), metalMat);
+    hd.position.set(0.22,-0.5,-0.38);
+    viewModelRoot.add(hd);
+  }
+
+  // left hand
+  const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.18,0.08), skinMat);
+  leftHand.position.set(-0.22,-0.25,-0.4);
+  leftHand.rotation.z = 0.3;
+  viewModelRoot.add(leftHand);
+
+  // animation state
+  viewModelRoot.userData.baseY = 0;
+}
+
+/* ---------- Audio (Web Audio synth) ---------- */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function ac(){ if(!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
+let continuousNodes = {};
+
+function playTone(freq, dur, type='sine', vol=0.1){
+  const ctx = ac(); const o = ctx.createOscillator(); const g = ctx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.value = 0; g.gain.linearRampToValueAtTime(vol, ctx.currentTime+0.02);
+  g.gain.linearRampToValueAtTime(0, ctx.currentTime+dur);
+  o.connect(g).connect(ctx.destination);
+  o.start(); o.stop(ctx.currentTime+dur+0.05);
+}
+function playNoise(dur, vol=0.15, filterFreq=2000){
+  const ctx = ac();
+  const buffer = ctx.createBuffer(1, ctx.sampleRate*dur, ctx.sampleRate);
+  const d = buffer.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+  const src = ctx.createBufferSource(); src.buffer = buffer;
+  const filter = ctx.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=filterFreq;
+  const g = ctx.createGain(); g.gain.value = vol * (Settings.audio.fx/100);
+  src.connect(filter).connect(g).connect(ctx.destination);
+  src.start();
+}
+function startLoop(id, freq=180, type='sawtooth'){
+  stopLoop(id);
+  const ctx = ac();
+  const o = ctx.createOscillator(); o.type=type; o.frequency.value=freq;
+  const g = ctx.createGain(); g.gain.value=0.0;
+  const filt = ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=600;
+  o.connect(filt).connect(g).connect(ctx.destination);
+  o.start();
+  g.gain.linearRampToValueAtTime(0.05*(Settings.audio.fx/100), ctx.currentTime+0.1);
+  continuousNodes[id] = { o, g };
+}
+function stopLoop(id){
+  if(continuousNodes[id]){
+    try{ continuousNodes[id].g.gain.linearRampToValueAtTime(0, audioCtx.currentTime+0.1);
+      continuousNodes[id].o.stop(audioCtx.currentTime+0.15); }catch(e){}
+    delete continuousNodes[id];
+  }
+}
+
+/* ============================================================
+   INPUT
+============================================================ */
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if(e.code==='Escape'){ togglePause(); return; }
+  if(e.code==='KeyE') player.holdingUse = true;
+  const n = parseInt(e.key);
+  if(n>=1 && n<=9){ setTool(n-1); }
+  if(e.code==='KeyR'){ interactDoor(); }
+});
+addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if(e.code==='KeyE') player.holdingUse = false;
+});
+
+let mouseLocked = false;
+canvas.addEventListener('click', () => {
+  if(player.inMenu) return;
+  if(!isTouch && !mouseLocked) canvas.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', () => {
+  mouseLocked = document.pointerLockElement === canvas;
+});
+addEventListener('mousemove', e => {
+  if(!mouseLocked) return;
+  const s = Settings.controls.sens / 100 * 0.0022;
+  player.yaw   -= e.movementX * s;
+  player.pitch -= e.movementY * s * (Settings.controls.invertY? -1: 1);
+  player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch));
+});
+
+/* Mobile joystick */
+const mobileVec = { x:0, y:0 };
+if(isTouch){
+  $('mobile').classList.add('active');
+  const stick = $('stick'), nub = stick.querySelector('.nub');
+  let stickId = null, stickOrigin = { x:0, y:0 };
+  stick.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    stickId = t.identifier;
+    const r = stick.getBoundingClientRect();
+    stickOrigin = { x: r.left + r.width/2, y: r.top + r.height/2 };
+  });
+  addEventListener('touchmove', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===stickId){
+        const dx = t.clientX - stickOrigin.x;
+        const dy = t.clientY - stickOrigin.y;
+        const len = Math.min(Math.hypot(dx,dy), 60);
+        const ang = Math.atan2(dy,dx);
+        nub.style.transform = `translate(${Math.cos(ang)*len}px,${Math.sin(ang)*len}px)`;
+        mobileVec.x = dx/60; mobileVec.y = dy/60;
+      } else if(t.identifier !== stickId && player.inMenu===false){
+        // look — handled by global touch
+      }
+    }
+  }, {passive:false});
+  addEventListener('touchend', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===stickId){ stickId=null; mobileVec.x=0; mobileVec.y=0; nub.style.transform=''; }
+    }
+  });
+
+  // look via drag on screen (right side)
+  let lookId = null, lastX=0, lastY=0;
+  addEventListener('touchstart', e=>{
+    for(const t of e.changedTouches){
+      if(t.clientX > innerWidth/2 && t.identifier !== stickId){
+        lookId = t.identifier; lastX = t.clientX; lastY = t.clientY; break;
+      }
+    }
+  }, {passive:false});
+  addEventListener('touchmove', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===lookId){
+        const dx = t.clientX - lastX, dy = t.clientY - lastY;
+        lastX = t.clientX; lastY = t.clientY;
+        const s = Settings.controls.sens / 100 * 0.005;
+        player.yaw -= dx * s;
+        player.pitch -= dy * s * (Settings.controls.invertY?-1:1);
+        player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch));
+      }
+    }
+  }, {passive:false});
+  addEventListener('touchend', e=>{
+    for(const t of e.changedTouches){ if(t.identifier===lookId) lookId = null; }
+  });
+
+  // buttons
+  const useBtn = $('mUse'), jumpBtn = $('mJump'), toolBtn = $('mTool');
+  const bindHold = (el, down, up) => {
+    el.addEventListener('touchstart', e=>{ e.preventDefault(); down(); });
+    el.addEventListener('touchend',   e=>{ e.preventDefault(); up&&up(); });
+  };
+  bindHold(useBtn, ()=>{ player.holdingUse = true; }, ()=>{ player.holdingUse=false; });
+  bindHold(jumpBtn, ()=>{ if(player.onGround){ player.vel.y = 5.2; player.onGround=false; } });
+  toolBtn.addEventListener('click', ()=>{ setTool((currentTool+1) % TOOLS.length); });
+}
+
+/* ============================================================
+   HUD
+============================================================ */
+function buildToolBar(){
+  const bar = $('tools'); bar.innerHTML='';
+  TOOLS.slice(0,9).forEach((t,i)=>{
+    const d = document.createElement('div');
+    d.className='tool' + (i===currentTool?' active':'');
+    d.innerHTML = `<div>${t.icon}</div><div class="k">${i+1}</div>`;
+    d.onclick = ()=>setTool(i);
+    bar.appendChild(d);
+  });
+}
+function setTool(i){
+  if(i<0||i>=TOOLS.length) return;
+  currentTool = i;
+  buildToolBar();
+  buildViewModel();
+}
+buildToolBar();
+buildViewModel();
+
+const missionDefs = [
+  { key:'trash', label:'Собрать мусор', need:7, stat:'trash' },
+  { key:'grass', label:'Покосить траву', need:8, stat:'grass' },
+  { key:'glass', label:'Вымыть окна', need:4, stat:'glass' },
+  { key:'floor', label:'Подмести / пылесос', need:10, stat:'floor' },
+  { key:'wall', label:'Вымыть стены', need:8, stat:'wall' }
+];
+function updateMissions(){
+  const el = $('missionList'); el.innerHTML='';
+  let allDone = true;
+  missionDefs.forEach(m=>{
+    const cur = Save.cleaned[m.stat]||0;
+    const done = cur >= m.need;
+    if(!done) allDone = false;
+    const row = document.createElement('div');
+    row.className = 'm' + (done?' done':'');
+    row.innerHTML = `<span>${done?'☑':'□'} ${m.label}</span><span>${cur}/${m.need}</span>`;
+    el.appendChild(row);
+  });
+  if(allDone && !Save.allRestored){
+    Save.allRestored = true;
+    Save.money += 5000;
+    showHint('HOUSE RESTORED  +$5000', 4000);
+    persist();
+  }
+}
+
+function showHint(text, ms=1500){
+  if(!Settings.controls.hints) return;
+  const h = $('hint'); h.textContent = text; h.classList.add('show');
+  clearTimeout(h._t); h._t = setTimeout(()=>h.classList.remove('show'), ms);
+}
+
+function updateHUD(){
+  $('hMoney').textContent = '$' + Save.money.toLocaleString();
+  $('hDay').textContent = 'DAY ' + Save.day;
+  $('hDate').textContent = DAYS[Save.dayIdx];
+  const h = Math.floor(Save.timeOfDay);
+  const m = Math.floor((Save.timeOfDay - h) * 60);
+  $('hTime').textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+/* ============================================================
+   INTERACTION
+============================================================ */
+const raycaster = new THREE.Raycaster();
+raycaster.far = 2.6;
+
+function getTarget(){
+  const origin = camera.getWorldPosition(new THREE.Vector3());
+  const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+  raycaster.set(origin, dir);
+  const candidates = [];
+  dirtItems.forEach(d=>{ if(d.parent) candidates.push(d); });
+  // collect children of groups
+  const meshes = [];
+  candidates.forEach(d=>{
+    if(d.userData.isTrashGroup || d.userData.type==='grass'){
+      d.traverse(c=>{ if(c.isMesh){ c.userData.dirtRoot = d; meshes.push(c); } });
+    } else meshes.push(d);
+  });
+  const hits = raycaster.intersectObjects(meshes, false);
+  if(hits.length){
+    const h = hits[0];
+    const root = h.object.userData.dirtRoot || h.object;
+    return { hit:h, dirt:root };
+  }
+  // door check
+  const dh = raycaster.intersectObject(doorMesh, false);
+  if(dh.length) return { hit:dh[0], door:true };
+  return null;
+}
+
+function applyTool(dt){
+  const tool = TOOLS[currentTool];
+  const t = getTarget();
+  if(!t){ stopLoop('tool'); return; }
+  if(t.door){
+    showHint('PRESS E TO OPEN', 800);
+    return;
+  }
+  const d = t.dirt;
+  if(!d || !d.parent) return;
+  if(!tool.accepts.includes(d.userData.type)){
+    showHint('НУЖЕН ДРУГОЙ ИНСТРУМЕНТ', 900);
+    stopLoop('tool');
+    return;
+  }
+  // progress
+  d.userData.hp -= dt * 1.2;
+  // particles
+  if(Settings.particles && Math.random()<0.5) spawnParticle(t.hit.point, d.userData.type);
+  // audio
+  if(!continuousNodes['tool']){
+    const sounds = { broom:300, mop:250, vacuum:90, window:600, sponge:200, mower:80, hammer:800, brush:150, hand:400 };
+    startLoop('tool', sounds[tool.id]||300, tool.id==='vacuum'||tool.id==='mower'?'sawtooth':'triangle');
+  }
+  // completion
+  if(d.userData.hp <= 0){
+    const type = d.userData.type;
+    const value = { floor:12, wall:20, glass:35, grass:25, trash:15 }[type] || 10;
+    Save.money += value;
+    Save.cleaned[type] = (Save.cleaned[type]||0)+1;
+    // remove
+    dirtGroup.remove(d);
+    const idx = dirtItems.indexOf(d); if(idx>=0) dirtItems.splice(idx,1);
+    // if glass dirt, mark glass as clean
+    if(type==='glass' && d.userData.glass){
+      d.userData.glass.material.opacity = 0.25;
+      d.userData.glass.material.color.setHex(0xccddff);
+    }
+    if(type==='wall'){
+      // lighten a nearby wall — visuals only
+    }
+    spawnBurst(d.position || (t.hit.point), type);
+    stopLoop('tool');
+    playTone(660, 0.15, 'sine', 0.08);
+    updateMissions(); updateHUD(); persist();
+  }
+}
+
+/* ---------- Particles ---------- */
+const particlePool = [];
+const particleGroup = new THREE.Group(); scene.add(particleGroup);
+const particleGeo = new THREE.SphereGeometry(0.03, 4, 3);
+function spawnParticle(pos, type){
+  const colors = { floor:0x8a7a5a, wall:0xcccccc, glass:0x88bbdd, grass:0x4a8030, trash:0x666644 };
+  const mat = new THREE.MeshBasicMaterial({ color: colors[type]||0x999999, transparent:true, opacity:0.85 });
+  const m = new THREE.Mesh(particleGeo, mat);
+  m.position.copy(pos);
+  m.velocity = new THREE.Vector3((Math.random()-0.5)*1.2, 0.5+Math.random()*0.8, (Math.random()-0.5)*1.2);
+  m.life = 0.7 + Math.random()*0.4;
+  particleGroup.add(m); particlePool.push(m);
+}
+function spawnBurst(pos, type){
+  for(let i=0;i<10;i++) spawnParticle(pos, type);
+}
+function updateParticles(dt){
+  for(let i=particlePool.length-1;i>=0;i--){
+    const p = particlePool[i];
+    p.velocity.y -= 4.5 * dt;
+    p.position.addScaledVector(p.velocity, dt);
+    p.life -= dt;
+    p.material.opacity = Math.max(0, p.life);
+    p.scale.setScalar(Math.max(0.1, p.life));
+    if(p.life <= 0){ particleGroup.remove(p); particlePool.splice(i,1); }
+  }
+  // cap
+  while(particlePool.length > 250){ const p = particlePool.shift(); particleGroup.remove(p); }
+}
+
+/* ---------- Door ---------- */
+function interactDoor(){
+  if(!doorMesh.userData.open){
+    doorMesh.userData.open = true;
+    doorMesh.userData.targetRot = -Math.PI*0.6;
+  } else {
+    doorMesh.userData.open = false;
+    doorMesh.userData.targetRot = 0;
+  }
+  playTone(180, 0.2, 'sine', 0.1);
+}
+
+/* ============================================================
+   TIME / DAY-NIGHT
+============================================================ */
+let lastT = performance.now();
+let elapsedSec = 0;
+function updateTime(dt){
+  elapsedSec += dt;
+  const dayPhase = Save.timeOfDay < 20; // day 08:00 – 20:00, night 20:00 – 08:00
+  const secPerHour = (dayPhase ? DAY_LEN_SEC : NIGHT_LEN_SEC) / 24;
+  Save.timeOfDay += dt / secPerHour * (dayPhase? 1.5 : 1.0);
+  // Actually simpler: total cycle in real seconds
+  // We'll normalize: full day = 23 min real time
+  const totalCycle = DAY_LEN_SEC + NIGHT_LEN_SEC;
+  // We'll just progress through hours 0-24 in totalCycle
+  // Reset
+  // (we'll skip above and do it cleanly below)
+}
+// cleaner time model
+let cycleT = 0; // 0..1 within day
+function initCycleFromTime(){
+  cycleT = (Save.timeOfDay % 24) / 24;
+}
+initCycleFromTime();
+function tickTime(dt){
+  const total = DAY_LEN_SEC + NIGHT_LEN_SEC;
+  cycleT += dt / total;
+  while(cycleT >= 1){
+    cycleT -= 1;
+    Save.day++;
+    Save.dayIdx = (Save.dayIdx+1) % 7;
+  }
+  Save.timeOfDay = cycleT * 24;
+}
+
+/* ---------- Sky/sun update ---------- */
+const SUN = new THREE.Vector3();
+function updateSky(){
+  const t = Save.timeOfDay;
+  // sun angle: at 6 rises (east), 12 noon, 18 sets (west), 0 midnight
+  const a = (t/24) * Math.PI*2 - Math.PI/2;
+  // Actually: hour 6 -> angle 0 (east horizon), 12 -> PI/2 (top), 18 -> PI (west horizon)
+  const ang = ((t-6)/24)*Math.PI*2;
+  SUN.set(Math.cos(ang), Math.sin(ang), 0.35).normalize();
+
+  const dayFactor = Math.max(0, Math.sin(ang));
+  const nightFactor = Math.max(0, -Math.sin(ang));
+
+  // lights
+  sunLight.position.copy(SUN).multiplyScalar(60);
+  sunLight.target.position.set(0,0,12);
+  sunLight.intensity = dayFactor * 2.6;
+  sunLight.color.setHSL(0.09 + 0.05*(1-dayFactor), 0.6, 0.55 + 0.35*dayFactor);
+
+  moonLight.position.copy(SUN).multiplyScalar(-60);
+  moonLight.intensity = nightFactor * 0.5;
+
+  hemi.intensity = 0.25 + dayFactor * 0.9;
+  ambient.intensity = 0.05 + dayFactor * 0.15;
+
+  // sky colors
+  const topDay = new THREE.Color(0x3a78c2);
+  const botDay = new THREE.Color(0xbfd8e8);
+  const topNight = new THREE.Color(0x04080f);
+  const botNight = new THREE.Color(0x142030);
+  const sunset = new THREE.Color(0xff8855);
+  const dayMix = dayFactor;
+  const sunsetMix = Math.max(0, 1 - Math.abs(Math.sin(ang)) * 5) * dayFactor;
+
+  skyUniforms.top.value.copy(topNight).lerp(topDay, dayMix).lerp(sunset, sunsetMix*0.6);
+  skyUniforms.bot.value.copy(botNight).lerp(botDay, dayMix).lerp(sunset, sunsetMix*0.9);
+  skyUniforms.sunDir.value.copy(SUN);
+  skyUniforms.sunCol.value.setRGB(1, 0.95, 0.7);
+  skyUniforms.sunPow.value = dayFactor * 1.5;
+
+  // fog
+  if(Settings.fog){
+    scene.fog.color.copy(skyUniforms.bot.value);
+    scene.fog.far = Settings.viewDistance;
+    scene.fog.near = 20;
+  } else scene.fog = null;
+
+  // interior light adaptation (auto-off during day is fine, keep manual toggle)
+  renderer.toneMappingExposure = 0.55 + dayFactor * 0.6;
+}
+
+/* ============================================================
+   PLAYER MOVEMENT
+============================================================ */
+function updatePlayer(dt){
+  if(player.inMenu) return;
+  // movement input
+  let mx = 0, mz = 0;
+  if(keys['KeyW']) mz -= 1;
+  if(keys['KeyS']) mz += 1;
+  if(keys['KeyA']) mx -= 1;
+  if(keys['KeyD']) mx += 1;
+  mx += mobileVec.x; mz += mobileVec.y;
+  const len = Math.hypot(mx, mz);
+  if(len > 1){ mx/=len; mz/=len; }
+
+  const sprint = keys['ShiftLeft'] ? player.sprint : player.speed;
+  // world direction
+  const sinY = Math.sin(player.yaw), cosY = Math.cos(player.yaw);
+  const wx = (mx*cosY - mz*sinY);
+  const wz = (mx*sinY + mz*cosY);
+  player.vel.x = wx * sprint;
+  player.vel.z = wz * sprint;
+  // simple gravity
+  player.vel.y -= 14 * dt;
+  if(player.pos.y <= player.height){ player.pos.y = player.height; player.vel.y = 0; player.onGround = true; }
+
+  player.pos.x += player.vel.x * dt;
+  player.pos.z += player.vel.z * dt;
+  player.pos.y += player.vel.y * dt;
+
+  // clamp area
+  player.pos.x = Math.max(-90, Math.min(90, player.pos.x));
+  player.pos.z = Math.max(-90, Math.min(90, player.pos.z));
+
+  // collision with house walls (simple AABB)
+  const HW = H.W/2, HD = H.D/2;
+  const cx = player.pos.x - house.position.x;
+  const cz = player.pos.z - house.position.z;
+  const inside = Math.abs(cx) < HW && Math.abs(cz) < HD;
+  const doorGap = 1.2; // door width
+  // if trying to cross wall
+  const nx = Math.max(-HW+0.3, Math.min(HW-0.3, cx));
+  const nz = Math.max(-HD+0.3, Math.min(HD-0.3, cz));
+  // allow through door: if z near -HD and |x|<doorGap/2
+  const throughDoor = Math.abs(cx) < doorGap/2 && cz < -HD + 0.5 && cz > -HD - 0.5;
+  if(!inside && !throughDoor){
+    // simple wall reject if we'd be inside
+    const testX = player.pos.x, testZ = player.pos.z;
+    // approximate: if near any wall from outside, push back
+  }
+  // We'll use a very simple approach: if we're inside the walls block, push out
+  const newCX = player.pos.x - house.position.x;
+  const newCZ = player.pos.z - house.position.z;
+  const inX = Math.abs(newCX) < HW + 0.05 && Math.abs(newCX) > HW - 0.25;
+  const inZ = Math.abs(newCZ) < HD + 0.05 && Math.abs(newCZ) > HD - 0.25;
+  // ignore — this is a prototype; house is walkable (walls not colliding by default)
+
+  // head bob
+  const speed = Math.hypot(player.vel.x, player.vel.z);
+  if(speed > 0.1 && player.onGround){
+    player.bob += dt * speed * 8;
+  } else {
+    player.bob *= 0.9;
+  }
+
+  // camera
+  const bobY = Math.sin(player.bob) * 0.03;
+  camera.position.set(player.pos.x, player.pos.y + bobY, player.pos.z);
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = player.yaw;
+  camera.rotation.x = player.pitch;
+
+  // viewmodel sway
+  if(viewModelRoot){
+    viewModelRoot.position.x = Math.sin(player.bob*0.5) * 0.008;
+    viewModelRoot.position.y = Math.sin(player.bob) * 0.01;
+  }
+
+  // interaction
+  if(player.holdingUse){
+    applyTool(dt);
+    // animation
+    viewModelRoot.rotation.x = Math.sin(performance.now()*0.02) * 0.08;
+  } else {
+    viewModelRoot.rotation.x *= 0.85;
+    stopLoop('tool');
+  }
+
+  // hint
+  if(!player.holdingUse && Settings.controls.hints){
+    const t = getTarget();
+    if(t && t.door) showHint('PRESS E TO INTERACT', 400);
+  }
+}
+
+/* ============================================================
+   CINEMATIC MENU CAMERA
+============================================================ */
+let menuCamAngle = 0;
+function updateMenuCamera(dt){
+  menuCamAngle += dt * 0.12;
+  const r = 22 + Math.sin(menuCamAngle*0.4) * 4;
+  const y = 6 + Math.sin(menuCamAngle*0.7) * 2;
+  const cx = house.position.x + Math.cos(menuCamAngle) * r;
+  const cz = house.position.z + Math.sin(menuCamAngle) * r;
+  camera.position.set(cx, y, cz);
+  camera.lookAt(house.position.x, 2, house.position.z);
+}
+
+/* ============================================================
+   MAIN LOOP
+============================================================ */
+function frame(){
+  const now = performance.now();
+  let dt = (now - lastT) / 1000;
+  lastT = now;
+  if(dt > 0.1) dt = 0.1;
+
+  if(player.inMenu){
+    updateMenuCamera(dt);
+  } else {
+    tickTime(dt);
+    updateSky();
+    updatePlayer(dt);
+    updateHUD();
+  }
+
+  updateParticles(dt);
+
+  // door swing
+  if(doorMesh.userData.targetRot !== undefined){
+    const cur = doorMesh.rotation.y;
+    doorMesh.rotation.y += (doorMesh.userData.targetRot - cur) * Math.min(1, dt*6);
+  }
+
+  // interior light flicker / on-state
+  interiorLight.intensity = interiorLightOn ? 1.4 : 0;
+  bulbMesh.material.emissiveIntensity = interiorLightOn ? 1.2 : 0.15;
+
+  // animate grass sway
+  // (cheap: rotate grass groups slightly)
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================
+   UI ACTIONS
+============================================================ */
+function showMenu(){
+  player.inMenu = true;
+  $('menu').classList.add('active');
+  $('hud').classList.remove('active');
+  if(isTouch) $('mobile').classList.remove('active');
+  if(document.pointerLockElement) document.exitPointerLock();
+}
+function startGame(){
+  $('menu').classList.remove('active');
+  $('hud').classList.add('active');
+  if(isTouch) $('mobile').classList.add('active');
+  player.inMenu = false;
+  player.pos.set(house.position.x, player.height, house.position.z - 8);
+  player.yaw = 0; player.pitch = 0;
+  // ensure some baseline sky
+  updateSky();
+}
+function togglePause(){
+  if(player.inMenu) return;
+  if($('settingsPanel').classList.contains('active')){ $('settingsPanel').classList.remove('active'); return; }
+  showMenu();
+}
+
+$('btnPlay').onclick = ()=>{ startGame(); };
+$('btnContinue').onclick = ()=>{ startGame(); };
+$('btnSettings').onclick = ()=>{ $('settingsPanel').classList.add('active'); };
+$('btnMP').onclick = ()=>{ $('mpPanel').classList.add('active'); mpInit(); };
+
+// show continue if save exists
+if(localStorage.getItem('rh_save')) $('btnContinue').style.display='block';
+
+/* ---------- Settings apply ---------- */
+function applyPreset(name){
+  Settings.preset = name;
+  const P = {
+    LOW:    { shadow:'LOW', reflections:'LOW', bloom:false, fog:false, ao:false, particles:false, viewDistance:100 },
+    MEDIUM: { shadow:'MEDIUM', reflections:'MEDIUM', bloom:false, fog:true, ao:true, particles:true, viewDistance:150 },
+    HIGH:   { shadow:'HIGH', reflections:'HIGH', bloom:true, fog:true, ao:true, particles:true, viewDistance:220 },
+    ULTRA:  { shadow:'ULTRA', reflections:'ULTRA', bloom:true, fog:true, ao:true, particles:true, viewDistance:320 }
+  }[name];
+  if(P) Object.assign(Settings, P, {preset:name});
+  syncSettingsUI();
+  applyGraphics();
+}
+function applyGraphics(){
+  // pixel ratio
+  let ratio = 1;
+  if(Settings.resolution === 'AUTO'){
+    ratio = Math.min(devicePixelRatio, isTouch? 1.5 : 2);
+  } else {
+    ratio = Math.min(devicePixelRatio, 1) * (parseInt(Settings.resolution)/100);
+  }
+  renderer.setPixelRatio(ratio);
+  // shadows
+  const smap = { LOW:512, MEDIUM:1024, HIGH:2048, ULTRA:4096 }[Settings.shadows] || 1024;
+  sunLight.shadow.mapSize.set(smap, smap);
+  sunLight.shadow.map?.dispose(); sunLight.shadow.map = null;
+  sunLight.castShadow = Settings.shadows !== 'LOW';
+  // fog
+  if(Settings.fog){ scene.fog = new THREE.Fog(0x9bb3c7, 30, Settings.viewDistance); }
+  else scene.fog = null;
+  // tone mapping
+  renderer.toneMappingExposure = Settings.preset === 'ULTRA' ? 1.15 : 1.0;
+}
+function syncSettingsUI(){
+  $('sPreset').value = Settings.preset;
+  $('sRes').value = Settings.resolution;
+  $('sShadow').value = Settings.shadows;
+  $('sRefl').value = Settings.reflections;
+  $('sBloom').checked = Settings.bloom;
+  $('sFog').checked = Settings.fog;
+  $('sAO').checked = Settings.ao;
+  $('sPart').checked = Settings.particles;
+  $('sView').value = Settings.viewDistance;
+  $('aMaster').value = Settings.audio.master;
+  $('aMusic').value = Settings.audio.music;
+  $('aFX').value = Settings.audio.fx;
+  $('aAmb').value = Settings.audio.ambient;
+  $('cSens').value = Settings.controls.sens;
+  $('cInvY').checked = Settings.controls.invertY;
+  $('cHints').checked = Settings.controls.hints;
+}
+syncSettingsUI();
+
+$('sSave').onclick = ()=>{
+  Settings.preset = $('sPreset').value;
+  Settings.resolution = $('sRes').value;
+  Settings.shadows = $('sShadow').value;
+  Settings.reflections = $('sRefl').value;
+  Settings.bloom = $('sBloom').checked;
+  Settings.fog = $('sFog').checked;
+  Settings.ao = $('sAO').checked;
+  Settings.particles = $('sPart').checked;
+  Settings.viewDistance = parseInt($('sView').value);
+  Settings.audio.master = +$('aMaster').value;
+  Settings.audio.music = +$('aMusic').value;
+  Settings.audio.fx = +$('aFX').value;
+  Settings.audio.ambient = +$('aAmb').value;
+  Settings.controls.sens = +$('cSens').value;
+  Settings.controls.invertY = $('cInvY').checked;
+  Settings.controls.hints = $('cHints').checked;
+  applyGraphics(); persist();
+  $('settingsPanel').classList.remove('active');
+};
+$('sPreset').onchange = ()=>applyPreset($('sPreset').value);
+
+// auto-detect recommended
+if(!localStorage.getItem('rh_save')){
+  const mobile = isTouch;
+  applyPreset(mobile ? 'MEDIUM' : 'HIGH');
+} else {
+  applyGraphics();
+}
+
+/* ============================================================
+   FIREBASE + MULTIPLAYER (optional)
+============================================================ */
+let fb = { app:null, auth:null, db:null, user:null, config:null };
+async function loadFirebaseConfig(){
+  try{
+    const txt = $('firebase-config').textContent;
+    const cfg = JSON.parse(txt);
+    if(!cfg.apiKey || cfg.apiKey.startsWith('REPLACE')) return null;
+    return cfg;
+  }catch(e){ return null; }
+}
+async function initFirebase(){
+  if(fb.app) return true;
+  const cfg = await loadFirebaseConfig();
+  if(!cfg){ return false; }
+  try{
+    const [{initializeApp}, {getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged},
+           {getDatabase, ref, set, onValue, onDisconnect, remove, update, serverTimestamp, push}] =
+      await Promise.all([
+        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js')
+      ]);
+    fb.app = initializeApp(cfg); fb.config = cfg;
+    fb.auth = getAuth(fb.app);
+    fb.db = getDatabase(fb.app);
+    fb.Provider = GoogleAuthProvider;
+    fb.signInWithPopup = signInWithPopup;
+    fb.onAuthStateChanged = onAuthStateChanged;
+    fb.ref = ref; fb.set = set; fb.onValue = onValue; fb.onDisconnect = onDisconnect;
+    fb.remove = remove; fb.update = update; fb.serverTimestamp = serverTimestamp; fb.push = push;
+    return true;
+  }catch(e){ console.warn('Firebase init failed', e); return false; }
+}
+
+$('btnLogin').onclick = async ()=>{
+  const ok = await initFirebase();
+  if(!ok){ alert('Firebase не настроен. Открой index.html и укажи свой конфиг в <script id="firebase-config">.'); return; }
+  try{
+    const p = new fb.Provider();
+    const res = await fb.signInWithPopup(fb.auth, p);
+    fb.user = res.user;
+    $('userInfo').textContent = `${res.user.displayName || ''} — ${res.user.email || ''}`;
+    $('btnLogin').textContent = 'ВЫЙТИ';
+  }catch(e){ console.warn(e); }
+};
+
+/* ---------- Multiplayer panel ---------- */
+let mpRoom = { id:null, isOwner:false, players:new Map() };
+
+function mpInit(){
+  const status = $('mpStatus');
+  if(!fb.app){
+    status.textContent = 'Войдите через Google чтобы играть онлайн';
+  } else {
+    status.textContent = fb.user ? 'Онлайн режим готов' : 'Войдите через Google';
+  }
+}
+
+function genCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = ''; for(let i=0;i<6;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+async function mpCreateRoom(){
+  const ok = await initFirebase();
+  if(!ok || !fb.user){ alert('Нужен вход через Google'); return; }
+  const code = genCode();
+  const roomRef = fb.ref(fb.db, `rooms/${code}`);
+  await fb.set(roomRef, {
+    code, owner: fb.user.uid, state: 'lobby', createdAt: fb.serverTimestamp(),
+    players: { [fb.user.uid]: { name: fb.user.displayName||'Player', photo: fb.user.photoURL||'', ready:true } }
+  });
+  joinRoomInternal(code, true);
+}
+async function mpJoinRoom(){
+  const code = ($('mpCode').value || '').toUpperCase().trim();
+  if(code.length !== 6){ alert('Код должен быть из 6 символов'); return; }
+  const ok = await initFirebase();
+  if(!ok || !fb.user){ alert('Нужен вход через Google'); return; }
+  joinRoomInternal(code, false);
+}
+function joinRoomInternal(code, isOwner){
+  mpRoom.id = code; mpRoom.isOwner = isOwner;
+  $('mpMain').style.display = 'none';
+  $('mpLobby').style.display = 'block';
+  $('lobbyCode').textContent = code;
+  $('mpStart').style.display = isOwner ? 'inline-block' : 'none';
+  $('mpWait').style.display   = isOwner ? 'none' : 'block';
+  const myUid = fb.user.uid;
+  const roomRef = fb.ref(fb.db, `rooms/${code}`);
+  const playerRef = fb.ref(fb.db, `rooms/${code}/players/${myUid}`);
+  fb.set(playerRef, { name: fb.user.displayName||'Player', photo: fb.user.photoURL||'', ready:true });
+  fb.onDisconnect(playerRef).remove();
+
+  fb.onValue(roomRef, snap=>{
+    const data = snap.val();
+    if(!data){ mpLobbyLeave(true); return; }
+    mpRoom.players.clear();
+    Object.entries(data.players||{}).forEach(([uid,p])=> mpRoom.players.set(uid, p));
+    renderLobby();
+    if(data.state === 'playing' && !player.inMenu){
+      // already in game
+    }
+    if(data.state === 'playing' && player.inMenu){
+      startGame();
+    }
+  });
+}
+function renderLobby(){
+  $('lobbyCount').textContent = mpRoom.players.size;
+  const list = $('lobbyList'); list.innerHTML='';
+  mpRoom.players.forEach((p, uid)=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="avatar"></div><div><div>${p.name}</div>
+      <div style="font-size:11px;opacity:.6">${uid===fb.user?.uid?'(you)':''}</div></div>`;
+    list.appendChild(li);
+  });
+}
+function mpLobbyLeave(silent){
+  if(mpRoom.id && fb.user){
+    try{ fb.remove(fb.ref(fb.db, `rooms/${mpRoom.id}/players/${fb.user.uid}`)); }catch(e){}
+  }
+  mpRoom.id = null; mpRoom.isOwner = false; mpRoom.players.clear();
+  if(!silent){
+    $('mpMain').style.display='block';
+    $('mpLobby').style.display='none';
+  }
+}
+$('mpCreate').onclick = mpCreateRoom;
+$('mpJoin').onclick = mpJoinRoom;
+$('mpLeave').onclick = ()=>mpLobbyLeave(false);
+$('mpStart').onclick = async ()=>{
+  if(!mpRoom.id) return;
+  await fb.update(fb.ref(fb.db, `rooms/${mpRoom.id}`), { state:'playing' });
+  startGame();
+};
+
+/* ============================================================
+   RESIZE / LOADED
+============================================================ */
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// initial sky and start
+updateSky();
+updateMissions();
+updateHUD();
+$('loader').style.display='none';
+showMenu();
+
+// pitch clamp helper
+addEventListener('contextmenu', e => { if(!player.inMenu) e.preventDefault(); });
+
+frame();
+
+// autosave
+setInterval(persist, 8000);
+</script>
+</body>
+</html>
