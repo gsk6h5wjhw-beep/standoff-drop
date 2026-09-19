@@ -8964,6 +8964,197 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   console.log('✅ ПАТЧ v14 установлен');
 })();
 </script>
+<script>
+/* v15 — диагностика с показом логов на экране */
+(function(){
+  // Лог-панель прямо на странице
+  var logBox = document.createElement('div');
+  logBox.id = 'v15log';
+  logBox.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;background:rgba(0,0,0,.95);color:#0f0;font-family:monospace;font-size:11px;padding:10px;border-radius:8px;z-index:999999;max-height:220px;overflow-y:auto;border:2px solid #0f0;line-height:1.4;';
+  logBox.innerHTML = '<div style="color:#ff0;font-weight:900;margin-bottom:6px">🔍 ДИАГНОСТИКА v15</div><div id="v15lines"></div><button id="v15copy" style="position:sticky;bottom:0;width:100%;margin-top:8px;padding:8px;background:#0f0;color:#000;border:none;border-radius:6px;font-weight:900;cursor:pointer">📋 Скопировать логи</button><button id="v15hide" style="width:100%;margin-top:4px;padding:6px;background:#333;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer">Скрыть панель</button>';
+  document.body.appendChild(logBox);
+
+  var lines = [];
+  var linesEl = document.getElementById('v15lines');
+  function log(msg){
+    var t = new Date().toLocaleTimeString();
+    lines.push('[' + t + '] ' + msg);
+    linesEl.innerHTML = lines.slice(-20).join('<br>');
+    logBox.scrollTop = logBox.scrollHeight;
+    console.log('[v15]', msg);
+  }
+  window._v15logs = function(){ return lines.join('\n'); };
+
+  document.getElementById('v15copy').onclick = function(){
+    var text = lines.join('\n');
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ alert('Логи скопированы'); });
+    } else {
+      alert(text);
+    }
+  };
+  document.getElementById('v15hide').onclick = function(){
+    logBox.style.display = 'none';
+  };
+
+  log('v15 старт');
+
+  // Ждём Firebase
+  (async function waitFB(){
+    var tries = 0;
+    while(!window.__fb && tries < 50){
+      await new Promise(function(r){ setTimeout(r, 200); });
+      tries++;
+    }
+    if(!window.__fb){
+      log('❌ Firebase не загрузился');
+      return;
+    }
+    var fb = window.__fb;
+    log('✅ Firebase OK');
+    log('currentUser: ' + (fb.auth.currentUser ? fb.auth.currentUser.email : 'null'));
+
+    // Пытаемся поставить persistence
+    try{
+      if(fb.authMod.indexedDBLocalPersistence){
+        await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
+        log('persistence: indexedDB ✅');
+      } else {
+        log('persistence: indexedDB недоступен');
+      }
+    }catch(e){ log('persist err: ' + (e.code || e.message)); }
+
+    // Пробуем getRedirectResult
+    try{
+      log('getRedirectResult вызываем...');
+      var res = await fb.authMod.getRedirectResult(fb.auth);
+      if(res && res.user){
+        log('✅ redirect result: ' + res.user.email);
+      } else {
+        log('redirect result: пусто (нет данных)');
+      }
+    }catch(e){
+      log('redirect err: ' + (e.code || e.message));
+    }
+
+    // Проверяем ещё раз currentUser
+    log('currentUser после redirect: ' + (fb.auth.currentUser ? fb.auth.currentUser.email : 'null'));
+
+    // Подписываемся на onAuthStateChanged
+    fb.authMod.onAuthStateChanged(fb.auth, function(user){
+      log('onAuthState: ' + (user ? user.email : 'null'));
+      if(user){
+        log('👤 USER НАЙДЕН! Скрываем логин, грузим профиль');
+        var l = document.getElementById('loginScreen');
+        var a = document.getElementById('app');
+        if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
+        if(a) a.style.display = '';
+
+        // Загружаем профиль
+        loadProfile(user);
+      } else {
+        log('user null — показываем логин');
+      }
+    });
+
+    async function loadProfile(user){
+      try{
+        var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
+        log('Читаем профиль...');
+        var snap = await fb.dbMod.get(ref);
+        log('snap.exists: ' + snap.exists());
+
+        if(snap.exists()){
+          var data = snap.val();
+          log('playerId: ' + (data.playerId || '?'));
+          log('onboarded: ' + (data.onboarded));
+
+          // Нормализация массивов
+          function toArr(v){
+            if(!v) return [];
+            if(Array.isArray(v)) return v.filter(Boolean);
+            if(typeof v === 'object') return Object.keys(v).sort(function(a,b){ return a-b; }).map(function(k){ return v[k]; }).filter(Boolean);
+            return [];
+          }
+          data.inventory = toArr(data.inventory);
+          data.friends = toArr(data.friends);
+          data.friendRequests = toArr(data.friendRequests);
+          data.incomingTransfers = toArr(data.incomingTransfers);
+
+          // Пишем во все места
+          if(window._v11){ _v11.profile = data; _v11.uid = user.uid; _v11.playerId = data.playerId; }
+          if(window.SD){ SD.profile = data; SD.uid = user.uid; SD.playerId = data.playerId; }
+
+          if(data.onboarded){
+            log('Показываем app');
+            var o = document.getElementById('onboardScreen');
+            if(o){ o.classList.add('hidden'); o.style.display = 'none'; }
+            var a2 = document.getElementById('app');
+            if(a2) a2.style.display = '';
+            // Перерисовываем
+            try{
+              if(window.goScreen) goScreen('home');
+            }catch(e){ log('goScreen err: ' + e.message); }
+          } else {
+            log('Показываем онбординг');
+            var o2 = document.getElementById('onboardScreen');
+            var a3 = document.getElementById('app');
+            if(o2){ o2.classList.remove('hidden'); o2.style.display = 'flex'; }
+            if(a3) a3.style.display = 'none';
+            var oid = document.getElementById('onboardId');
+            if(oid) oid.textContent = data.playerId;
+          }
+        } else {
+          log('⚠ Профиль не существует — нужен онбординг');
+        }
+      }catch(e){
+        log('❌ loadProfile: ' + (e.code || e.message));
+      }
+    }
+
+    // Привязываем Google заново — ТОЛЬКО POPUP
+    function bindGoogle(){
+      var btn = document.getElementById('googleLoginBtn');
+      if(!btn){ setTimeout(bindGoogle, 500); return; }
+      var fresh = btn.cloneNode(true);
+      btn.parentNode.replaceChild(fresh, btn);
+
+      fresh.addEventListener('click', async function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        log('🖱 Google click');
+        try{
+          var prov = new fb.authMod.GoogleAuthProvider();
+          prov.setCustomParameters({ prompt: 'select_account' });
+          log('signInWithPopup...');
+          var result = await fb.authMod.signInWithPopup(fb.auth, prov);
+          log('✅ popup OK: ' + result.user.email);
+        }catch(err){
+          log('❌ popup err: ' + (err.code || err.message));
+          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user')){
+            log('↪ Fallback на redirect');
+            try{
+              await fb.authMod.signInWithRedirect(fb.auth, prov);
+            }catch(e2){ log('redirect err: ' + (e2.code || e2.message)); }
+          }
+        }
+      }, true);
+
+      log('✅ Google-кнопка привязана (popup)');
+    }
+
+    // Ждём чуть и привязываем
+    setTimeout(bindGoogle, 500);
+
+    // Панель исчезнет через 60 секунд
+    setTimeout(function(){
+      if(logBox) logBox.style.opacity = '0.3';
+    }, 60000);
+
+  })();
+})();
+</script>
 </body>
 </html>
 
