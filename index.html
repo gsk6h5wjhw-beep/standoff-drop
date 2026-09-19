@@ -6988,6 +6988,116 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   console.log('✅ ПАТЧ v11 установлен');
 })();
 </script>
+<script>
+/* ФИКС кнопки «Начать играть» и онбординга */
+(function(){
+  function fix(){
+    var btn = document.getElementById('onboardSave');
+    if(!btn){ setTimeout(fix, 300); return; }
+    if(btn._fixed2) return;
+    btn._fixed2 = true;
+
+    // Клонируем — снимаем все старые обработчики
+    var fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh._fixed2 = true;
+
+    fresh.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      console.log('🖱 Кнопка "Начать играть" нажата');
+
+      var nameEl = document.getElementById('onboardName');
+      var name = (nameEl && nameEl.value || '').trim();
+      if(!name){ alert('Введите ник'); return; }
+      if(name.length < 2){ alert('Ник слишком короткий (мин. 2 символа)'); return; }
+
+      // Берём выбранный аватар
+      var selAv = document.querySelector('#onboardAvatars .avatar-choice.active');
+      var avatar = selAv ? +selAv.dataset.av : 0;
+
+      // Ищем UID — откуда угодно
+      var uid = null;
+      try{
+        if(window.SD && SD.uid) uid = SD.uid;
+        if(!uid && window._v11 && _v11.uid) uid = _v11.uid;
+        if(!uid && window._v10 && _v10.uid) uid = _v10.uid;
+        if(!uid && window.__fb && __fb.auth && __fb.auth.currentUser){
+          uid = __fb.auth.currentUser.uid;
+        }
+      }catch(err){ console.error('uid lookup:', err); }
+
+      if(!uid){
+        alert('Сессия потеряна. Нажмите Google-вход заново.');
+        location.reload();
+        return;
+      }
+
+      // Показываем что идёт процесс
+      fresh.disabled = true;
+      fresh.textContent = 'Сохранение...';
+
+      // Ждём Firebase
+      var wait = function(){
+        if(!window.__firebaseReady || !window.__fb){ setTimeout(wait, 200); return; }
+        var fb = window.__fb;
+
+        fb.dbMod.update(
+          fb.dbMod.ref(fb.db, 'users/' + uid),
+          { name: name.slice(0,20), avatar: avatar, onboarded: true }
+        ).then(function(){
+          console.log('✅ Профиль сохранён');
+          // Обновляем локальный профиль
+          if(window.SD && SD.profile){
+            SD.profile.name = name;
+            SD.profile.avatar = avatar;
+            SD.profile.onboarded = true;
+          }
+          // Скрываем онбординг
+          var ob = document.getElementById('onboardScreen');
+          var lg = document.getElementById('loginScreen');
+          var ap = document.getElementById('app');
+          if(ob) ob.classList.add('hidden');
+          if(lg) lg.classList.add('hidden');
+          if(ap) ap.style.display = '';
+
+          // Перерисовываем
+          try{
+            if(typeof renderAll === 'function') renderAll();
+            else if(window._v11){
+              // v11 не экспортирует renderAll — вызываем по отдельности
+              if(typeof renderHome === 'function') renderHome();
+              if(typeof renderProfile === 'function') renderProfile();
+              if(typeof renderInventory === 'function') renderInventory();
+            }
+          }catch(e){ console.error('renderAll fail:', e); }
+
+          alert('✅ Добро пожаловать, ' + name + '!');
+        }).catch(function(err){
+          console.error('Ошибка сохранения:', err);
+          alert('Ошибка: ' + (err.code || err.message || 'неизвестная'));
+          fresh.disabled = false;
+          fresh.textContent = 'Начать играть';
+        });
+      };
+      wait();
+    }, true);
+
+    fresh.style.pointerEvents = 'auto';
+    fresh.style.cursor = 'pointer';
+    fresh.style.touchAction = 'manipulation';
+    console.log('✅ Кнопка "Начать играть" привязана заново');
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', fix);
+  } else {
+    fix();
+  }
+  setTimeout(fix, 2000);
+  setTimeout(fix, 5000);
+})();
+</script>
 </body>
 </html>
 
