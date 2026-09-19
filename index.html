@@ -8730,6 +8730,240 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   console.log('✅ ПАТЧ v13 установлен');
 })();
 </script>
+<script>
+/* v14 — жёсткий фикс Google-входа */
+(function(){
+  console.log('🎯 v14 стартует');
+
+  // === 1. СРАЗУ при старте выставляем правильный persistence ===
+  // Это КРИТИЧНО — до любого signInWithRedirect
+  async function setupPersistence(){
+    try{
+      var fb = window.__fb;
+      if(!fb){ setTimeout(setupPersistence, 200); return; }
+      // В Safari лучше всего работает indexedDB — обходит ITP
+      if(fb.authMod.indexedDBLocalPersistence){
+        await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
+        console.log('✅ indexedDBLocalPersistence');
+      }
+    }catch(e){
+      console.warn('persistence:', e);
+    }
+  }
+  setupPersistence();
+
+  // === 2. Перехватываем клик по Google — ВСЕГДА redirect ===
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('#googleLoginBtn');
+    if(!btn) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    console.log('🖱 Google нажат, начинаем вход...');
+
+    (async function(){
+      try{
+        var fb = window.__fb;
+        if(!fb){ alert('Firebase ещё загружается, подожди 2 секунды'); return; }
+
+        var prov = new fb.authMod.GoogleAuthProvider();
+        prov.setCustomParameters({ prompt: 'select_account' });
+
+        // ВСЕГДА redirect — это надёжнее всего в Safari
+        await fb.authMod.signInWithRedirect(fb.auth, prov);
+        console.log('➡ Редирект на Google...');
+      }catch(err){
+        console.error('login error:', err);
+        alert('Ошибка: ' + (err.code || err.message || 'неизвестная'));
+      }
+    })();
+  }, true); // capture: true — перехватываем до всех остальных
+
+  // === 3. При возврате с Google — ловим результат и загружаем профиль ===
+  async function handleReturn(){
+    try{
+      var fb = window.__fb;
+      if(!fb){ setTimeout(handleReturn, 300); return; }
+
+      // Ждём завершения redirect
+      var result = null;
+      try{
+        result = await fb.authMod.getRedirectResult(fb.auth);
+      }catch(e){
+        // Игнорируем «no-auth-event» — это норма когда возвращаешься не с Google
+        if(e.code !== 'auth/no-auth-event' && e.code !== 'auth/redirect-cancelled-by-user'){
+          console.warn('redirect result err:', e.code || e.message);
+        }
+      }
+
+      // Проверяем текущего юзера
+      var user = fb.auth.currentUser;
+
+      if(!result && !user){
+        console.log('⏳ Пользователь не найден после возврата');
+        return;
+      }
+
+      if(!user && result && result.user){
+        user = result.user;
+      }
+
+      if(!user){
+        console.log('⏳ Ждём авторизации...');
+        return;
+      }
+
+      console.log('✅ User найден:', user.email, user.uid);
+
+      // Пользователь есть — грузим профиль
+      var V = window._v11;
+      if(!V){ setTimeout(handleReturn, 300); return; }
+
+      // Если профиль уже загружен — не делаем ничего
+      if(V.profile && V.profile.playerId) return;
+
+      V.uid = user.uid;
+      V.user = user;
+      if(window.SD){ SD.uid = user.uid; SD.user = user; }
+
+      // Читаем профиль из Firebase
+      var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
+      var snap = await fb.dbMod.get(ref);
+
+      if(!snap.exists()){
+        // Новый игрок — создаём с ID
+        var cRef = fb.dbMod.ref(fb.db, 'counter/playerId');
+        var tx = await fb.dbMod.runTransaction(cRef, function(c){ return (c||0) + 1; });
+        var newId = String(tx.snapshot.val()).padStart(9, '0');
+
+        var defProfile = {
+          playerId: newId,
+          name: user.displayName || 'Игрок',
+          avatar: 0,
+          balance: 200,
+          inventory: [],
+          stats: { cases: 0, upgrades: 0 },
+          friends: [],
+          friendRequests: [],
+          incomingTransfers: [],
+          lastNickChange: 0,
+          language: 'ru',
+          accent: 'crimson',
+          bonus: { day: 0, lastClaim: 0 },
+          devMode: false,
+          onboarded: false,
+          createdAt: Date.now()
+        };
+        await fb.dbMod.set(ref, defProfile);
+        await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId), user.uid);
+
+        V.profile = defProfile;
+        V.playerId = newId;
+        if(window.SD){ SD.profile = defProfile; SD.playerId = newId; }
+
+        // Показываем онбординг
+        var l = document.getElementById('loginScreen');
+        var o = document.getElementById('onboardScreen');
+        var a = document.getElementById('app');
+        if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
+        if(o){ o.classList.remove('hidden'); o.style.display = 'flex'; }
+        var oid = document.getElementById('onboardId');
+        if(oid) oid.textContent = newId;
+        // Отрисуем аватарки
+        if(window._v11 && typeof renderOnboardAvatars === 'function'){
+          // v14 не имеет доступа, но мы можем вызвать через v11
+        }
+        console.log('✅ Новый игрок создан:', newId);
+        return;
+      }
+
+      // Профиль существует
+      var data = snap.val();
+
+      function toArr(v){
+        if(!v) return [];
+        if(Array.isArray(v)) return v.filter(Boolean);
+        if(typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);
+        return [];
+      }
+      data.inventory = toArr(data.inventory);
+      data.friends = toArr(data.friends);
+      data.friendRequests = toArr(data.friendRequests);
+      data.incomingTransfers = toArr(data.incomingTransfers);
+
+      V.profile = data;
+      V.playerId = data.playerId;
+      if(window.SD){ SD.profile = data; SD.playerId = data.playerId; }
+
+      if(data.onboarded){
+        // Скрываем логин + онбординг, показываем app
+        var l2 = document.getElementById('loginScreen');
+        var o2 = document.getElementById('onboardScreen');
+        var a2 = document.getElementById('app');
+        if(l2){ l2.classList.add('hidden'); l2.style.display = 'none'; }
+        if(o2){ o2.classList.add('hidden'); o2.style.display = 'none'; }
+        if(a2) a2.style.display = '';
+        console.log('✅ Профиль загружен, показываем app');
+      } else {
+        // Показываем онбординг
+        var l3 = document.getElementById('loginScreen');
+        var o3 = document.getElementById('onboardScreen');
+        var a3 = document.getElementById('app');
+        if(l3){ l3.classList.add('hidden'); l3.style.display = 'none'; }
+        if(o3){ o3.classList.remove('hidden'); o3.style.display = 'flex'; }
+        var oid3 = document.getElementById('onboardId');
+        if(oid3) oid3.textContent = data.playerId;
+        console.log('✅ Профиль без онбординга — показываем онбординг');
+      }
+    }catch(e){
+      console.error('handleReturn error:', e);
+      alert('Ошибка загрузки профиля: ' + (e.code || e.message || 'неизвестная'));
+    }
+  }
+
+  // Ждём Firebase и вызываем
+  setTimeout(handleReturn, 500);
+  setTimeout(handleReturn, 1500);
+  setTimeout(handleReturn, 3000);
+
+  // === 4. Периодически проверяем — если user есть, а profile нет → догрузить ===
+  setInterval(function(){
+    try{
+      var fb = window.__fb;
+      if(!fb || !fb.auth) return;
+      var user = fb.auth.currentUser;
+      var V = window._v11;
+      if(!user || !V) return;
+      if(V.profile && V.profile.playerId) return;
+      // Есть user но нет профиля — перезагружаем
+      handleReturn();
+    }catch(e){}
+  }, 3000);
+
+  // === 5. MutationObserver — не даём показать логин если user есть ===
+  var loginEl = document.getElementById('loginScreen');
+  if(loginEl){
+    new MutationObserver(function(){
+      try{
+        var fb = window.__fb;
+        var user = fb && fb.auth && fb.auth.currentUser;
+        if(!user) return;
+        // Пользователь авторизован — не даём показать логин
+        if(loginEl.classList.contains('hidden')) return;
+        // Есть user но логин показан → скрываем
+        loginEl.classList.add('hidden');
+        loginEl.style.display = 'none';
+        // И догружаем профиль
+        handleReturn();
+      }catch(e){}
+    }).observe(loginEl, { attributes: true, attributeFilter: ['class', 'style'] });
+  }
+
+  console.log('✅ ПАТЧ v14 установлен');
+})();
+</script>
 </body>
 </html>
 
