@@ -6105,12 +6105,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
 console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v31 loaded');
 </script>
 <script>
+/* ПАТЧ v2 — полностью чинит Google + сброс сессии */
 (function(){
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   function init(){
     if(!window.SD || !window.waitFirebase){ setTimeout(init, 300); return; }
 
+    // 1) Переопределяем loginGoogle
     SD.loginGoogle = async function(){
       try{
         const fb = await waitFirebase();
@@ -6127,6 +6129,15 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       }
     };
 
+    // 2) ПЕРЕПРИВЯЗЫВАЕМ кнопку (это ключевой фикс!)
+    const oldBtn = document.getElementById('googleLoginBtn');
+    if(oldBtn){
+      const newBtn = oldBtn.cloneNode(true);
+      oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+      newBtn.addEventListener('click', SD.loginGoogle, {passive:true});
+    }
+
+    // 3) Обработка возврата с redirect
     (async ()=>{
       try{
         const fb = await waitFirebase();
@@ -6134,6 +6145,27 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
         if(r && r.user) console.log('Redirect OK:', r.user.email);
       }catch(e){ console.error('redirect result:', e) }
     })();
+
+    // 4) Авто-сброс застрявшей сессии
+    // Если через 3 секунды видим ошибку "Профиль не загружен" —
+    // сами выходим из Google и показываем логин заново
+    setTimeout(async ()=>{
+      const loginVisible = document.getElementById('loginScreen') && !document.getElementById('loginScreen').classList.contains('hidden');
+      const onboardVisible = document.getElementById('onboardScreen') && !document.getElementById('onboardScreen').classList.contains('hidden');
+      const app = document.getElementById('app');
+      const appEmpty = app && app.offsetHeight < 50;
+      // Если логин не показан, а приложение пустое — что-то упало
+      if(!loginVisible && !onboardVisible && appEmpty){
+        console.warn('App stuck — resetting session');
+        try{
+          const fb = await waitFirebase();
+          await fb.authMod.signOut(fb.auth);
+          localStorage.removeItem('sd_uid');
+          localStorage.removeItem('sd_playerId');
+          location.reload();
+        }catch(e){ console.error(e) }
+      }
+    }, 3500);
   }
   init();
 })();
