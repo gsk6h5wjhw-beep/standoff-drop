@@ -6200,6 +6200,56 @@ document.addEventListener('DOMContentLoaded', ()=>{
    ============================================================ */
 console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v31 loaded');
 </script>
+  <script>
+/* ФИКС кнопки Google — поверх всех патчей */
+(function(){
+  function fix(){
+    var btn = document.getElementById('googleLoginBtn');
+    if(!btn){ setTimeout(fix, 300); return; }
+    if(btn._fixed) return;
+    btn._fixed = true;
+
+    // Клонируем кнопку — это снимает ВСЕ обработчики со старой
+    var fresh = btn.cloneNode(true);
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh._fixed = true;
+
+    // Навешиваем ОДИН чистый обработчик
+    fresh.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      // Вызываем переопределённый SD.loginGoogle (если v11 уже применился)
+      // либо старый (для совместимости)
+      try{
+        if(typeof SD !== 'undefined' && SD.loginGoogle){
+          SD.loginGoogle();
+        } else {
+          alert('Firebase ещё не загрузился, подожди 2 секунды');
+        }
+      }catch(err){
+        console.error('google login error:', err);
+        alert('Ошибка: ' + (err.code || err.message || 'неизвестная'));
+      }
+    }, true);
+
+    // Убираем pointer-events:none если он где-то стоит
+    fresh.style.pointerEvents = 'auto';
+    fresh.style.cursor = 'pointer';
+    fresh.style.touchAction = 'manipulation';
+
+    console.log('✅ Кнопка Google привязана заново');
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', fix);
+  } else {
+    fix();
+  }
+  setTimeout(fix, 2000);
+  setTimeout(fix, 5000);
+})();
+</script>
 <script>
 /* ПАТЧ v11 — фикс наложения экранов + надёжная авторизация */
 (function(){
