@@ -6105,7 +6105,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v31 loaded');
 </script>
 <script>
-/* ПАТЧ v2 — полностью чинит Google + сброс сессии */
+/* ПАТЧ v3 — точная диагностика ошибки профиля */
 (function(){
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -6129,7 +6129,7 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       }
     };
 
-    // 2) ПЕРЕПРИВЯЗЫВАЕМ кнопку (это ключевой фикс!)
+    // 2) Перепривязываем кнопку
     const oldBtn = document.getElementById('googleLoginBtn');
     if(oldBtn){
       const newBtn = oldBtn.cloneNode(true);
@@ -6137,7 +6137,7 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       newBtn.addEventListener('click', SD.loginGoogle, {passive:true});
     }
 
-    // 3) Обработка возврата с redirect
+    // 3) Возврат с redirect
     (async ()=>{
       try{
         const fb = await waitFirebase();
@@ -6146,30 +6146,79 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       }catch(e){ console.error('redirect result:', e) }
     })();
 
-    // 4) Авто-сброс застрявшей сессии
-    // Если через 3 секунды видим ошибку "Профиль не загружен" —
-    // сами выходим из Google и показываем логин заново
+    // 4) ДИАГНОСТИКА: перехватываем ошибку профиля
+    // Через 5 секунд после загрузки — проверяем, что случилось
     setTimeout(async ()=>{
       const loginVisible = document.getElementById('loginScreen') && !document.getElementById('loginScreen').classList.contains('hidden');
       const onboardVisible = document.getElementById('onboardScreen') && !document.getElementById('onboardScreen').classList.contains('hidden');
       const app = document.getElementById('app');
       const appEmpty = app && app.offsetHeight < 50;
-      // Если логин не показан, а приложение пустое — что-то упало
+
+      // Если логин скрыт, онбординг скрыт, но приложение пустое — профиль не загрузился
       if(!loginVisible && !onboardVisible && appEmpty){
-        console.warn('App stuck — resetting session');
+        console.warn('=== ДИАГНОСТИКА ===');
         try{
           const fb = await waitFirebase();
-          await fb.authMod.signOut(fb.auth);
-          localStorage.removeItem('sd_uid');
-          localStorage.removeItem('sd_playerId');
-          location.reload();
-        }catch(e){ console.error(e) }
+          const user = fb.auth.currentUser;
+
+          let info = 'ДИАГНОСТИКА:\n\n';
+          info += 'Пользователь: ' + (user ? user.email : 'НЕТ') + '\n';
+          info += 'UID: ' + (user ? user.uid : 'НЕТ') + '\n\n';
+
+          if(user){
+            // Пробуем прочитать свой профиль
+            try{
+              const snap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + user.uid));
+              info += 'users/{uid}: ' + (snap.exists() ? 'ЕСТЬ' : 'НЕТ') + '\n';
+              if(snap.exists()){
+                const d = snap.val();
+                info += '  playerId: ' + (d.playerId || '—') + '\n';
+                info += '  name: ' + (d.name || '—') + '\n';
+                info += '  balance: ' + (d.balance || 0) + '\n';
+                info += '  onboarded: ' + (d.onboarded) + '\n';
+              }
+            }catch(e1){
+              info += 'ОШИБКА чтения users/{uid}: ' + (e1.code || e1.message) + '\n';
+            }
+
+            // Пробуем прочитать counter
+            try{
+              const cSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'counter/playerId'));
+              info += 'counter/playerId: ' + (cSnap.exists() ? cSnap.val() : 'НЕТ') + '\n';
+            }catch(e2){
+              info += 'ОШИБКА чтения counter: ' + (e2.code || e2.message) + '\n';
+            }
+
+            // Пробуем прочитать playerIds
+            try{
+              const pSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'playerIds'));
+              info += 'playerIds: ' + (pSnap.exists() ? 'ЕСТЬ (' + Object.keys(pSnap.val()||{}).length + ')' : 'НЕТ') + '\n';
+            }catch(e3){
+              info += 'ОШИБКА чтения playerIds: ' + (e3.code || e3.message) + '\n';
+            }
+          }
+
+          alert(info);
+          console.log(info);
+
+          // Предлагаем выход, чтобы начать заново
+          if(confirm('Выйти из аккаунта и начать заново?')){
+            try{
+              await fb.authMod.signOut(fb.auth);
+              localStorage.clear();
+              location.reload();
+            }catch(e){}
+          }
+        }catch(err){
+          alert('Диагностика упала: ' + (err.code || err.message));
+        }
       }
-    }, 3500);
+    }, 5000);
   }
   init();
 })();
 </script>
+
 </body>
 </html>
 
