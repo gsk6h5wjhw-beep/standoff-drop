@@ -6251,872 +6251,19 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <script>
-/* ПАТЧ v11 — фикс наложения экранов + надёжная авторизация */
-(function(){
-  function $(id){return document.getElementById(id)}
-  function toArr(v){if(!v)return[];if(Array.isArray(v))return v.filter(Boolean);if(typeof v==='object')return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);return[]}
-  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]})}
-  function waitFB(){return new Promise(function(res){var t=function(){if(window.__firebaseReady&&window.__fb)res(window.__fb);else setTimeout(t,150)};t()})}
-
-  var V={fb:null,user:null,uid:null,profile:null,playerId:null,onboardAvatar:0,lang:'ru',accent:'crimson',devMode:false,invFilter:'all',casesFilter:'all',transferSelected:[],currentCase:null,currentCount:1,upSource:null,upTarget:null,upAdd:0,ready:false};
-  window._v11=V;
-
-  function avatarSrc(a){ if(typeof a==='number'&&SD.avatars&&SD.avatars[a]) return SD.avatars[a]; if(typeof a==='string'&&a.length>20) return a; return SD.avatars?SD.avatars[0]:''; }
-
-  /* ===== ФИКС НАЛОЖЕНИЯ: скрываем login/onboard при старте ===== */
-  // loginScreen показывается ТОЛЬКО когда точно нет user
-  // app скрывается пока не загрузится профиль
-  var _originalShowLogin = null;
-  function forceHideAuth(){
-    var l=$('loginScreen'),o=$('onboardScreen'),a=$('app');
-    if(l){l.classList.add('hidden');l.style.display='none';}
-    if(o){o.classList.add('hidden');o.style.display='none';}
-    if(a){a.style.display='';}
-  }
-  function forceShowLogin(){
-    var l=$('loginScreen'),o=$('onboardScreen'),a=$('app');
-    if(l){l.classList.remove('hidden');l.style.display='flex';}
-    if(o){o.classList.add('hidden');o.style.display='none';}
-    if(a){a.style.display='none';}
-  }
-  function forceShowOnboard(){
-    var l=$('loginScreen'),o=$('onboardScreen'),a=$('app');
-    if(l){l.classList.add('hidden');l.style.display='none';}
-    if(o){o.classList.remove('hidden');o.style.display='flex';}
-    if(a){a.style.display='none';}
-  }
-  window._v11HideAuth=forceHideAuth;
-  window._v11ShowLogin=forceShowLogin;
-  window._v11ShowOnboard=forceShowOnboard;
-
-  /* Изначально ВСЁ скрыто кроме сплэша */
-  document.addEventListener('DOMContentLoaded', function(){
-    forceShowLogin(); // пока считаем что не залогинен
-  });
-  // И ещё раз через 100мс — на случай, если DOM уже загружен
-  setTimeout(function(){ forceShowLogin(); }, 100);
-
-  /* ===== Загрузка профиля ===== */
-  async function loadProfile(user){
-    var fb=V.fb; V.user=user; V.uid=user.uid;
-    SD.uid=user.uid; SD.user=user;
-    try{
-      var ref=fb.dbMod.ref(fb.db,'users/'+user.uid);
-      var snap=await fb.dbMod.get(ref);
-      var data;
-      if(!snap.exists()){
-        var cRef=fb.dbMod.ref(fb.db,'counter/playerId');
-        var res=await fb.dbMod.runTransaction(cRef,function(c){return (c||0)+1});
-        var newId=String(res.snapshot.val()).padStart(9,'0');
-        data={playerId:newId,name:user.displayName||'Игрок',avatar:0,balance:200,inventory:[],stats:{cases:0,upgrades:0},friends:[],friendRequests:[],incomingTransfers:[],lastNickChange:0,language:V.lang,accent:V.accent,bonus:{day:0,lastClaim:0},devMode:false,onboarded:false,createdAt:Date.now()};
-        await fb.dbMod.set(ref,data);
-        await fb.dbMod.set(fb.dbMod.ref(fb.db,'playerIds/'+newId),user.uid);
-      } else {
-        data=snap.val();
-        if(!data.playerId||/^0+$/.test(String(data.playerId))){
-          var cRef2=fb.dbMod.ref(fb.db,'counter/playerId');
-          var r2=await fb.dbMod.runTransaction(cRef2,function(c){return (c||0)+1});
-          var newId2=String(r2.snapshot.val()).padStart(9,'0');
-          data.playerId=newId2; data.onboarded=false;
-          await fb.dbMod.update(ref,{playerId:newId2,onboarded:false});
-          await fb.dbMod.set(fb.dbMod.ref(fb.db,'playerIds/'+newId2),user.uid);
-        }
-      }
-      data.inventory=toArr(data.inventory); data.friends=toArr(data.friends);
-      data.friendRequests=toArr(data.friendRequests); data.incomingTransfers=toArr(data.incomingTransfers);
-      V.profile=data; V.playerId=data.playerId;
-      SD.profile=data; SD.uid=user.uid; SD.playerId=data.playerId;
-      if(data.accent){V.accent=data.accent;document.documentElement.setAttribute('data-accent',data.accent);SD.accent=data.accent}
-      if(data.language){V.lang=data.language;SD.lang=data.language}
-      V.devMode=!!data.devMode; SD.devMode=V.devMode;
-      if(!data.onboarded){
-        forceShowOnboard();
-        renderOnboardAvatars();
-        var idEl=$('onboardId'); if(idEl)idEl.textContent=data.playerId;
-      } else {
-        forceHideAuth();
-        try{renderAll()}catch(e){console.error('renderAll:',e)}
-      }
-    }catch(e){
-      console.error('loadProfile error:', e);
-      // ВАЖНО: даже если упало — покажем app и дадим пользователю шанс
-      forceHideAuth();
-      try{renderAll()}catch(err){}
-      alert('Ошибка загрузки профиля: '+(e.code||e.message||'неизвестная')+'\n\nНо вы уже вошли. Попробуйте обновить страницу.');
-    }
-  }
-
-  /* ===== Онбординг ===== */
-  function renderOnboardAvatars(){
-    var box=$('onboardAvatars'); if(!box)return;
-    box.innerHTML=SD.avatars.map(function(src,i){return '<button type="button" class="avatar-choice '+(i===V.onboardAvatar?'active':'')+'" data-av="'+i+'"><img src="'+src+'" alt=""></button>'}).join('');
-  }
-  async function finishOnboard(){
-    var nEl=$('onboardName');
-    var name=(nEl&&nEl.value||'').trim();
-    if(!name){alert('Введите ник');return}
-    if(name.length<2){alert('Ник слишком короткий');return}
-    try{
-      var fb=V.fb;
-      await fb.dbMod.update(fb.dbMod.ref(fb.db,'users/'+V.uid),{name:name.slice(0,20),avatar:V.onboardAvatar,onboarded:true});
-      V.profile.name=name; V.profile.avatar=V.onboardAvatar; V.profile.onboarded=true;
-      SD.profile.name=name; SD.profile.avatar=V.onboardAvatar; SD.profile.onboarded=true;
-      forceHideAuth();
-      try{renderAll()}catch(e){}
-    }catch(e){console.error('finishOnboard:',e); alert('Ошибка: '+(e.code||e.message||'неизвестная'))}
-  }
-
-  /* ===== Рендеры ===== */
-  function renderAll(){
-    try{renderHeader()}catch(e){}
-    try{renderHome()}catch(e){}
-    try{renderAllCases()}catch(e){}
-    try{renderInventory()}catch(e){}
-    try{renderProfile()}catch(e){}
-    try{renderSettings()}catch(e){}
-    try{renderBonus()}catch(e){}
-    try{renderPlayers()}catch(e){}
-  }
-  function renderHeader(){
-    if(!V.profile)return;
-    var hb=$('headerBalance'); if(hb)hb.textContent=Math.round(V.profile.balance||0).toLocaleString('ru-RU');
-    var ha=$('headerAvatar'); if(ha)ha.src=avatarSrc(V.profile.avatar);
-  }
-  function caseCardHTML(c){
-    var prem=c.tier==='premium';
-    return '<div class="case-card '+(prem?'premium':'')+'" data-case-id="'+c.id+'">'+
-      '<div class="case-img"><img src="'+c.img+'" alt="" loading="lazy"></div>'+
-      '<div class="case-name">'+esc(c.name)+'</div>'+
-      '<div class="case-price">'+c.price.toLocaleString('ru-RU')+'</div></div>';
-  }
-  function renderHome(){var box=$('homeCases'); if(!box)return; box.innerHTML=SD.CASES.slice(0,6).map(caseCardHTML).join('')}
-  function renderAllCases(){
-    var box=$('allCases'); if(!box)return;
-    var list=SD.CASES.filter(function(c){return V.casesFilter==='all'||c.tier===V.casesFilter});
-    var cnt=$('casesCount'); if(cnt)cnt.textContent=list.length;
-    box.innerHTML=list.map(caseCardHTML).join('');
-  }
-  function renderInventory(){
-    var grid=$('inventoryGrid'); if(!grid)return;
-    var inv=toArr(V.profile&&V.profile.inventory);
-    var list=inv;
-    if(V.invFilter==='skin')list=inv.filter(function(s){return s.t==='skin'||!s.t});
-    else if(V.invFilter==='knife')list=inv.filter(function(s){return s.t==='knife'});
-    else if(V.invFilter==='gloves')list=inv.filter(function(s){return s.t==='gloves'});
-    var cnt=$('invCountLabel'); if(cnt)cnt.textContent=list.length+' шт.';
-    if(!list.length){grid.innerHTML='<div class="inv-empty"><div class="ie-emoji">🎒</div><div>'+SD.t('emptyInv')+'</div></div>';return}
-    grid.innerHTML=list.map(function(s){
-      var realIdx=inv.indexOf(s);
-      var price=s.received?Math.round(s.p*0.8):Math.round(s.p);
-      return '<div class="inv-card" style="--rc:'+SD.rarityColor(s.r)+'" data-inv-idx="'+realIdx+'">'+
-        (s.received?'<div class="ic-tag">−20%</div>':'')+
-        '<img src="'+s.img+'" alt=""><div class="ic-rar">'+esc(SD.t('r'+s.r)||s.r)+'</div>'+
-        '<div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
-        '<div class="ic-price">'+price+' G</div></div>';
-    }).join('');
-  }
-  function renderProfile(){
-    if(!V.profile)return;
-    var p=V.profile;
-    var a=$('profileAvatar'); if(a)a.src=avatarSrc(p.avatar);
-    var n=$('profileName'); if(n)n.textContent=p.name||'Игрок';
-    var id=$('profilePlayerId'); if(id)id.textContent=p.playerId||'000000000';
-    var b=$('profileBalance'); if(b)b.textContent=Math.round(p.balance||0).toLocaleString('ru-RU');
-    var sc=$('statCases'); if(sc)sc.textContent=(p.stats&&p.stats.cases)||0;
-    var su=$('statUpgrades'); if(su)su.textContent=(p.stats&&p.stats.upgrades)||0;
-    var sf=$('statFriends'); if(sf)sf.textContent=toArr(p.friends).length;
-    renderHeader();
-  }
-  function renderSettings(){
-    if(!V.profile)return;
-    document.querySelectorAll('#accentPicker .accent-dot').forEach(function(d){d.classList.toggle('active',d.dataset.accent===V.accent)});
-    document.querySelectorAll('.lang-btn').forEach(function(b){b.classList.toggle('active',b.dataset.lang===V.lang)});
-    var n=$('settingsNickname'); if(n)n.value=V.profile.name||'';
-    var box=$('settingsAvatars');
-    if(box){var cur=typeof V.profile.avatar==='number'?V.profile.avatar:0;
-      box.innerHTML=SD.avatars.map(function(src,i){return '<button type="button" class="avatar-choice '+(i===cur?'active':'')+'" data-sav="'+i+'"><img src="'+src+'" alt=""></button>'}).join('')}
-  }
-  var BONUS=[10,50,100,150,200,300,350,400,450,500];
-  function renderBonus(){
-    if(!V.profile)return;
-    var box=$('bonusDays'); if(!box)return;
-    var p=V.profile, day=(p.bonus&&p.bonus.day)||0, last=(p.bonus&&p.bonus.lastClaim)||0;
-    var today=new Date().toDateString(), claimed=last&&new Date(last).toDateString()===today;
-    box.innerHTML=BONUS.slice(0,5).map(function(r,i){
-      var d=i+1, cl=day>=d, td=(day===d-1||(day===0&&d===1))&&!claimed&&day<10;
-      return '<div class="bonus-day '+(cl?'claimed ':'')+(td?'today':'')+'"><span class="bd-num">День '+d+'</span><span class="bd-val">'+r+' G</span></div>';
-    }).join('');
-    var btn=$('bonusTakeBtn');
-    if(btn){ if(claimed){btn.disabled=true;btn.textContent=SD.t('todayClaimed')}
-      else{btn.disabled=false;btn.textContent=SD.t('takeBonus')+' (+'+(BONUS[Math.min(day,9)]||10)+' G)'} }
-  }
-  function renderPlayers(){
-    var idEl=$('myPlayerId'); if(idEl)idEl.textContent=V.playerId||'000000000';
-    renderFriends(); renderTransferSkins(); renderIncoming();
-  }
-  function renderFriends(){
-    var box=$('friendsList'); if(!box)return;
-    var f=toArr(V.profile&&V.profile.friends);
-    if(!f.length){box.innerHTML='<div class="inv-empty"><div class="ie-emoji">.closest👥('#</div><div>'+mainSD.t('emptyFriends')+'</divLogo></div>';return}
-    box.innerHTML=f.map(function(x){
-      return '<div class="friend-row"><div class="friend-avatar"><img src="'+avatarSrc(x.avatar)+'" alt=""></div>'+
-        '<div class="friend-info"><b>'+esc(x.name||'Игрок')+'</b><span>ID: '+esc(x.playerId||'—')+'</span></div></div>';
-    }).join('');
-  }
-  function renderTransferSkins(){
-    var box=$('transferSkinsList'); if(!box)return;
-    var inv=toArr(V.profile&&V.profile.inventory), av=inv.filter(function(s){return !s.received});
-    if(!av.length){box.innerHTML='<div class="inv-empty" style="grid-column:1/-1;padding:20px;font-size:13px">'+SD.t('emptyInv')+'</div>';return}
-    box.innerHTML=av.map(function(s){
-      var idx=inv.indexOf(s), sel=V.transferSelected.indexOf(idx)>-1;
-      return '<div class="transfer-skin '+(sel?'selected':'')+'" data-ts-idx="'+idx+'"><img src="'+s.img+'" alt=""><div class="ts-name">'+esc(s.w)+' | '+esc(s.s)+'</div></div>';
-    }).join('');
-    var cnt=$('transferSelectedCount'); if(cnt)cnt.textContent='('+V.transferSelected.length+'/5)';
-    var b=$('sendTransferBtn'); if(b)b.disabled=!V.transferSelected.length;
-  }
-  function renderIncoming(){
-    var box=$('incomingTransfersList'); if(!box)return;
-    var list=toArr(V.profile&&V.profile.incomingTransfers);
-    if(!list.length){box.innerHTML='<div class="inv-empty" style="padding:60px 20px"><div class="ie-emoji">📭</div><div>'+SD.t('emptyTransfers')+'</div></div>';return}
-    box.innerHTML=list.map(function(tr){
-      return '<div class="settings-block"><div style="font-weight:900;margin-bottom:8px">От: '+esc(tr.fromName)+'</div>'+
-        '<div class="row"><button class="btn btn-primary btn-sm" data-accept-tr="'+esc(tr.transferId)+'">Принять</button>'+
-        '<button class="btn btn-ghost btn-sm" data-decline-tr="'+esc(tr.transferId)+'">Отклонить</button></div></div>';
-    }).join('');
-  }
-
-  function goScreen(name){
-    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active')});
-    var t=$('screen-'+name); if(t)t.classList.add('active');
-    var navKey=name;
-    if(['inventory','settings','bonus','topup','players'].indexOf(name)>-1)navKey='profile';
-    if(name==='roulette')navKey='games';
-    document.querySelectorAll('#bottomNav .nav-item').forEach(function(i){i.classList.toggle('active',i.dataset.nav===navKey)});
-    window.scrollTo(0,0);
-    try{
-      if(name==='home')renderHome();
-      if(name==='cases')renderAllCases();
-      if(name==='inventory')renderInventory();
-      if(name==='profile')renderProfile();
-      if(name==='settings')renderSettings();
-      if(name==='bonus')renderBonus();
-      if(name==='players')renderPlayers();
-    }catch(e){}
-  }
-
-  /* ===== Делегирование ===== */
-  document.addEventListener('click',function(e){
-    var t=e.target;
-    if(t.closest('#onboardSave')){e.preventDefault();finishOnboard();return}
-    var av=t.closest('#onboardAvatars .avatar-choice');
-    if(av){e.preventDefault();V.onboardAvatar=+av.dataset.av;renderOnboardAvatars();return}
-    var logo=t');
-    if(logo){e.preventDefault();if(!logo._t11)logo._t11=0;logo._t11++;clearTimeout(logo._t11t);if(logo._t11>=17){logo._t11=0;if(SD.openModal)SD.openModal('devCodeModal');return}if(logo._t11===1)goScreen('home');logo._t11t=setTimeout(function(){logo._t11=0},3000);return}
-    var nav=t.closest('#bottomNav .nav-item');
-    if(nav&&nav.dataset.nav){e.preventDefault();goScreen(nav.dataset.nav);return}
-    if(t.closest('#headerPlus')){e.preventDefault();if(SD.openModal)SD.openModal('topupModal');return}
-    var qb=t.closest('.quick-btn');
-    if(qb&&qb.getAttribute('onclick')){e.preventDefault();try{new Function(qb.getAttribute('onclick')).call(qb)}catch(err){}return}
-    var pm=t.closest('.pm-item');
-    if(pm&&pm.getAttribute('onclick')){e.preventDefault();try{new Function(pm.getAttribute('onclick')).call(pm)}catch(err){}return}
-    var invf=t.closest('#invFilters .inv-filter');
-    if(invf){e.preventDefault();V.invFilter=invf.dataset.ifilter;document.querySelectorAll('#invFilters .inv-filter').forEach(function(b){b.classList.toggle('active',b===invf)});renderInventory();return}
-    var cf=t.closest('#casesFilters .inv-filter');
-    if(cf){e.preventDefault();V.casesFilter=cf.dataset.filter;document.querySelectorAll('#casesFilters .inv-filter').forEach(function(b){b.classList.toggle('active',b===cf)});renderAllCases();return}
-    var lang=t.closest('.lang-btn');
-    if(lang){e.preventDefault();V.lang=lang.dataset.lang;SD.lang=V.lang;try{localStorage.setItem('sd_lang',JSON.stringify(V.lang))}catch(err){}document.querySelectorAll('.lang-btn').forEach(function(b){b.classList.toggle('active',b.dataset.lang===V.lang)});if(SD.applyI18n)SD.applyI18n();if(SD.saveSetting)SD.saveSetting('language',V.lang);return}
-    var acc=t.closest('#accentPicker .accent-dot');
-    if(acc){e.preventDefault();V.accent=acc.dataset.accent;SD.accent=V.accent;document.documentElement.setAttribute('data-accent',V.accent);try{localStorage.setItem('sd_accent',JSON.stringify(V.accent))}catch(err){}document.querySelectorAll('#accentPicker .accent-dot').forEach(function(d){d.classList.toggle('active',d.dataset.accent===V.accent)});if(SD.saveSetting)SD.saveSetting('accent',V.accent);return}
-    var sav=t.closest('#settingsAvatars .avatar-choice');
-    if(sav){e.preventDefault();document.querySelectorAll('#settingsAvatars .avatar-choice').forEach(function(b){b.classList.remove('active')});sav.classList.add('active');return}
-    if(t.closest('#saveProfileSettings')){e.preventDefault();saveProfileSettings();return}
-    var qs=t.closest('#topupPresets .quick-btn, #topupModal .quick-btn');
-    if(qs&&qs.dataset.amount){e.preventDefault();var target=qs.closest('#topupModal')?'topupModalAmount':'topupAmount';var inp=$(target); if(inp)inp.value=qs.dataset.amount;return}
-    if(t.closest('#topupModalConfirm')){e.preventDefault();var a=parseInt(($('topupModalAmount')||{}).value,10);doTopup(a,true);return}
-    if(t.closest('#topupConfirmBtn')){e.preventDefault();var a2=parseInt(($('topupAmount')||{}).value,10);doTopup(a2,false);return}
-    if(t.closest('#profileTopupBtn')){e.preventDefault();goScreen('topup');return}
-    if(t.closest('#profileCopyId')){e.preventDefault();var pid=($('profilePlayerId')||{}).textContent||'';navigator.clipboard.writeText(pid).then(function(){alert('ID: '+pid)});return}
-    if(t.closest('#copyMyId')){e.preventDefault();var mid=($('myPlayerId')||{}).textContent||'';navigator.clipboard.writeText(mid).then(function(){alert('ID: '+mid)});return}
-    var pr=t.closest('.upgrade-presets button');
-    if(pr&&pr.dataset.add!==undefined){e.preventDefault();V.upAdd=+pr.dataset.add;refreshUpgrade();return}
-    if(t.closest('#upgradeBtn')){e.preventDefault();runUpgrade();return}
-    if(t.closest('#upSourceSlot')){e.preventDefault();openPickSource();return}
-    if(t.closest('#upTargetSlot')){e.preventDefault();if(!V.upSource){alert('Сначала выберите свой предмет');return}openPickTarget();return}
-    if(t.closest('#bonusTakeBtn')){e.preventDefault();claimBonus();return}
-    if(t.closest('#spinRouletteBtn')){e.preventDefault();spinRoulette();return}
-    var cc=t.closest('.case-card');
-    if(cc&&cc.dataset.caseId){e.preventDefault();openCase(cc.dataset.caseId);return}
-    var cnt=t.closest('.count-btn');
-    if(cnt&&cnt.parentNode&&cnt.parentNode.id==='caseCountRow'){e.preventDefault();V.currentCount=parseInt(cnt.textContent,10)||1;cnt.parentNode.querySelectorAll('.count-btn').forEach(function(b){b.classList.remove('active')});cnt.classList.add('active');updateCaseOpenBtn();return}
-    if(t.closest('#caseOpenBtn')){e.preventDefault();doOpenCase();return}
-    var ic=t.closest('.inv-card[data-inv-idx]');
-    if(ic){e.preventDefault();openSkinCard(+ic.dataset.invIdx);return}
-    var pt=t.closest('#playersTabs button');
-    if(pt){e.preventDefault();document.querySelectorAll('#playersTabs button').forEach(function(b){b.classList.remove('active')});pt.classList.add('active');var tab=pt.dataset.tab;var pf=$('playersFriends'),ptr=$('playersTransfer');if(pf)pf.classList.toggle('hide',tab!=='friends');if(ptr)ptr.classList.toggle('hide',tab!=='transfer');return}
-    var tt=t.closest('#transferTabs button');
-    if(tt){e.preventDefault();document.querySelectorAll('#transferTabs button').forEach(function(b){b.classList.remove('active')});tt.classList.add('active');var t2=tt.dataset.ttab;var ts=$('transferSend'),tr2=$('transferReceive');if(ts)ts.classList.toggle('hide',t2!=='send');if(tr2)tr2.classList.toggle('hide',t2!=='receive');if(t2==='receive')renderIncoming();else renderTransferSkins();return}
-    if(t.closest('#addFriendBtn')){e.preventDefault();addFriend();return}
-    if(t.closest('#sendTransferBtn')){e.preventDefault();sendTransfer();return}
-    var tsk=t.closest('.transfer-skin[data-ts-idx]');
-    if(tsk){e.preventDefault();var i=+tsk.dataset.tsIdx;var p=V.transferSelected.indexOf(i);if(p>-1)V.transferSelected.splice(p,1);else if(V.transferSelected.length<5)V.transferSelected.push(i);renderTransferSkins();return}
-    if(t.closest('#googleLoginBtn')){e.preventDefault();googleLogin();return}
-    var sc=t.closest('.sheet-close');
-    if(sc&&sc.dataset.close){e.preventDefault();var m=$(sc.dataset.close);if(m)m.classList.remove('show');return}
-    if(t.closest('#devCodeConfirm')){e.preventDefault();confirmDevCode();return}
-    if(t.classList&&t.classList.contains('modal-back')){t.classList.remove('show');return}
-  }, true);
-
-  /* ===== Действия ===== */
-  async function googleLogin(){
-    try{
-      var fb=V.fb; var prov=new fb.authMod.GoogleAuthProvider();
-      prov.setCustomParameters({prompt:'select_account'});
-      try{await fb.authMod.setPersistence(fb.auth, fb.authMod.browserSessionPersistence);}catch(e){}
-      var isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      if(isMobile){await fb.authMod.signInWithRedirect(fb.auth,prov);}
-      else{
-        try{await fb.authMod.signInWithPopup(fb.auth,prov);}
-        catch(err){
-          if(err&&(err.code==='auth/popup-blocked'||err.code==='auth/popup-closed-by-user')){await fb.authMod.signInWithRedirect(fb.auth,prov);}
-          else throw err;
-        }
-      }
-    }catch(e){console.error('login:',e);alert('Ошибка входа: '+(e.code||e.message||''))}
-  }
-  async function saveProfileSettings(){
-    var nEl=$('settingsNickname'); var newName=(nEl&&nEl.value||'').trim();
-    var cur=V.profile.name||''; var isChanged=newName&&newName!==cur;
-    var last=V.profile.lastNickChange||0; var cool=30*24*3600*1000;
-    if(isChanged&&last&&(Date.now()-last)<cool){var left=Math.ceil((cool-(Date.now()-last))/(24*3600*1000));alert('Смена ника через '+left+' дн.');return}
-    var sel=document.querySelector('#settingsAvatars .avatar-choice.active');
-    var newAvatar=sel?+sel.dataset.sav:V.profile.avatar;
-    var upd={avatar:newAvatar};
-    if(isChanged){upd.name=newName.slice(0,20);upd.lastNickChange=Date.now()}
-    try{
-      await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),upd);
-      Object.assign(V.profile,upd); Object.assign(SD.profile,upd);
-      renderProfile(); renderSettings(); alert('Сохранено');
-    }catch(e){console.error(e);alert('Ошибка: '+(e.code||e.message||''))}
-  }
-  async function doTopup(amount,fromModal){
-    amount=parseInt(amount,10);
-    if(!amount||amount<500||amount>2000){alert('Введите сумму от 500 до 2000');return}
-    var newBal=Math.round((V.profile.balance||0)+amount);
-    V.profile.balance=newBal; SD.profile.balance=newBal;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{balance:newBal});
-    renderHeader(); renderProfile();
-    if(fromModal){var m=$('topupModal'); if(m)m.classList.remove('show')}
-    else{var a=$('topupAmount'); if(a)a.value=''}
-    if(SD.ok)SD.ok('Пополнено','+'+amount+' G');
-  }
-  async function claimBonus(){
-    var p=V.profile, last=(p.bonus&&p.bonus.lastClaim)||0;
-    var today=new Date().toDateString();
-    if(last&&new Date(last).toDateString()===today){alert('Приходи завтра');return}
-    var day=(p.bonus&&p.bonus.day)||0;
-    var hrs=last?(Date.now()-last)/3600000:0;
-    if(last&&hrs>48)day=0;
-    var nd=Math.min(day+1,10); var rw=BONUS[nd-1]||10;
-    var nb=Math.round((p.balance||0)+rw);
-    var nb2={day:nd,lastClaim:Date.now()};
-    p.balance=nb; p.bonus=nb2; SD.profile.balance=nb; SD.profile.bonus=nb2;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{balance:nb,bonus:nb2});
-    renderHeader(); renderProfile(); renderBonus();
-    if(SD.ok)SD.ok('Бонус получен','+'+rw+' G');
-  }
-  async function addFriend(){
-    var inp=$('friendIdInput'); var id=(inp&&inp.value||'').trim();
-    if(!/^\d{9}$/.test(id)){alert('ID должен быть 9 цифр');return}
-    if(id===V.playerId){alert('Нельзя добавить себя');return}
-    try{
-      var uSnap=await V.fb.dbMod.get(V.fb.dbMod.ref(V.fb.db,'playerIds/'+id));
-      if(!uSnap.exists()){alert('Игрок не найден');return}
-      var targetUid=uSnap.val();
-      var req=toArr((await V.fb.dbMod.get(V.fb.dbMod.ref(V.fb.db,'users/'+targetUid+'/friendRequests'))).val());
-      req.push({uid:V.uid,name:V.profile.name||'Игрок',playerId:V.playerId,avatar:V.profile.avatar||0,ts:Date.now()});
-      await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+targetUid),{friendRequests:req});
-      if(inp)inp.value='';
-      alert('Запрос отправлен');
-    }catch(e){console.error(e);alert('Ошибка')}
-  }
-  async function sendTransfer(){
-    var inp=$('transferIdInput'); var id=(inp&&inp.value||'').trim();
-    if(!/^\d{9}$/.test(id)){alert('ID должен быть 9 цифр');return}
-    if(!V.transferSelected.length){alert('Выберите скины');return}
-    try{
-      var uSnap=await V.fb.dbMod.get(V.fb.dbMod.ref(V.fb.db,'playerIds/'+id));
-      if(!uSnap.exists()){alert('Игрок не найден');return}
-      var targetUid=uSnap.val();
-      var inv=toArr(V.profile.inventory);
-      var skins=V.transferSelected.map(function(i){return inv[i]}).filter(Boolean);
-      if(!skins.length)return;
-      var trs=toArr((await V.fb.dbMod.get(V.fb.dbMod.ref(V.fb.db,'users/'+targetUid+'/incomingTransfers'))).val());
-      trs.push({from:V.uid,fromName:V.profile.name,fromPlayerId:V.playerId,skins:skins,transferId:'tr-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),ts:Date.now()});
-      await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+targetUid),{incomingTransfers:trs});
-      var idxs=V.transferSelected.slice().sort(function(a,b){return b-a});
-      var newInv=inv.slice(); idxs.forEach(function(i){newInv.splice(i,1)});
-      V.profile.inventory=newInv; SD.profile.inventory=newInv;
-      await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{inventory:newInv});
-      V.transferSelected=[]; renderTransferSkins(); if(inp)inp.value='';
-      alert('Отправлено');
-    }catch(e){console.error(e);alert('Ошибка')}
-  }
-  function openSkinCard(idx){
-    var inv=toArr(V.profile.inventory); var skin=inv[idx]; if(!skin)return;
-    var m=$('skinCardModal'); if(!m)return;
-    var body=$('skinCardBody');
-    var price=skin.received?Math.round(skin.p*0.8):Math.round(skin.p);
-    body.innerHTML='<div style="text-align:center;padding:14px 0">'+
-      '<img src="'+skin.img+'" style="width:220px;height:160px;object-fit:contain;display:block;margin:0 auto 8px">'+
-      '<div style="font-size:12px;font-weight:1000;color:'+SD.rarityColor(skin.r)+';text-transform:uppercase;margin-bottom:6px">'+esc(SD.t('r'+skin.r)||skin.r)+'</div>'+
-      '<div style="font-size:20px;font-weight:900;margin-bottom:12px">'+esc(skin.w)+' | '+esc(skin.s)+'</div>'+
-      '<div style="font-size:22px;font-weight:1000;color:var(--gold);margin-bottom:18px">'+price+' G</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-        '<button class="btn btn-gold" id="scSell">💰 Продать</button>'+
-        '<button class="btn btn-primary" id="scUp">⚡ Апгрейд</button>'+
-      '</div></div>';
-    m.classList.add('show');
-    var b1=$('scSell'), b2=$('scUp');
-    if(b1)b1.onclick=function(){sellSkinByRef(skin);m.classList.remove('show')};
-    if(b2)b2.onclick=function(){V.upSource=skin;m.classList.remove('show');goScreen('upgrade');renderUpgradeUI()};
-  }
-  async function sellSkinByRef(skin){
-    var inv=toArr(V.profile.inventory);
-    var idx=-1; for(var i=0;i<inv.length;i++){if(inv[i].w===skin.w&&inv[i].s===skin.s){idx=i;break}}
-    if(idx<0)return;
-    var it=inv[idx]; inv.splice(idx,1);
-    var pr=it.received?Math.round(it.p*0.8):Math.round(it.p);
-    var nb=Math.round((V.profile.balance||0)+pr);
-    V.profile.inventory=inv; V.profile.balance=nb;
-    SD.profile.inventory=inv; SD.profile.balance=nb;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{inventory:inv,balance:nb});
-    renderHeader(); renderInventory(); renderProfile();
-    if(SD.ok)SD.ok('Продано',it.w+' +'+pr+' G',it.img);
-  }
-  function openCase(caseId){
-    var c=SD.CASES.find(function(x){return x.id===caseId}); if(!c)return;
-    V.currentCase=c; V.currentCount=1;
-    var img=$('caseModalImg'); if(img)img.src=c.img;
-    var t=$('caseModalTitle'); if(t)t.textContent=c.name;
-    var s=$('caseModalSub'); if(s)s.textContent=c.items.length+' предметов';
-    var row=$('caseCountRow');
-    if(row){row.innerHTML='';for(var i=1;i<=10;i++){var b=document.createElement('button');b.className='count-btn'+(i===1?' active':'');b.textContent=i;b.dataset.val=i;row.appendChild(b)}}
-    var cont=$('caseContents');
-    if(cont){cont.innerHTML=c.items.map(function(s){return '<div class="contents-item"><img src="'+s.img+'" alt=""><div class="ci-rar" style="color:'+SD.rarityColor(s.r)+'">'+esc(SD.t('r'+s.r)||s.r)+'</div><div class="ci-name">'+esc(s.w)+' | '+esc(s.s)+'</div><div class="ci-price">'+Math.round(s.p)+' G</div></div>'}).join('')}
-    updateCaseOpenBtn();
-    var sa=$('spinArea'); if(sa)sa.classList.remove('show');
-    var ms=$('multiSpins'); if(ms){ms.classList.remove('show');ms.innerHTML=''}
-    var sr=$('spinResult'); if(sr){sr.classList.remove('show');sr.innerHTML=''}
-    var ob=$('caseOpenBtn'); if(ob)ob.style.display='';
-    if(SD.openModal)SD.openModal('caseModal');
-  }
-  function updateCaseOpenBtn(){
-    var c=V.currentCase; if(!c)return;
-    var total=c.price*V.currentCount;
-    var b=$('caseOpenBtn'); if(b){b.textContent='ОТКРЫТЬ ЗА '+total.toLocaleString('ru-RU')+' G'; b.disabled=!V.profile||V.profile.balance<total}
-  }
-  async function doOpenCase(){
-    var c=V.currentCase; if(!c||!V.profile)return;
-    var total=c.price*V.currentCount;
-    if(V.profile.balance<total){alert('Недостаточно баланса');return}
-    var nb=Math.round(V.profile.balance-total);
-    V.profile.balance=nb; SD.profile.balance=nb;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{balance:nb});
-    var prev=(V.profile.stats&&V.profile.stats.cases)||0;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid+'/stats'),{cases:prev+V.currentCount});
-    renderHeader(); renderProfile();
-    var ob=$('caseOpenBtn'); if(ob)ob.style.display='none';
-    if(V.currentCount===1){
-      var win=pickSkin(c); if(!win)return;
-      spinSingleAnimation(win,c);
-    } else {
-      var wins=[]; for(var i=0;i<V.currentCount;i++){wins.push(pickSkin(c))}
-      await addManySkins(wins);
-      showMultiResults(wins);
-    }
-  }
-  function pickSkin(c){
-    var pool=c.items.filter(Boolean); if(!pool.length)return null;
-    if(V.devMode){return pool.reduce(function(a,b){return a.p>b.p?a:b})}
-    var groups={}; pool.forEach(function(s){(groups[s.r]=groups[s.r]||[]).push(s)});
-    var RCH={Common:56.78,Uncommon:37.85,Rare:3.79,Epic:1.42,Legendary:0.14,Arcane:0.02,Nameless:0.005};
-    var entries=Object.keys(groups).map(function(r){return {r:r,arr:groups[r],w:RCH[r]||1}});
-    var tw=entries.reduce(function(s,e){return s+e.w},0);
-    var roll=Math.random()*tw, pick=entries[0];
-    for(var i=0;i<entries.length;i++){roll-=entries[i].w;if(roll<=0){pick=entries[i];break}}
-    var arr=pick.arr, inner=arr.map(function(s){return {s:s,w:1/Math.max(0.01,s.p)}});
-    var ti=inner.reduce(function(s,x){return s+x.w},0), r2=Math.random()*ti;
-    for(var j=0;j<inner.length;j++){r2-=inner[j].w;if(r2<=0)return inner[j].s}
-    return arr[arr.length-1];
-  }
-  async function addManySkins(wins){
-    var inv=toArr(V.profile.inventory);
-    wins.forEach(function(w){if(w)inv.push({w:w.w,s:w.s,r:w.r,img:w.img,p:Math.round(w.p),t:w.t||'skin',id:'inv-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),received:false})});
-    V.profile.inventory=inv; SD.profile.inventory=inv;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{inventory:inv});
-    renderInventory();
-  }
-  function spinSingleAnimation(win,c){
-    var area=$('spinArea'); if(area)area.classList.add('show');
-    var track=$('spinTrack'); if(!track)return;
-    var ITEM_W=126, WIN_IDX=55, TOTAL=65;
-    var pool=c.items.filter(Boolean); var arr=[];
-    for(var i=0;i<TOTAL;i++)arr.push(i===WIN_IDX?win:pool[Math.floor(Math.random()*pool.length)]);
-    track.innerHTML=arr.map(function(s){return '<div class="spin-item"><img src="'+s.img+'"><b>'+esc(s.w)+' | '+esc(s.s)+'</b></div>'}).join('');
-    var viewportW=track.parentNode.clientWidth||320;
-    var targetX=WIN_IDX*ITEM_W+(ITEM_W-8)/2-viewportW/2;
-    var start=performance.now(), DUR=4200, lastIdx=-1;
-    track.style.transition='none'; track.style.transform='translateX(0)';
-    function frame(now){
-      var t=Math.min(1,(now-start)/DUR), e=1-Math.pow(1-t,4), x=targetX*e;
-      track.style.transform='translateX('+(-x)+'px)';
-      var curIdx=Math.floor(x/ITEM_W);
-      if(curIdx!==lastIdx){lastIdx=curIdx;if(t<0.96&&SD.tickSound)SD.tickSound()}
-      if(t<1)requestAnimationFrame(frame);
-      else{
-        track.style.transform='translateX('+(-targetX)+'px)';
-        if(SD.winSound)SD.winSound();
-        var inv=toArr(V.profile.inventory);
-        inv.push({w:win.w,s:win.s,r:win.r,img:win.img,p:Math.round(win.p),t:win.t||'skin',id:'inv-'+Date.now(),received:false});
-        V.profile.inventory=inv; SD.profile.inventory=inv;
-        V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{inventory:inv});
-        showSingleResult(win,c);
-      }
-    }
-    requestAnimationFrame(frame);
-  }
-  function showSingleResult(win,c){
-    var box=$('spinResult'); if(!box)return;
-    box.classList.add('show');
-    box.innerHTML='<div class="sr-label">ВЫПАЛО</div>'+
-      '<img src="'+win.img+'">'+
-      '<div class="sr-rar" style="color:'+SD.rarityColor(win.r)+'">'+esc(SD.t('r'+win.r)||win.r)+'</div>'+
-      '<div class="sr-name">'+esc(win.w)+' | '+esc(win.s)+'</div>'+
-      '<div class="sr-price">'+Math.round(win.p)+' G</div>'+
-      '<div class="sr-actions">'+
-        '<button class="sr-inv" id="srInvBtn">В инвентарь</button>'+
-        '<button class="sr-again" id="srAgainBtn">Открыть ещё</button>'+
-        '<button class="sr-sell" id="srSellBtn">Продать</button>'+
-      '</div>';
-    var ib=$('srInvBtn'); if(ib)ib.onclick=function(){if(SD.ok)SD.ok('Добавлено',win.w+' | '+win.s,win.img)};
-    var ab=$('srAgainBtn'); if(ab)ab.onclick=function(){box.classList.remove('show');var sa=$('spinArea'); if(sa)sa.classList.remove('show');var ob=$('caseOpenBtn'); if(ob)ob.style.display='';updateCaseOpenBtn()};
-    var sb=$('srSellBtn'); if(sb)sb.onclick=function(){sellSkinByRef(win)};
-    if(SD.ok)SD.ok('Добавлено',win.w+' | '+win.s,win.img);
-  }
-  function showMultiResults(wins){
-    var box=$('spinResult'); if(!box)return;
-    var total=wins.reduce(function(s,w){return s+(w?Math.round(w.p):0)},0);
-    box.classList.add('show');
-    box.innerHTML='<div class="sr-label">'+wins.length+' КЕЙСОВ</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0">'+
-      wins.map(function(w){return w?'<div style="padding:6px;background:var(--surface-2);border-radius:8px;text-align:center"><img src="'+w.img+'" style="width:100%;height:50px;object-fit:contain"><div style="font-size:9px;color:'+SD.rarityColor(w.r)+'">'+esc(SD.t('r'+w.r)||w.r)+'</div></div>':''}).join('')+
-      '</div><div class="sr-price">+'+total+' G</div>'+
-      '<div class="sr-actions"><button class="sr-inv" id="srInvBtn">В инвентарь</button><button class="sr-again" id="srAgainBtn">Открыть ещё</button></div>';
-    var ib=$('srInvBtn'); if(ib)ib.onclick=function(){if(SD.ok)SD.ok('Добавлено',wins.length+' скинов')};
-    var ab=$('srAgainBtn'); if(ab)ab.onclick=function(){box.classList.remove('show');var ob=$('caseOpenBtn'); if(ob)ob.style.display='';updateCaseOpenBtn()};
-  }
-  async function spinRoulette(){
-    var price=100;
-    if((V.profile.balance||0)<price){alert('Недостаточно баланса');return}
-    var nb=Math.round(V.profile.balance-price);
-    V.profile.balance=nb; SD.profile.balance=nb;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{balance:nb});
-    renderHeader();
-    var pool=SD.CASES.filter(function(c){return c.price<=500});
-    if(!pool.length)return;
-    var weights=pool.map(function(c){return 1/Math.max(1,c.price)});
-    var tw=weights.reduce(function(a,b){return a+b},0);
-    var r=Math.random()*tw, win=pool[0];
-    for(var i=0;i<pool.length;i++){r-=weights[i];if(r<=0){win=pool[i];break}}
-    if(V.devMode)win=pool.reduce(function(a,b){return a.price>b.price?a:b});
-    setTimeout(function(){if(SD.winSound)SD.winSound();alert('Выпал: '+win.name+' ('+win.price+' G)')},4600);
-  }
-  async function runUpgrade(){
-    if(!V.upSource||!V.upTarget){alert('Выберите предмет и цель');return}
-    var srcP=V.upSource.received?V.upSource.p*0.8:V.upSource.p;
-    var tgtP=V.upTarget.p;
-    if(tgtP<=srcP){alert('Цель должна быть дороже');return}
-    var baseChance=Math.min(92,(srcP/tgtP)*100);
-    var maxAdd=92-baseChance;
-    var addPct=Math.min(V.upAdd,maxAdd);
-    var addG=Math.round(tgtP*(addPct/100));
-    if(addG>(V.profile.balance||0)){alert('Недостаточно средств');return}
-    var chance=baseChance+addPct;
-    var win=V.devMode?true:(Math.random()*100<chance);
-    var nb=Math.round((V.profile.balance||0)-addG);
-    var inv=toArr(V.profile.inventory);
-    var idx=-1;for(var i=0;i<inv.length;i++){if(inv[i].id===V.upSource.id){idx=i;break}}
-    if(idx>-1)inv.splice(idx,1);
-    V.profile.balance=nb; V.profile.inventory=inv;
-    var prev=(V.profile.stats&&V.profile.stats.upgrades)||0;
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{balance:nb,inventory:inv});
-    await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid+'/stats'),{upgrades:prev+1});
-    renderHeader();
-    if(win){
-      inv.push(Object.assign({},V.upTarget,{id:'inv-'+Date.now(),received:false,t:V.upTarget.t||'skin'}));
-      V.profile.inventory=inv;
-      await V.fb.dbMod.update(V.fb.dbMod.ref(V.fb.db,'users/'+V.uid),{inventory:inv});
-      if(SD.winSound)SD.winSound();
-      if(SD.ok)SD.ok('Апгрейд удался!',V.upTarget.w+' | '+V.upTarget.s,V.upTarget.img);
-      V.upSource=V.upTarget; V.upTarget=null; V.upAdd=0;
-    } else {
-      if(SD.err)SD.err('Апгрейд не удался','Скин сгорел');
-      V.upSource=null; V.upTarget=null; V.upAdd=0;
-    }
-    renderInventory(); renderProfile(); renderUpgradeUI();
-  }
-  function renderUpgradeUI(){
-    var sImg=$('upSourceImg'),tImg=$('upTargetImg');
-    var sEmp=$('upSourceEmpty'),tEmp=$('upTargetEmpty');
-    var sSlot=$('upSourceSlot'),tSlot=$('upTargetSlot');
-    if(V.upSource){if(sImg){sImg.src=V.upSource.img;sImg.style.display='block'}if(sEmp)sEmp.style.display='none';if(sSlot)sSlot.classList.add('filled')}
-    else{if(sImg)sImg.style.display='none';if(sEmp)sEmp.style.display='';if(sSlot)sSlot.classList.remove('filled')}
-    if(V.upTarget){if(tImg){tImg.src=V.upTarget.img;tImg.style.display='block'}if(tEmp)tEmp.style.display='none';if(tSlot)tSlot.classList.add('filled')}
-    else{if(tImg)tImg.style.display='none';if(tEmp)tEmp.style.display='';if(tSlot)tSlot.classList.remove('filled')}
-    refreshUpgrade();
-  }
-  function refreshUpgrade(){
-    if(!V.upSource||!V.upTarget){var cv=$('upChanceVal');if(cv)cv.textContent='0%';return}
-    var srcP=V.upSource.received?V.upSource.p*0.8:V.upSource.p;
-    var tgtP=V.upTarget.p;
-    var base=Math.min(92,(srcP/tgtP)*100);
-    var maxAdd=Math.max(0,92-base);
-    var add=Math.min(V.upAdd,maxAdd);
-    var chance=base+add;
-    var cv=$('upChanceVal'); if(cv)cv.textContent=chance.toFixed(2)+'%';
-    var lbl=$('upgradeChanceLabel'); if(lbl)lbl.textContent='Шанс: '+chance.toFixed(2)+'%';
-    var addG=Math.round(tgtP*(add/100));
-    var av=$('upAddVal'); if(av)av.textContent='+'+addG+' G';
-    drawChanceArc(chance);
-  }
-  function drawChanceArc(pct){
-    var path=$('upChanceArc'); if(!path)return;
-    var p=Math.max(0,Math.min(100,pct));
-    if(p<0.01){path.setAttribute('d','');return}
-    var cx=130,cy=130,r=108;
-    var half=(p*3.6)/2;
-    var sA=(90+half)*Math.PI/180, eA=(90-half)*Math.PI/180;
-    var x1=cx+r*Math.cos(sA), y1=cy+r*Math.sin(sA);
-    var x2=cx+r*Math.cos(eA), y2=cy+r*Math.sin(eA);
-    var large=p>50?1:0;
-    path.setAttribute('d','M '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 0 '+x2+' '+y2);
-  }
-  function openPickSource(){
-    var grid=$('pickSourceGrid'); if(!grid)return;
-    var inv=toArr(V.profile.inventory);
-    if(!inv.length){grid.innerHTML='<div class="inv-empty"><div class="ie-emoji">🎒</div>Пусто</div>';return}
-    grid.innerHTML=inv.map(function(s,i){
-      return '<div class="inv-card" style="--rc:'+SD.rarityColor(s.r)+'" data-picksrc="'+i+'"><img src="'+s.img+'"><div class="ic-rar">'+esc(SD.t('r'+s.r)||s.r)+'</div><div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div><div class="ic-price">'+Math.round(s.p)+' G</div></div>';
-    }).join('');
-    grid.querySelectorAll('.inv-card').forEach(function(c){
-      c.onclick=function(){V.upSource=inv[+c.dataset.picksrc];V.upAdd=0;if(SD.closeModal)SD.closeModal('pickSourceModal');renderUpgradeUI()};
-    });
-    if(SD.openModal)SD.openModal('pickSourceModal');
-  }
-  function openPickTarget(){
-    var grid=$('pickTargetGrid'); if(!grid)return;
-    var srcP=V.upSource?(V.upSource.received?V.upSource.p*0.8:V.upSource.p):0;
-    var list=ALL_SKINS.filter(function(s){return s.p>srcP}).slice(0,80);
-    grid.innerHTML=list.map(function(s){
-      return '<div class="inv-card" style="--rc:'+SD.rarityColor(s.r)+'" data-tgt-w="'+esc(s.w)+'" data-tgt-s="'+esc(s.s)+'"><img src="'+s.img+'"><div class="ic-rar">'+esc(SD.t('r'+s.r)||s.r)+'</div><div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div><div class="ic-price">'+Math.round(s.p)+' G</div></div>';
-    }).join('');
-    grid.querySelectorAll('.inv-card').forEach(function(c){
-      c.onclick=function(){
-        var w=c.dataset.tgtW, s=c.dataset.tgtS;
-        var f=ALL_SKINS.find(function(x){return x.w===w&&x.s===s});
-        if(f){V.upTarget=f;V.upAdd=0;if(SD.closeModal)SD.closeModal('pickTargetModal');renderUpgradeUI()}
-      };
-    });
-    if(SD.openModal)SD.openModal('pickTargetModal');
-  }
-  function confirmDevCode(){
-    var v=($('devCodeInput')||{}).value||'';
-    if(v.trim()!=='5568228660007'){alert('Неверный код');return}
-    V.devMode=true; SD.devMode=true;
-    if(SD.saveSetting)SD.saveSetting('devMode',true);
-    if(SD.closeModal)SD.closeModal('devCodeModal');
-    alert('Режим разработчика активирован');
-    ['devCaseToggle','devUpgradeToggle','devRouletteToggle'].forEach(function(id){var e=$(id);if(e)e.classList.add('show')});
-  }
-
-  /* ===== Старт ===== */
-  (async function(){
-    try{
-      V.fb=await waitFB();
-      V.auth=V.fb.auth;
-      var savedLang=null,savedAccent=null;
-      try{savedLang=JSON.parse(localStorage.getItem('sd_lang')||'null')}catch(e){}
-      try{savedAccent=JSON.parse(localStorage.getItem('sd_accent')||'null')}catch(e){}
-      if(savedLang)V.lang=savedLang;
-      if(savedAccent){V.accent=savedAccent;document.documentElement.setAttribute('data-accent',savedAccent)}
-
-      V.fb.authMod.onAuthStateChanged(V.auth,async function(user){
-        console.log('[v11] auth state:', user?user.email:'no user');
-        if(user){
-          // ВАЖНО: скрываем логин СРАЗУ, чтобы не было наложения
-          forceHideAuth();
-          try{
-            await loadProfile(user);
-          }catch(e){
-            console.error('loadProfile error:', e);
-            forceHideAuth();
-            try{renderAll()}catch(err){}
-          }
-        } else {
-          forceShowLogin();
-        }
-      });
-
-      // Обработка redirect
-      try{
-        var r = await V.fb.authMod.getRedirectResult(V.auth);
-        if(r && r.user){
-          console.log('Redirect OK:', r.user.email);
-          forceHideAuth();
-        }
-      }catch(e){
-        console.error('redirect error:', e);
-        if(e.code && e.code!=='auth/no-auth-event' && e.code!=='auth/redirect-cancelled-by-user'){
-          setTimeout(function(){
-            alert('Ошибка входа: '+(e.code||e.message||'неизвестная')+'\n\nЕсли не работает — отключите "Расширенную защиту от отслеживания" в Настройках Safari');
-          }, 500);
-        }
-      }
-    }catch(e){console.error('v11 init:',e)}
-  })();
-
-  console.log('✅ ПАТЧ v11 установлен');
-})();
-</script>
 <script>
-/* ФИКС кнопки «Начать играть» и онбординга */
+/* ═══════════════════════════════════════════════════════
+   ФИНАЛЬНЫЙ ПАТЧ — единый, без конфликтов
+   Заменяет v8-v18
+   ═══════════════════════════════════════════════════════ */
 (function(){
-  function fix(){
-    var btn = document.getElementById('onboardSave');
-    if(!btn){ setTimeout(fix, 300); return; }
-    if(btn._fixed2) return;
-    btn._fixed2 = true;
+  console.log('🎯 ФИНАЛЬНЫЙ патч стартует');
+  var $ = function(id){ return document.getElementById(id); };
 
-    // Клонируем — снимаем все старые обработчики
-    var fresh = btn.cloneNode(true);
-    btn.parentNode.replaceChild(fresh, btn);
-    fresh._fixed2 = true;
-
-    fresh.addEventListener('click', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      console.log('🖱 Кнопка "Начать играть" нажата');
-
-      var nameEl = document.getElementById('onboardName');
-      var name = (nameEl && nameEl.value || '').trim();
-      if(!name){ alert('Введите ник'); return; }
-      if(name.length < 2){ alert('Ник слишком короткий (мин. 2 символа)'); return; }
-
-      // Берём выбранный аватар
-      var selAv = document.querySelector('#onboardAvatars .avatar-choice.active');
-      var avatar = selAv ? +selAv.dataset.av : 0;
-
-      // Ищем UID — откуда угодно
-      var uid = null;
-      try{
-        if(window.SD && SD.uid) uid = SD.uid;
-        if(!uid && window._v11 && _v11.uid) uid = _v11.uid;
-        if(!uid && window._v10 && _v10.uid) uid = _v10.uid;
-        if(!uid && window.__fb && __fb.auth && __fb.auth.currentUser){
-          uid = __fb.auth.currentUser.uid;
-        }
-      }catch(err){ console.error('uid lookup:', err); }
-
-      if(!uid){
-        alert('Сессия потеряна. Нажмите Google-вход заново.');
-        location.reload();
-        return;
-      }
-
-      // Показываем что идёт процесс
-      fresh.disabled = true;
-      fresh.textContent = 'Сохранение...';
-
-      // Ждём Firebase
-      var wait = function(){
-        if(!window.__firebaseReady || !window.__fb){ setTimeout(wait, 200); return; }
-        var fb = window.__fb;
-
-        fb.dbMod.update(
-          fb.dbMod.ref(fb.db, 'users/' + uid),
-          { name: name.slice(0,20), avatar: avatar, onboarded: true }
-        ).then(function(){
-          console.log('✅ Профиль сохранён');
-          // Обновляем локальный профиль
-          if(window.SD && SD.profile){
-            SD.profile.name = name;
-            SD.profile.avatar = avatar;
-            SD.profile.onboarded = true;
-          }
-          // Скрываем онбординг
-          var ob = document.getElementById('onboardScreen');
-          var lg = document.getElementById('loginScreen');
-          var ap = document.getElementById('app');
-          if(ob) ob.classList.add('hidden');
-          if(lg) lg.classList.add('hidden');
-          if(ap) ap.style.display = '';
-
-          // Перерисовываем
-          try{
-            if(typeof renderAll === 'function') renderAll();
-            else if(window._v11){
-              // v11 не экспортирует renderAll — вызываем по отдельности
-              if(typeof renderHome === 'function') renderHome();
-              if(typeof renderProfile === 'function') renderProfile();
-              if(typeof renderInventory === 'function') renderInventory();
-            }
-          }catch(e){ console.error('renderAll fail:', e); }
-
-          alert('✅ Добро пожаловать, ' + name + '!');
-        }).catch(function(err){
-          console.error('Ошибка сохранения:', err);
-          alert('Ошибка: ' + (err.code || err.message || 'неизвестная'));
-          fresh.disabled = false;
-          fresh.textContent = 'Начать играть';
-        });
-      };
-      wait();
-    }, true);
-
-    fresh.style.pointerEvents = 'auto';
-    fresh.style.cursor = 'pointer';
-    fresh.style.touchAction = 'manipulation';
-    console.log('✅ Кнопка "Начать играть" привязана заново');
-  }
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', fix);
-  } else {
-    fix();
-  }
-  setTimeout(fix, 2000);
-  setTimeout(fix, 5000);
-})();
-</script>
-<script>
-/* v12 — единое делегирование, сносим все конфликты */
-(function(){
-  console.log('🚀 v12 инициализация...');
-
-  // ====== СНАЧАЛА: снимаем ВСЕ старые обработчики с кнопок ======
-  function stripHandlers(selector){
-    document.querySelectorAll(selector).forEach(function(el){
-      var fresh = el.cloneNode(true);
-      el.parentNode.replaceChild(fresh, el);
-    });
-  }
-
-  // ====== Хелперы ======
-  function $(id){ return document.getElementById(id); }
   function toArr(v){
     if(!v) return [];
     if(Array.isArray(v)) return v.filter(Boolean);
-    if(typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);
+    if(typeof v === 'object') return Object.keys(v).sort(function(a,b){return a-b;}).map(function(k){return v[k];}).filter(Boolean);
     return [];
   }
   function esc(s){
@@ -7124,52 +6271,117 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
     });
   }
-  function V(){ return window._v11 || {}; }
-  function PROFILE(){ return (window._v11 && _v11.profile) || window.SD && SD.profile || null; }
+  function waitFB(cb){
+    if(window.__firebaseReady && window.__fb) return cb(window.__fb);
+    setTimeout(function(){ waitFB(cb); }, 200);
+  }
+  function showLogin(){
+    var l = $('loginScreen'), o = $('onboardScreen'), a = $('app');
+    if(l){ l.classList.remove('hidden'); l.style.display = 'flex'; }
+    if(o){ o.classList.add('hidden'); o.style.display = 'none'; }
+    if(a) a.style.display = 'none';
+  }
+  function showApp(){
+    var l = $('loginScreen'), o = $('onboardScreen'), a = $('app');
+    if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
+    if(o){ o.classList.add('hidden'); o.style.display = 'none'; }
+    if(a) a.style.display = '';
+  }
+  function showOnboard(pid){
+    var l = $('loginScreen'), o = $('onboardScreen'), a = $('app');
+    if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
+    if(o){ o.classList.remove('hidden'); o.style.display = 'flex'; }
+    if(a) a.style.display = 'none';
+    var oid = $('onboardId'); if(oid) oid.textContent = pid;
+    renderOnboardAvatars();
+  }
 
-  // ====== Главный роутер экранов ======
-  function goScreen(name){
-    if(name === 'transfer'){
-      if(window._v11){ _v11.playersTab = 'transfer'; _v11.transferTab = 'send'; }
-      name = 'players';
+  /* ====== Профиль ====== */
+  var PROFILE = null;
+  var PLAYER_ID = null;
+  var UID = null;
+  var ONBOARD_AV = 0;
+  var DEV = false;
+
+  async function loadProfile(fb, user){
+    UID = user.uid;
+    if(window.SD){ SD.uid = user.uid; }
+    var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
+    var snap = await fb.dbMod.get(ref);
+    var data;
+
+    if(!snap.exists()){
+      // Новый — создаём
+      var cRef = fb.dbMod.ref(fb.db, 'counter/playerId');
+      var tx = await fb.dbMod.runTransaction(cRef, function(c){ return (c||0) + 1; });
+      var newId = String(tx.snapshot.val()).padStart(9, '0');
+      data = {
+        playerId: newId, name: user.displayName || 'Игрок', avatar: 0,
+        balance: 200, inventory: [], stats: { cases: 0, upgrades: 0 },
+        friends: [], friendRequests: [], incomingTransfers: [],
+        lastNickChange: 0, language: 'ru', accent: 'crimson',
+        bonus: { day: 0, lastClaim: 0 }, devMode: false,
+        onboarded: false, createdAt: Date.now()
+      };
+      await fb.dbMod.set(ref, data);
+      await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId), user.uid);
+    } else {
+      data = snap.val();
+      // Битый ID
+      if(!data.playerId || /^0+$/.test(String(data.playerId))){
+        var cRef2 = fb.dbMod.ref(fb.db, 'counter/playerId');
+        var tx2 = await fb.dbMod.runTransaction(cRef2, function(c){ return (c||0) + 1; });
+        var newId2 = String(tx2.snapshot.val()).padStart(9, '0');
+        data.playerId = newId2;
+        data.onboarded = false;
+        await fb.dbMod.update(ref, { playerId: newId2, onboarded: false });
+        await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId2), user.uid);
+      }
     }
-    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
-    var t = $('screen-' + name);
-    if(t) t.classList.add('active');
 
-    var navKey = name;
-    if(['inventory','settings','bonus','topup','players'].indexOf(name) > -1) navKey = 'profile';
-    if(name === 'roulette') navKey = 'games';
-    document.querySelectorAll('#bottomNav .nav-item').forEach(function(i){
-      i.classList.toggle('active', i.dataset.nav === navKey);
-    });
-    window.scrollTo(0,0);
-    renderScreen(name);
-  }
-  window.goScreen = goScreen;
+    data.inventory = toArr(data.inventory);
+    data.friends = toArr(data.friends);
+    data.friendRequests = toArr(data.friendRequests);
+    data.incomingTransfers = toArr(data.incomingTransfers);
 
-  // ====== Рендеры с fallback ======
-  function renderScreen(name){
-    try{
-      if(name === 'home') renderHome();
-      else if(name === 'cases') renderCases();
-      else if(name === 'inventory') renderInventory();
-      else if(name === 'profile') renderProfile();
-      else if(name === 'settings') renderSettings();
-      else if(name === 'bonus') renderBonus();
-      else if(name === 'players') renderPlayers();
-      else if(name === 'upgrade') renderUpgrade();
-      else if(name === 'roulette') renderRoulette();
-    }catch(e){ console.error('render ' + name + ':', e); }
+    PROFILE = data;
+    PLAYER_ID = data.playerId;
+    DEV = !!data.devMode;
+    if(window.SD){ SD.profile = data; SD.playerId = data.playerId; SD.devMode = DEV; }
+
+    if(data.accent){ document.documentElement.setAttribute('data-accent', data.accent); }
+    if(data.language){ /* можно применить */ }
+
+    if(!data.onboarded){
+      showOnboard(data.playerId);
+    } else {
+      showApp();
+      renderAll();
+    }
   }
 
-  // ====== Рендер: Главная ======
-  function renderHome(){
-    var box = $('homeCases'); if(!box) return;
-    if(!window.SD || !SD.CASES) return;
-    box.innerHTML = SD.CASES.slice(0,6).map(caseCard).join('');
+  function renderAll(){
+    try { renderHeader(); } catch(e){}
+    try { renderHome(); } catch(e){}
+    try { renderCases(); } catch(e){}
+    try { renderInventory(); } catch(e){}
+    try { renderProfile(); } catch(e){}
   }
-  function caseCard(c){
+
+  function renderHeader(){
+    if(!PROFILE) return;
+    var hb = $('headerBalance');
+    if(hb) hb.textContent = Math.round(PROFILE.balance || 0).toLocaleString('ru-RU');
+    var ha = $('headerAvatar');
+    if(ha){
+      var a = PROFILE.avatar;
+      if(typeof a === 'number' && SD.avatars[a]) ha.src = SD.avatars[a];
+      else if(typeof a === 'string' && a.length > 20) ha.src = a;
+      else if(SD.avatars) ha.src = SD.avatars[0];
+    }
+  }
+
+  function caseCardHTML(c){
     var prem = c.tier === 'premium';
     return '<div class="case-card '+(prem?'premium':'')+'" data-case-id="'+c.id+'">'+
       '<div class="case-img"><img src="'+c.img+'" alt=""></div>'+
@@ -7178,39 +6390,29 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
     '</div>';
   }
 
-  // ====== Рендер: Кейсы ======
+  function renderHome(){
+    var box = $('homeCases'); if(!box || !SD.CASES) return;
+    box.innerHTML = SD.CASES.slice(0, 6).map(caseCardHTML).join('');
+  }
   function renderCases(){
-    var box = $('allCases'); if(!box) return;
-    if(!window.SD || !SD.CASES) return;
-    var f = (window._v11 && _v11.casesFilter) || 'all';
-    var list = SD.CASES.filter(function(c){ return f === 'all' || c.tier === f; });
-    var cnt = $('casesCount');
-    if(cnt) cnt.textContent = list.length;
-    box.innerHTML = list.map(caseCard).join('');
+    var box = $('allCases'); if(!box || !SD.CASES) return;
+    var list = SD.CASES;
+    var cnt = $('casesCount'); if(cnt) cnt.textContent = list.length;
+    box.innerHTML = list.map(caseCardHTML).join('');
   }
 
-  // ====== Рендер: Инвентарь ======
   function renderInventory(){
     var grid = $('inventoryGrid'); if(!grid) return;
-    var p = PROFILE();
-    var inv = toArr(p && p.inventory);
-    var f = (window._v11 && _v11.invFilter) || 'all';
-    var list = inv;
-    if(f === 'skin') list = inv.filter(function(s){ return s.t === 'skin' || !s.t; });
-    else if(f === 'knife') list = inv.filter(function(s){ return s.t === 'knife'; });
-    else if(f === 'gloves') list = inv.filter(function(s){ return s.t === 'gloves'; });
-
-    var cnt = $('invCountLabel');
-    if(cnt) cnt.textContent = list.length + ' шт.';
-
-    if(!list.length){
-      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div><div>Инвентарь пуст</div><div class="muted mt-8">Открой кейс, чтобы получить скин</div></div>';
+    var inv = PROFILE ? toArr(PROFILE.inventory) : [];
+    var cnt = $('invCountLabel'); if(cnt) cnt.textContent = inv.length + ' шт.';
+    if(!inv.length){
+      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div><div>Инвентарь пуст</div><div class="muted mt-8">Открой кейс</div></div>';
       return;
     }
-    grid.innerHTML = list.map(function(s){
-      var price = s.received ? Math.round((s.p||0)*0.8) : Math.round(s.p||0);
-      var rc = (SD.rarityColor ? SD.rarityColor(s.r) : '#888');
-      return '<div class="inv-card" style="--rc:'+rc+'" data-inv-w="'+esc(s.w)+'" data-inv-s="'+esc(s.s)+'">'+
+    grid.innerHTML = inv.map(function(s, i){
+      var rc = SD.rarityColor ? SD.rarityColor(s.r) : '#888';
+      var price = s.received ? Math.round(s.p*0.8) : Math.round(s.p||0);
+      return '<div class="inv-card" style="--rc:'+rc+'" data-inv-idx="'+i+'">'+
         (s.received ? '<div class="ic-tag">−20%</div>' : '')+
         '<img src="'+s.img+'" alt="">'+
         '<div class="ic-rar">'+esc(s.r||'')+'</div>'+
@@ -7220,234 +6422,156 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
     }).join('');
   }
 
-  // ====== Рендер: Профиль ======
   function renderProfile(){
-    var p = PROFILE(); if(!p) return;
-    var avatarSrc = (function(a){
-      if(typeof a === 'number' && SD && SD.avatars && SD.avatars[a]) return SD.avatars[a];
-      if(typeof a === 'string' && a.length > 20) return a;
-      return SD && SD.avatars ? SD.avatars[0] : '';
-    })(p.avatar);
-
-    var pa = $('profileAvatar'); if(pa) pa.src = avatarSrc;
-    var pn = $('profileName'); if(pn) pn.textContent = p.name || 'Игрок';
-    var pid = $('profilePlayerId'); if(pid) pid.textContent = p.playerId || '000000000';
-    var pb = $('profileBalance'); if(pb) pb.textContent = Math.round(p.balance || 0).toLocaleString('ru-RU');
-    var sc = $('statCases'); if(sc) sc.textContent = (p.stats && p.stats.cases) || 0;
-    var su = $('statUpgrades'); if(su) su.textContent = (p.stats && p.stats.upgrades) || 0;
-    var sf = $('statFriends'); if(sf) sf.textContent = toArr(p.friends).length;
+    if(!PROFILE) return;
+    var a = $('profileAvatar');
+    if(a){
+      var av = PROFILE.avatar;
+      if(typeof av === 'number' && SD.avatars[av]) a.src = SD.avatars[av];
+      else if(typeof av === 'string' && av.length > 20) a.src = av;
+      else if(SD.avatars) a.src = SD.avatars[0];
+    }
+    var n = $('profileName'); if(n) n.textContent = PROFILE.name || 'Игрок';
+    var id = $('profilePlayerId'); if(id) id.textContent = PROFILE.playerId || '000000000';
+    var b = $('profileBalance'); if(b) b.textContent = Math.round(PROFILE.balance||0).toLocaleString('ru-RU');
+    var sc = $('statCases'); if(sc) sc.textContent = (PROFILE.stats && PROFILE.stats.cases) || 0;
+    var su = $('statUpgrades'); if(su) su.textContent = (PROFILE.stats && PROFILE.stats.upgrades) || 0;
+    var sf = $('statFriends'); if(sf) sf.textContent = toArr(PROFILE.friends).length;
     renderHeader();
   }
 
-  // ====== Рендер: Шапка ======
-  function renderHeader(){
-    var p = PROFILE(); if(!p) return;
-    var hb = $('headerBalance');
-    if(hb) hb.textContent = Math.round(p.balance || 0).toLocaleString('ru-RU');
-    var ha = $('headerAvatar');
-    if(ha){
-      if(typeof p.avatar === 'number' && SD && SD.avatars && SD.avatars[p.avatar]) ha.src = SD.avatars[p.avatar];
-      else if(typeof p.avatar === 'string' && p.avatar.length > 20) ha.src = p.avatar;
-      else if(SD && SD.avatars) ha.src = SD.avatars[0];
-    }
-  }
-
-  // ====== Рендер: Настройки ======
-  function renderSettings(){
-    var p = PROFILE(); if(!p) return;
-    var ac = (window._v11 && _v11.accent) || 'crimson';
-    document.querySelectorAll('#accentPicker .accent-dot').forEach(function(d){
-      d.classList.toggle('active', d.dataset.accent === ac);
-    });
-    var lg = (window._v11 && _v11.lang) || 'ru';
-    document.querySelectorAll('.lang-btn').forEach(function(b){
-      b.classList.toggle('active', b.dataset.lang === lg);
-    });
-    var n = $('settingsNickname');
-    if(n) n.value = p.name || '';
-    var box = $('settingsAvatars');
-    if(box){
-      var cur = typeof p.avatar === 'number' ? p.avatar : 0;
-      box.innerHTML = (SD.avatars || []).map(function(src,i){
-        return '<button type="button" class="avatar-choice '+(i===cur?'active':'')+'" data-sav="'+i+'"><img src="'+src+'" alt=""></button>';
-      }).join('');
-    }
-  }
-
-  // ====== Рендер: Бонусы ======
-  var BONUS = [10,50,100,150,200,300,350,400,450,500];
-  function renderBonus(){
-    var p = PROFILE(); if(!p) return;
-    var box = $('bonusDays'); if(!box) return;
-    var day = (p.bonus && p.bonus.day) || 0;
-    var last = (p.bonus && p.bonus.lastClaim) || 0;
-    var today = new Date().toDateString();
-    var claimed = last && new Date(last).toDateString() === today;
-
-    box.innerHTML = BONUS.slice(0,5).map(function(r,i){
-      var d = i + 1;
-      var cl = day >= d;
-      var td = (day === d - 1 || (day === 0 && d === 1)) && !claimed && day < 10;
-      return '<div class="bonus-day '+(cl?'claimed ':'')+(td?'today':'')+'">'+
-        '<span class="bd-num">День '+d+'</span>'+
-        '<span class="bd-val">'+r+' G</span>'+
-      '</div>';
+  function renderOnboardAvatars(){
+    var box = $('onboardAvatars'); if(!box) return;
+    box.innerHTML = SD.avatars.map(function(src, i){
+      return '<button type="button" class="avatar-choice '+(i===ONBOARD_AV?'active':'')+'" data-av="'+i+'"><img src="'+src+'" alt=""></button>';
     }).join('');
-
-    var btn = $('bonusTakeBtn');
-    if(btn){
-      if(claimed){ btn.disabled = true; btn.textContent = 'Приходи завтра'; }
-      else { btn.disabled = false; btn.textContent = '🎁 ЗАБРАТЬ БОНУС (+'+(BONUS[Math.min(day,9)]||10)+' G)'; }
-    }
   }
 
-  // ====== Рендер: Игроки ======
-  function renderPlayers(){
-    var p = PROFILE(); if(!p) return;
-    var mid = $('myPlayerId');
-    if(mid) mid.textContent = p.playerId || '000000000';
-
-    // Друзья
-    var fl = $('friendsList');
-    if(fl){
-      var friends = toArr(p.friends);
-      if(!friends.length){
-        fl.innerHTML = '<div class="inv-empty"><div class="ie-emoji">👥</div><div>Пока нет друзей</div></div>';
-      } else {
-        fl.innerHTML = friends.map(function(x){
-          var av = (typeof x.avatar === 'number' && SD && SD.avatars) ? SD.avatars[x.avatar] : (SD && SD.avatars ? SD.avatars[0] : '');
-          return '<div class="friend-row"><div class="friend-avatar"><img src="'+av+'"></div>'+
-            '<div class="friend-info"><b>'+esc(x.name||'Игрок')+'</b><span>ID: '+esc(x.playerId||'—')+'</span></div></div>';
-        }).join('');
-      }
-    }
-
-    // Скины для передачи
-    var tsl = $('transferSkinsList');
-    if(tsl){
-      var inv = toArr(p.inventory);
-      var avail = inv.filter(function(s){ return !s.received; });
-      var selected = (window._v11 && _v11.transferSelected) || [];
-      if(!avail.length){
-        tsl.innerHTML = '<div class="inv-empty" style="grid-column:1/-1;padding:20px;font-size:13px">Инвентарь пуст</div>';
-      } else {
-        tsl.innerHTML = avail.map(function(s){
-          var idx = inv.indexOf(s);
-          var sel = selected.indexOf(idx) > -1;
-          return '<div class="transfer-skin '+(sel?'selected':'')+'" data-ts-idx="'+idx+'">'+
-            '<img src="'+s.img+'">'+
-            '<div class="ts-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
-          '</div>';
-        }).join('');
-      }
-      var cnt = $('transferSelectedCount');
-      if(cnt) cnt.textContent = '('+selected.length+'/5)';
-      var sb = $('sendTransferBtn');
-      if(sb) sb.disabled = !selected.length;
-    }
-
-    // Входящие
-    var itl = $('incomingTransfersList');
-    if(itl){
-      var list = toArr(p.incomingTransfers);
-      if(!list.length){
-        itl.innerHTML = '<div class="inv-empty" style="padding:60px 20px"><div class="ie-emoji">📭</div><div>Вам пока ничего не отправляли</div></div>';
-      } else {
-        itl.innerHTML = list.map(function(tr){
-          return '<div class="settings-block"><div style="font-weight:900;margin-bottom:8px">От: '+esc(tr.fromName||'Игрок')+'</div>'+
-            '<div class="row"><button class="btn btn-primary btn-sm" data-accept-tr="'+esc(tr.transferId)+'">Принять</button>'+
-            '<button class="btn btn-ghost btn-sm" data-decline-tr="'+esc(tr.transferId)+'">Отклонить</button></div></div>';
-        }).join('');
-      }
-    }
+  /* ====== Навигация ====== */
+  function goScreen(name){
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+    var t = $('screen-' + name);
+    if(t) t.classList.add('active');
+    var navKey = name;
+    if(['inventory','settings','bonus','topup','players'].indexOf(name) > -1) navKey = 'profile';
+    if(name === 'roulette') navKey = 'games';
+    document.querySelectorAll('#bottomNav .nav-item').forEach(function(i){
+      i.classList.toggle('active', i.dataset.nav === navKey);
+    });
+    window.scrollTo(0, 0);
+    if(name === 'home') renderHome();
+    if(name === 'cases') renderCases();
+    if(name === 'inventory') renderInventory();
+    if(name === 'profile') renderProfile();
   }
 
-  // ====== Рендер: UPGRADE ======
-  function renderUpgrade(){
-    var V = window._v11 || {};
-    var sImg = $('upSourceImg'), tImg = $('upTargetImg');
-    var sEmp = $('upSourceEmpty'), tEmp = $('upTargetEmpty');
-    var sSlot = $('upSourceSlot'), tSlot = $('upTargetSlot');
+  /* ====== Модалки ====== */
+  function openModal(id){ var m = $(id); if(m) m.classList.add('show'); }
+  function closeModal(id){ var m = $(id); if(m) m.classList.remove('show'); }
 
-    if(V.upSource){
-      if(sImg){ sImg.src = V.upSource.img; sImg.style.display = 'block'; }
-      if(sEmp) sEmp.style.display = 'none';
-      if(sSlot) sSlot.classList.add('filled');
-    } else {
-      if(sImg) sImg.style.display = 'none';
-      if(sEmp) sEmp.style.display = '';
-      if(sSlot) sSlot.classList.remove('filled');
-    }
-    if(V.upTarget){
-      if(tImg){ tImg.src = V.upTarget.img; tImg.style.display = 'block'; }
-      if(tEmp) tEmp.style.display = 'none';
-      if(tSlot) tSlot.classList.add('filled');
-    } else {
-      if(tImg) tImg.style.display = 'none';
-      if(tEmp) tEmp.style.display = '';
-      if(tSlot) tSlot.classList.remove('filled');
-    }
-    refreshChance();
-  }
-
-  function refreshChance(){
-    var V = window._v11 || {};
-    var cv = $('upChanceVal');
-    if(!V.upSource || !V.upTarget){
-      if(cv) cv.textContent = '0%';
-      var lbl = $('upgradeChanceLabel'); if(lbl) lbl.textContent = '—';
+  /* ====== Закрытие модалок ====== */
+  document.addEventListener('click', function(e){
+    var sc = e.target.closest('.sheet-close');
+    if(sc && sc.dataset.close){
+      e.preventDefault();
+      closeModal(sc.dataset.close);
       return;
     }
-    var srcP = V.upSource.received ? V.upSource.p*0.8 : V.upSource.p;
-    var tgtP = V.upTarget.p;
-    var base = Math.min(92, (srcP/tgtP)*100);
-    var maxAdd = Math.max(0, 92 - base);
-    var add = Math.min(V.upAdd || 0, maxAdd);
-    var chance = base + add;
-
-    if(cv) cv.textContent = chance.toFixed(2) + '%';
-    var lbl = $('upgradeChanceLabel'); if(lbl) lbl.textContent = 'Шанс: ' + chance.toFixed(2) + '%';
-    var addG = Math.round(tgtP * (add/100));
-    var av = $('upAddVal'); if(av) av.textContent = '+' + addG + ' G';
-
-    // Слайдер
-    var slider = $('upSlider');
-    if(slider){
-      slider.max = Math.max(1, Math.round(maxAdd));
-      slider.value = Math.min(V.upAdd || 0, maxAdd);
-      var fill = (slider.value / Math.max(1, slider.max)) * 100;
-      slider.style.setProperty('--fill', fill + '%');
+    if(e.target.classList && e.target.classList.contains('modal-back')){
+      e.target.classList.remove('show');
     }
+  }, true);
 
-    // Дуга
-    var path = $('upChanceArc');
-    if(path){
-      var p = Math.max(0, Math.min(100, chance));
-      if(p < 0.01){ path.setAttribute('d', ''); }
-      else {
-        var cx=130, cy=130, r=108;
-        var half = (p*3.6)/2;
-        var sA = (90+half)*Math.PI/180, eA = (90-half)*Math.PI/180;
-        var x1 = cx+r*Math.cos(sA), y1 = cy+r*Math.sin(sA);
-        var x2 = cx+r*Math.cos(eA), y2 = cy+r*Math.sin(eA);
-        var large = p > 50 ? 1 : 0;
-        path.setAttribute('d', 'M '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 0 '+x2+' '+y2);
-      }
-    }
+  /* ====== Свайп-закрытие по серой полоске ====== */
+  function enableSwipes(){
+    document.querySelectorAll('.modal-back').forEach(function(modal){
+      if(modal._sw) return;
+      modal._sw = true;
+      var sheet = modal.querySelector('.modal-sheet');
+      if(!sheet) return;
+      var handle = sheet.querySelector('.sheet-handle');
+      if(!handle) return;
+      handle.style.cursor = 'grab';
+      handle.style.touchAction = 'none';
+      handle.style.padding = '14px 0';
+      handle.style.marginTop = '-6px';
+      var startY = 0, curY = 0, drag = false;
+      handle.addEventListener('touchstart', function(e){
+        drag = true; startY = e.touches[0].clientY; curY = 0;
+        sheet.style.transition = 'none';
+      }, {passive:true});
+      handle.addEventListener('touchmove', function(e){
+        if(!drag) return;
+        e.preventDefault();
+        curY = e.touches[0].clientY - startY;
+        if(curY < 0) curY *= 0.3;
+        sheet.style.transform = 'translateY(' + curY + 'px)';
+      }, {passive:false});
+      handle.addEventListener('touchend', function(){
+        if(!drag) return;
+        drag = false;
+        sheet.style.transition = 'transform .28s ease';
+        if(curY > 90){
+          sheet.style.transform = 'translateY(100%)';
+          setTimeout(function(){
+            modal.classList.remove('show');
+            sheet.style.transform = '';
+            sheet.style.transition = '';
+          }, 260);
+        } else {
+          sheet.style.transform = '';
+          setTimeout(function(){ sheet.style.transition = ''; }, 300);
+        }
+      });
+    });
   }
-  window.refreshChance = refreshChance;
+  setInterval(enableSwipes, 1500);
 
-  // ====== Рендер: Рулетка ======
-  function renderRoulette(){
-    var price = $('roulettePriceVal');
-    if(price) price.textContent = '100 G';
-  }
-
-  // ====== ВСЁ ДЕЛЕГИРОВАНИЕ ======
+  /* ====== Единое делегирование кликов ====== */
   document.addEventListener('click', function(e){
     var t = e.target;
 
-    // ===== Нижняя навигация =====
+    // === Google Login ===
+    if(t.closest('#googleLoginBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doGoogleLogin();
+      return;
+    }
+
+    // === Кнопка «Начать играть» ===
+    if(t.closest('#onboardSave')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doFinishOnboard();
+      return;
+    }
+
+    // === Аватар в онбординге ===
+    var av = t.closest('#onboardAvatars .avatar-choice');
+    if(av){
+      e.preventDefault(); e.stopImmediatePropagation();
+      ONBOARD_AV = +av.dataset.av;
+      renderOnboardAvatars();
+      return;
+    }
+
+    // === Логотип (1 тап = главная, 17 = dev) ===
+    var logo = t.closest('#mainLogo');
+    if(logo){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(!logo._t) logo._t = 0;
+      logo._t++;
+      clearTimeout(logo._tt);
+      if(logo._t >= 17){
+        logo._t = 0;
+        openModal('devCodeModal');
+        return;
+      }
+      if(logo._t === 1) goScreen('home');
+      logo._tt = setTimeout(function(){ logo._t = 0; }, 3000);
+      return;
+    }
+
+    // === Нижнее меню ===
     var nav = t.closest('#bottomNav .nav-item');
     if(nav && nav.dataset.nav){
       e.preventDefault(); e.stopImmediatePropagation();
@@ -7455,38 +6579,20 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       return;
     }
 
-    // ===== Логотип (1 тап = главная, 17 = dev) =====
-    var logo = t.closest('#mainLogo');
-    if(logo){
-      e.preventDefault(); e.stopImmediatePropagation();
-      if(!logo._t12) logo._t12 = 0;
-      logo._t12++;
-      clearTimeout(logo._t12t);
-      if(logo._t12 >= 17){
-        logo._t12 = 0;
-        if(SD.openModal) SD.openModal('devCodeModal');
-        return;
-      }
-      if(logo._t12 === 1) goScreen('home');
-      logo._t12t = setTimeout(function(){ logo._t12 = 0; }, 3000);
-      return;
-    }
-
-    // ===== Плюсик пополнения =====
+    // === Плюсик пополнения ===
     if(t.closest('#headerPlus')){
       e.preventDefault(); e.stopImmediatePropagation();
       openModal('topupModal');
       return;
     }
 
-    // ===== Быстрые кнопки (.quick-btn) =====
+    // === Быстрые кнопки на главной ===
     var qb = t.closest('.quick-btn');
     if(qb){
       e.preventDefault(); e.stopImmediatePropagation();
       var oc = qb.getAttribute('onclick') || '';
       var m = oc.match(/SD\.go\(['"]([^'"]+)['"]\)/);
       if(m) goScreen(m[1]);
-      // Если это пресет суммы — обрабатываем ниже
       if(qb.dataset.amount){
         var target = qb.closest('#topupModal') ? 'topupModalAmount' : 'topupAmount';
         var inp = $(target);
@@ -7495,206 +6601,100 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       return;
     }
 
-    // ===== Меню профиля (.pm-item) =====
+    // === Меню профиля ===
     var pm = t.closest('.pm-item');
     if(pm){
       e.preventDefault(); e.stopImmediatePropagation();
-      var oc = pm.getAttribute('onclick') || '';
-      if(oc.indexOf('SD.support') > -1){
-        window.open('https://t.me/dev_so_drop', '_blank');
-        return;
-      }
-      if(oc.indexOf('SD.logout') > -1){
-        if(window.SD && SD.logout) SD.logout();
-        return;
-      }
-      var m2 = oc.match(/SD\.go\(['"]([^'"]+)['"]\)/);
+      var oc2 = pm.getAttribute('onclick') || '';
+      if(oc2.indexOf('support') > -1){ window.open('https://t.me/dev_so_drop', '_blank'); return; }
+      if(oc2.indexOf('logout') > -1){ doLogout(); return; }
+      var m2 = oc2.match(/SD\.go\(['"]([^'"]+)['"]\)/);
       if(m2) goScreen(m2[1]);
       return;
     }
 
-    // ===== Фильтры инвентаря =====
+    // === Фильтры инвентаря ===
     var invf = t.closest('#invFilters .inv-filter');
     if(invf){
       e.preventDefault(); e.stopImmediatePropagation();
-      if(window._v11) _v11.invFilter = invf.dataset.ifilter;
-      document.querySelectorAll('#invFilters .inv-filter').forEach(function(b){
-        b.classList.toggle('active', b === invf);
-      });
+      document.querySelectorAll('#invFilters .inv-filter').forEach(function(b){ b.classList.toggle('active', b === invf); });
       renderInventory();
       return;
     }
 
-    // ===== Фильтры кейсов =====
+    // === Фильтры кейсов ===
     var cf = t.closest('#casesFilters .inv-filter');
     if(cf){
       e.preventDefault(); e.stopImmediatePropagation();
-      if(window._v11) _v11.casesFilter = cf.dataset.filter;
-      document.querySelectorAll('#casesFilters .inv-filter').forEach(function(b){
-        b.classList.toggle('active', b === cf);
-      });
+      document.querySelectorAll('#casesFilters .inv-filter').forEach(function(b){ b.classList.toggle('active', b === cf); });
       renderCases();
       return;
     }
 
-    // ===== Язык =====
+    // === Язык ===
     var lang = t.closest('.lang-btn');
     if(lang){
       e.preventDefault(); e.stopImmediatePropagation();
-      if(window._v11) _v11.lang = lang.dataset.lang;
-      if(window.SD) SD.lang = lang.dataset.lang;
-      document.querySelectorAll('.lang-btn').forEach(function(b){
-        b.classList.toggle('active', b.dataset.lang === lang.dataset.lang);
-      });
-      if(SD && SD.applyI18n) SD.applyI18n();
+      document.querySelectorAll('.lang-btn').forEach(function(b){ b.classList.toggle('active', b === lang); });
+      if(window.SD){ SD.lang = lang.dataset.lang; if(SD.applyI18n) SD.applyI18n(); }
       return;
     }
 
-    // ===== Акцент =====
+    // === Акцент ===
     var acc = t.closest('#accentPicker .accent-dot');
     if(acc){
       e.preventDefault(); e.stopImmediatePropagation();
       var name = acc.dataset.accent;
-      if(window._v11) _v11.accent = name;
-      if(window.SD) SD.accent = name;
       document.documentElement.setAttribute('data-accent', name);
-      document.querySelectorAll('#accentPicker .accent-dot').forEach(function(d){
-        d.classList.toggle('active', d.dataset.accent === name);
-      });
+      document.querySelectorAll('#accentPicker .accent-dot').forEach(function(d){ d.classList.toggle('active', d === acc); });
+      if(UID && window.__fb){
+        window.__fb.dbMod.update(window.__fb.dbMod.ref(window.__fb.db, 'users/'+UID), { accent: name });
+      }
       return;
     }
 
-    // ===== Аватар в настройках =====
-    var sav = t.closest('#settingsAvatars .avatar-choice');
-    if(sav){
+    // === Пресеты пополнения ===
+    var qs = t.closest('#topupPresets .quick-btn, #topupModal .quick-btn');
+    if(qs && qs.dataset.amount){
       e.preventDefault(); e.stopImmediatePropagation();
-      document.querySelectorAll('#settingsAvatars .avatar-choice').forEach(function(b){
-        b.classList.remove('active');
-      });
-      sav.classList.add('active');
+      var target2 = qs.closest('#topupModal') ? 'topupModalAmount' : 'topupAmount';
+      var inp2 = $(target2);
+      if(inp2) inp2.value = qs.dataset.amount;
       return;
     }
 
-    // ===== Сохранить настройки профиля =====
-    if(t.closest('#saveProfileSettings')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      saveProfile();
-      return;
-    }
-
-    // ===== Кнопка «Начать играть» =====
-    if(t.closest('#onboardSave')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      doFinishOnboard();
-      return;
-    }
-
-    // ===== Аватар в онбординге =====
-    var av = t.closest('#onboardAvatars .avatar-choice');
-    if(av){
-      e.preventDefault(); e.stopImmediatePropagation();
-      if(window._v11) _v11.onboardAvatar = +av.dataset.av;
-      document.querySelectorAll('#onboardAvatars .avatar-choice').forEach(function(b){
-        b.classList.toggle('active', b === av);
-      });
-      return;
-    }
-
-    // ===== Google Login =====
-    if(t.closest('#googleLoginBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      doGoogleLogin();
-      return;
-    }
-
-    // ===== Копирование ID =====
-    if(t.closest('#profileCopyId')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var pid = ($('profilePlayerId') || {}).textContent || '';
-      navigator.clipboard.writeText(pid).then(function(){ alert('ID скопирован: ' + pid); });
-      return;
-    }
-    if(t.closest('#copyMyId')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var mid = ($('myPlayerId') || {}).textContent || '';
-      navigator.clipboard.writeText(mid).then(function(){ alert('ID скопирован: ' + mid); });
-      return;
-    }
-    if(t.closest('#onboardCopyId')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var oid = ($('onboardId') || {}).textContent || '';
-      navigator.clipboard.writeText(oid).then(function(){ alert('ID скопирован: ' + oid); });
-      return;
-    }
-
-    // ===== Пополнение =====
+    // === Подтверждение пополнения ===
     if(t.closest('#topupModalConfirm')){
       e.preventDefault(); e.stopImmediatePropagation();
-      var a = parseInt(($('topupModalAmount') || {}).value, 10);
-      doTopup(a, true);
+      var amt = parseInt(($('topupModalAmount')||{}).value, 10);
+      doTopup(amt, true);
       return;
     }
     if(t.closest('#topupConfirmBtn')){
       e.preventDefault(); e.stopImmediatePropagation();
-      var a2 = parseInt(($('topupAmount') || {}).value, 10);
-      doTopup(a2, false);
+      var amt2 = parseInt(($('topupAmount')||{}).value, 10);
+      doTopup(amt2, false);
       return;
     }
+
+    // === Кнопка «Пополнить» в профиле ===
     if(t.closest('#profileTopupBtn')){
       e.preventDefault(); e.stopImmediatePropagation();
       goScreen('topup');
       return;
     }
 
-    // ===== Бонус =====
-    if(t.closest('#bonusTakeBtn')){
+    // === Копирование ID ===
+    if(t.closest('#profileCopyId') || t.closest('#copyMyId') || t.closest('#onboardCopyId')){
       e.preventDefault(); e.stopImmediatePropagation();
-      doClaimBonus();
+      var idEl = t.closest('#profileCopyId') ? $('profilePlayerId') : (t.closest('#copyMyId') ? $('myPlayerId') : $('onboardId'));
+      if(idEl){
+        navigator.clipboard.writeText(idEl.textContent).then(function(){ alert('ID: ' + idEl.textContent); });
+      }
       return;
     }
 
-    // ===== Апгрейд — слайдер =====
-    var slider = t.closest('#upSlider');
-    if(slider) return; // слайдер сам обрабатывает через input
-
-    // ===== Пресеты апгрейда =====
-    var pr = t.closest('.upgrade-presets button');
-    if(pr && pr.dataset.add !== undefined){
-      e.preventDefault(); e.stopImmediatePropagation();
-      if(window._v11) _v11.upAdd = +pr.dataset.add;
-      refreshChance();
-      return;
-    }
-
-    // ===== Кнопка ПРОКАЧАТЬ =====
-    if(t.closest('#upgradeBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      doUpgrade();
-      return;
-    }
-
-    // ===== Слоты апгрейда =====
-    if(t.closest('#upSourceSlot')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      openPickSource();
-      return;
-    }
-    if(t.closest('#upTargetSlot')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      if(!window._v11 || !_v11.upSource){ alert('Сначала выберите свой предмет'); return; }
-      openPickTarget();
-      return;
-    }
-
-    // ===== Карточка скина (инвентарь) =====
-    var ic = t.closest('.inv-card[data-inv-w]');
-    if(ic){
-      e.preventDefault(); e.stopImmediatePropagation();
-      openSkinCard(ic.dataset.invW, ic.dataset.invS);
-      return;
-    }
-
-    // ===== Кейс — открыть =====
+    // === Открытие кейса ===
     var cc = t.closest('.case-card[data-case-id]');
     if(cc){
       e.preventDefault(); e.stopImmediatePropagation();
@@ -7702,253 +6702,114 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       return;
     }
 
-    // ===== Кнопка количества =====
-    var cnt = t.closest('.count-btn');
-    if(cnt && cnt.parentNode && cnt.parentNode.id === 'caseCountRow'){
+    // === Кнопки количества ===
+    var cnt = t.closest('#caseCountRow .count-btn');
+    if(cnt){
       e.preventDefault(); e.stopImmediatePropagation();
       var v = parseInt(cnt.textContent, 10) || 1;
-      if(window._v11) _v11.currentCount = v;
+      window._caseCount = v;
       cnt.parentNode.querySelectorAll('.count-btn').forEach(function(b){ b.classList.remove('active'); });
       cnt.classList.add('active');
       updateCaseBtn();
       return;
     }
 
-    // ===== Открыть кейс =====
+    // === Открыть кейс ===
     if(t.closest('#caseOpenBtn')){
       e.preventDefault(); e.stopImmediatePropagation();
       doOpenCase();
       return;
     }
 
-    // ===== Результат: В инвентарь / Открыть ещё / Продать =====
-    if(t.closest('#srInvBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      if(SD && SD.ok) SD.ok('Добавлено', '', '');
-      return;
-    }
-    if(t.closest('#srAgainBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var box = $('spinResult'); if(box) box.classList.remove('show');
-      var sa = $('spinArea'); if(sa) sa.classList.remove('show');
-      var ob = $('caseOpenBtn'); if(ob){ ob.style.display = ''; updateCaseBtn(); }
-      return;
-    }
-    if(t.closest('#srSellBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      // продадим первый скин из инвентаря
-      return;
-    }
-
-    // ===== Табы игроков =====
-    var pt = t.closest('#playersTabs button');
-    if(pt){
-      e.preventDefault(); e.stopImmediatePropagation();
-      document.querySelectorAll('#playersTabs button').forEach(function(b){ b.classList.remove('active'); });
-      pt.classList.add('active');
-      var tab = pt.dataset.tab;
-      var pf = $('playersFriends'), ptr = $('playersTransfer');
-      if(pf) pf.classList.toggle('hide', tab !== 'friends');
-      if(ptr) ptr.classList.toggle('hide', tab !== 'transfer');
-      return;
-    }
-    var tt = t.closest('#transferTabs button');
-    if(tt){
-      e.preventDefault(); e.stopImmediatePropagation();
-      document.querySelectorAll('#transferTabs button').forEach(function(b){ b.classList.remove('active'); });
-      tt.classList.add('active');
-      var tab2 = tt.dataset.ttab;
-      var ts = $('transferSend'), tr2 = $('transferReceive');
-      if(ts) ts.classList.toggle('hide', tab2 !== 'send');
-      if(tr2) tr2.classList.toggle('hide', tab2 !== 'receive');
-      return;
-    }
-
-    // ===== Добавить друга =====
-    if(t.closest('#addFriendBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      doAddFriend();
-      return;
-    }
-    if(t.closest('#sendTransferBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      doSendTransfer();
-      return;
-    }
-
-    // ===== Выбор скина для передачи =====
-    var tsk = t.closest('.transfer-skin[data-ts-idx]');
-    if(tsk){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var i = +tsk.dataset.tsIdx;
-      if(!window._v11) return;
-      if(!_v11.transferSelected) _v11.transferSelected = [];
-      var pos = _v11.transferSelected.indexOf(i);
-      if(pos > -1) _v11.transferSelected.splice(pos, 1);
-      else if(_v11.transferSelected.length < 5) _v11.transferSelected.push(i);
-      renderPlayers();
-      return;
-    }
-
-    // ===== Кнопка рулетки =====
-    if(t.closest('#spinRouletteBtn')){
-      e.preventDefault(); e.stopImmediatePropagation();
-      doSpinRoulette();
-      return;
-    }
-
-    // ===== Dev-код =====
+    // === Dev-код ===
     if(t.closest('#devCodeConfirm')){
       e.preventDefault(); e.stopImmediatePropagation();
-      var v = ($('devCodeInput') || {}).value || '';
-      if(v.trim() !== '5568228660007'){ alert('Неверный код'); return; }
-      if(window._v11) _v11.devMode = true;
-      if(window.SD) SD.devMode = true;
+      var v2 = ($('devCodeInput')||{}).value || '';
+      if(v2.trim() !== '5568228660007'){ alert('Неверный код'); return; }
+      DEV = true;
+      if(UID && window.__fb){
+        window.__fb.dbMod.update(window.__fb.dbMod.ref(window.__fb.db, 'users/'+UID), { devMode: true });
+      }
       closeModal('devCodeModal');
       alert('Режим разработчика активирован');
-      ['devCaseToggle','devUpgradeToggle','devRouletteToggle'].forEach(function(id){
-        var el = $(id); if(el) el.classList.add('show');
-      });
-      return;
-    }
-
-    // ===== Закрытие модалок =====
-    var sc = t.closest('.sheet-close');
-    if(sc && sc.dataset.close){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var m = $(sc.dataset.close);
-      if(m) m.classList.remove('show');
-      return;
-    }
-    if(t.classList && t.classList.contains('modal-back')){
-      t.classList.remove('show');
       return;
     }
   }, true);
 
-  // ===== Слайдер апгрейда — отдельный обработчик =====
-  document.addEventListener('input', function(e){
-    if(e.target && e.target.id === 'upSlider'){
-      if(window._v11) _v11.upAdd = +e.target.value;
-      refreshChance();
-    }
-  }, true);
-
-  // ====== Действия ======
-  function openModal(id){ var m = $(id); if(m) m.classList.add('show'); }
-  function closeModal(id){ var m = $(id); if(m) m.classList.remove('show'); }
-
+  /* ====== Google Login ====== */
   async function doGoogleLogin(){
     try{
       var fb = window.__fb;
-      if(!fb){ alert('Firebase ещё загружается, подожди 2 сек'); return; }
+      if(!fb) { alert('Firebase загружается, подожди'); return; }
       var prov = new fb.authMod.GoogleAuthProvider();
       prov.setCustomParameters({ prompt: 'select_account' });
-      try{ await fb.authMod.setPersistence(fb.auth, fb.authMod.browserSessionPersistence); }catch(e){}
+      try{ await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence); }catch(e){}
       var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       if(isMobile){
-        await fb.authMod.signInWithRedirect(fb.auth, prov);
+        try{
+          await fb.authMod.signInWithPopup(fb.auth, prov);
+        }catch(e){
+          if(e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user'){
+            await fb.authMod.signInWithRedirect(fb.auth, prov);
+          } else throw e;
+        }
       } else {
         try{ await fb.authMod.signInWithPopup(fb.auth, prov); }
-        catch(err){
-          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user')){
-            await fb.authMod.signInWithRedirect(fb.auth, prov);
-          } else throw err;
+        catch(e){
+          if(e.code === 'auth/popup-blocked'){ await fb.authMod.signInWithRedirect(fb.auth, prov); }
+          else throw e;
         }
       }
     }catch(e){
-      console.error('google login:', e);
-      alert('Ошибка входа: ' + (e.code || e.message || 'неизвестная'));
+      console.error('login:', e);
+      alert('Ошибка: ' + (e.code || e.message || ''));
     }
   }
 
+  /* ====== Онбординг ====== */
   async function doFinishOnboard(){
-    var nEl = $('onboardName');
-    var name = (nEl && nEl.value || '').trim();
+    var name = ($('onboardName')||{}).value || '';
+    name = name.trim();
     if(!name){ alert('Введите ник'); return; }
-    if(name.length < 2){ alert('Ник слишком короткий'); return; }
-
-    var uid = null;
-    try{
-      if(window._v11 && _v11.uid) uid = _v11.uid;
-      else if(window.SD && SD.uid) uid = SD.uid;
-      else if(window.__fb && __fb.auth && __fb.auth.currentUser) uid = __fb.auth.currentUser.uid;
-    }catch(e){}
-
-    if(!uid){ alert('Сессия потеряна. Войдите заново.'); location.reload(); return; }
-
-    var avatar = (window._v11 && _v11.onboardAvatar) || 0;
-    var btn = $('onboardSave');
-    if(btn){ btn.disabled = true; btn.textContent = 'Сохранение...'; }
-
+    if(!UID){ alert('Сессия потеряна'); location.reload(); return; }
     try{
       var fb = window.__fb;
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), {
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/'+UID), {
         name: name.slice(0,20),
-        avatar: avatar,
+        avatar: ONBOARD_AV,
         onboarded: true
       });
-      if(window._v11 && _v11.profile){ _v11.profile.name = name; _v11.profile.avatar = avatar; _v11.profile.onboarded = true; }
-      if(window.SD && SD.profile){ SD.profile.name = name; SD.profile.avatar = avatar; SD.profile.onboarded = true; }
-
-      var ob = $('onboardScreen'); if(ob) ob.classList.add('hidden');
-      var lg = $('loginScreen'); if(lg) lg.classList.add('hidden');
-      var ap = $('app'); if(ap) ap.style.display = '';
-
-      renderHome(); renderProfile();
+      if(PROFILE){ PROFILE.name = name; PROFILE.avatar = ONBOARD_AV; PROFILE.onboarded = true; }
+      if(window.SD && SD.profile){ SD.profile.name = name; SD.profile.avatar = ONBOARD_AV; SD.profile.onboarded = true; }
+      showApp();
+      renderAll();
       alert('✅ Добро пожаловать, ' + name + '!');
-    }catch(e){
-      console.error('finishOnboard:', e);
-      alert('Ошибка: ' + (e.code || e.message || 'неизвестная'));
-      if(btn){ btn.disabled = false; btn.textContent = 'Начать играть'; }
-    }
-  }
-
-  async function saveProfile(){
-    var p = PROFILE(); if(!p) return;
-    var nEl = $('settingsNickname');
-    var newName = (nEl && nEl.value || '').trim();
-    if(!newName){ alert('Введите ник'); return; }
-    var isChanged = newName !== (p.name || '');
-    var last = p.lastNickChange || 0;
-    var cool = 30 * 24 * 3600 * 1000;
-    if(isChanged && last && (Date.now() - last) < cool){
-      var left = Math.ceil((cool - (Date.now() - last)) / (24 * 3600 * 1000));
-      alert('Смена ника через ' + left + ' дн.');
-      return;
-    }
-    var sel = document.querySelector('#settingsAvatars .avatar-choice.active');
-    var newAvatar = sel ? +sel.dataset.sav : p.avatar;
-
-    var upd = { avatar: newAvatar };
-    if(isChanged){ upd.name = newName.slice(0,20); upd.lastNickChange = Date.now(); }
-
-    try{
-      var fb = window.__fb;
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), upd);
-      if(window._v11 && _v11.profile) Object.assign(_v11.profile, upd);
-      if(window.SD && SD.profile) Object.assign(SD.profile, upd);
-      renderProfile(); renderSettings();
-      alert('Сохранено');
     }catch(e){
       alert('Ошибка: ' + (e.code || e.message || ''));
     }
   }
 
+  /* ====== Выход ====== */
+  async function doLogout(){
+    try{
+      if(!confirm('Выйти из аккаунта?')) return;
+      var fb = window.__fb;
+      await fb.authMod.signOut(fb.auth);
+      localStorage.clear();
+      location.reload();
+    }catch(e){ location.reload(); }
+  }
+
+  /* ====== Пополнение ====== */
   async function doTopup(amount, fromModal){
     amount = parseInt(amount, 10);
-    if(!amount || amount < 500 || amount > 2000){
-      alert('Введите сумму от 500 до 2000');
-      return;
-    }
+    if(!amount || amount < 500 || amount > 2000){ alert('Сумма от 500 до 2000'); return; }
+    if(!UID){ alert('Войдите в аккаунт'); return; }
     try{
       var fb = window.__fb;
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      var p = PROFILE();
-      var newBal = Math.round((p.balance || 0) + amount);
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: newBal });
-      if(window._v11 && _v11.profile) _v11.profile.balance = newBal;
+      var newBal = Math.round((PROFILE.balance || 0) + amount);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/'+UID), { balance: newBal });
+      PROFILE.balance = newBal;
       if(window.SD && SD.profile) SD.profile.balance = newBal;
       renderHeader(); renderProfile();
       if(fromModal) closeModal('topupModal');
@@ -7957,262 +6818,74 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
     }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
   }
 
-  async function doClaimBonus(){
-    var p = PROFILE(); if(!p) return;
-    var last = (p.bonus && p.bonus.lastClaim) || 0;
-    var today = new Date().toDateString();
-    if(last && new Date(last).toDateString() === today){
-      alert('Приходи завтра');
-      return;
-    }
-    var day = (p.bonus && p.bonus.day) || 0;
-    var hrs = last ? (Date.now() - last) / 3600000 : 0;
-    if(last && hrs > 48) day = 0;
-    var nd = Math.min(day + 1, 10);
-    var rw = BONUS[nd - 1] || 10;
-    var nb = Math.round((p.balance || 0) + rw);
-    var nb2 = { day: nd, lastClaim: Date.now() };
-
-    try{
-      var fb = window.__fb;
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: nb, bonus: nb2 });
-      if(window._v11 && _v11.profile){ _v11.profile.balance = nb; _v11.profile.bonus = nb2; }
-      if(window.SD && SD.profile){ SD.profile.balance = nb; SD.profile.bonus = nb2; }
-      renderHeader(); renderProfile(); renderBonus();
-      if(SD && SD.ok) SD.ok('Бонус получен', '+' + rw + ' G');
-    }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
-  }
-
-  async function doAddFriend(){
-    var inp = $('friendIdInput');
-    var id = (inp && inp.value || '').trim();
-    if(!/^\d{9}$/.test(id)){ alert('ID должен быть 9 цифр'); return; }
-    var p = PROFILE();
-    if(id === (p && p.playerId)){ alert('Нельзя добавить себя'); return; }
-    try{
-      var fb = window.__fb;
-      var uSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'playerIds/' + id));
-      if(!uSnap.exists()){ alert('Игрок не найден'); return; }
-      var targetUid = uSnap.val();
-      var req = toArr((await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + targetUid + '/friendRequests'))).val());
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      req.push({ uid: uid, name: p.name || 'Игрок', playerId: p.playerId, avatar: p.avatar || 0, ts: Date.now() });
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + targetUid), { friendRequests: req });
-      inp.value = '';
-      alert('Запрос отправлен');
-    }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
-  }
-
-  async function doSendTransfer(){
-    var inp = $('transferIdInput');
-    var id = (inp && inp.value || '').trim();
-    if(!/^\d{9}$/.test(id)){ alert('ID должен быть 9 цифр'); return; }
-    var V11 = window._v11;
-    if(!V11 || !V11.transferSelected || !V11.transferSelected.length){ alert('Выберите скины'); return; }
-    try{
-      var fb = window.__fb;
-      var uSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'playerIds/' + id));
-      if(!uSnap.exists()){ alert('Игрок не найден'); return; }
-      var targetUid = uSnap.val();
-      var p = PROFILE();
-      var inv = toArr(p.inventory);
-      var skins = V11.transferSelected.map(function(i){ return inv[i]; }).filter(Boolean);
-      if(!skins.length) return;
-      var trs = toArr((await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + targetUid + '/incomingTransfers'))).val());
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      trs.push({
-        from: uid, fromName: p.name, fromPlayerId: p.playerId,
-        skins: skins, transferId: 'tr-' + Date.now(), ts: Date.now()
-      });
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + targetUid), { incomingTransfers: trs });
-
-      var idxs = V11.transferSelected.slice().sort(function(a,b){ return b-a; });
-      var newInv = inv.slice();
-      idxs.forEach(function(i){ newInv.splice(i, 1); });
-      if(window._v11 && _v11.profile) _v11.profile.inventory = newInv;
-      if(window.SD && SD.profile) SD.profile.inventory = newInv;
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { inventory: newInv });
-      V11.transferSelected = [];
-      renderPlayers();
-      inp.value = '';
-      alert('Отправлено');
-    }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
-  }
-
-  function openSkinCard(w, s){
-    var p = PROFILE(); if(!p) return;
-    var inv = toArr(p.inventory);
-    var skin = inv.find(function(x){ return x.w === w && x.s === s; });
-    if(!skin) return;
-    var m = $('skinCardModal'); if(!m) return;
-    var price = skin.received ? Math.round((skin.p||0)*0.8) : Math.round(skin.p||0);
-    var rc = SD && SD.rarityColor ? SD.rarityColor(skin.r) : '#888';
-    $('skinCardBody').innerHTML =
-      '<div style="text-align:center;padding:14px 0">'+
-        '<img src="'+skin.img+'" style="width:220px;height:160px;object-fit:contain;display:block;margin:0 auto 8px">'+
-        '<div style="font-size:12px;font-weight:1000;color:'+rc+';text-transform:uppercase;margin-bottom:6px">'+esc(skin.r||'')+'</div>'+
-        '<div style="font-size:20px;font-weight:900;margin-bottom:12px">'+esc(skin.w)+' | '+esc(skin.s)+'</div>'+
-        '<div style="font-size:22px;font-weight:1000;color:var(--gold);margin-bottom:18px">'+price+' G</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-          '<button class="btn btn-gold" id="scSell">💰 Продать</button>'+
-          '<button class="btn btn-primary" id="scUp">⚡ Апгрейд</button>'+
-        '</div>'+
-      '</div>';
-    m.classList.add('show');
-
-    $('scSell').onclick = async function(){
-      await sellSkin(skin);
-      m.classList.remove('show');
-    };
-    $('scUp').onclick = function(){
-      if(window._v11){ _v11.upSource = skin; _v11.upAdd = 0; }
-      m.classList.remove('show');
-      goScreen('upgrade');
-    };
-  }
-
-  async function sellSkin(skin){
-    var p = PROFILE(); if(!p) return;
-    var inv = toArr(p.inventory);
-    var idx = -1;
-    for(var i=0;i<inv.length;i++){
-      if(inv[i].w === skin.w && inv[i].s === skin.s){ idx = i; break; }
-    }
-    if(idx < 0) return;
-    var it = inv[idx];
-    inv.splice(idx, 1);
-    var pr = it.received ? Math.round((it.p||0)*0.8) : Math.round(it.p||0);
-    var nb = Math.round((p.balance || 0) + pr);
-
-    if(window._v11 && _v11.profile){ _v11.profile.inventory = inv; _v11.profile.balance = nb; }
-    if(window.SD && SD.profile){ SD.profile.inventory = inv; SD.profile.balance = nb; }
-
-    try{
-      var fb = window.__fb;
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { inventory: inv, balance: nb });
-    }catch(e){ console.error('sell:', e); }
-
-    renderHeader(); renderInventory(); renderProfile();
-    if(SD && SD.ok) SD.ok('Продано', it.w + ' +' + pr + ' G', it.img);
-  }
+  /* ====== Кейсы ====== */
+  var CURRENT_CASE = null;
+  window._caseCount = 1;
 
   function openCase(caseId){
-    if(!window.SD || !SD.CASES) return;
+    if(!SD.CASES) return;
     var c = SD.CASES.find(function(x){ return x.id === caseId; });
     if(!c) return;
-    if(window._v11){ _v11.currentCase = c; _v11.currentCount = 1; }
-    $('caseModalImg').src = c.img;
-    $('caseModalTitle').textContent = c.name;
-    $('caseModalSub').textContent = c.items.length + ' предметов';
+    CURRENT_CASE = c;
+    window._caseCount = 1;
+
+    var img = $('caseModalImg'); if(img) img.src = c.img;
+    var t = $('caseModalTitle'); if(t) t.textContent = c.name;
+    var s = $('caseModalSub'); if(s) s.textContent = c.items.length + ' предметов';
 
     var row = $('caseCountRow');
-    row.innerHTML = '';
-    for(var i=1;i<=10;i++){
-      var b = document.createElement('button');
-      b.className = 'count-btn' + (i===1?' active':'');
-      b.textContent = i;
-      b.dataset.val = i;
-      row.appendChild(b);
+    if(row){
+      row.innerHTML = '';
+      for(var i=1;i<=10;i++){
+        var b = document.createElement('button');
+        b.className = 'count-btn' + (i===1?' active':'');
+        b.textContent = i;
+        row.appendChild(b);
+      }
     }
 
     var cont = $('caseContents');
     if(cont){
-      cont.innerHTML = c.items.map(function(s){
-        var rc = SD.rarityColor ? SD.rarityColor(s.r) : '#888';
+      cont.innerHTML = c.items.map(function(sk){
+        var rc = SD.rarityColor ? SD.rarityColor(sk.r) : '#888';
         return '<div class="contents-item">'+
-          '<img src="'+s.img+'">'+
-          '<div class="ci-rar" style="color:'+rc+'">'+esc(s.r||'')+'</div>'+
-          '<div class="ci-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
-          '<div class="ci-price">'+Math.round(s.p||0)+' G</div>'+
+          '<img src="'+sk.img+'">'+
+          '<div class="ci-rar" style="color:'+rc+'">'+esc(sk.r)+'</div>'+
+          '<div class="ci-name">'+esc(sk.w)+' | '+esc(sk.s)+'</div>'+
+          '<div class="ci-price">'+Math.round(sk.p)+' G</div>'+
         '</div>';
       }).join('');
     }
 
+    var sa = $('spinArea'); if(sa) sa.classList.remove('show');
+    var sr = $('spinResult'); if(sr){ sr.classList.remove('show'); sr.innerHTML = ''; }
+
+    var ob = $('caseOpenBtn');
+    if(ob) ob.style.display = '';
     updateCaseBtn();
-    ['spinArea','multiSpins','spinResult'].forEach(function(id){
-      var el = $(id); if(el){ el.classList.remove('show'); if(id!=='spinArea') el.innerHTML=''; }
-    });
-    $('caseOpenBtn').style.display = '';
+
     openModal('caseModal');
   }
 
   function updateCaseBtn(){
-    var V = window._v11 || {};
-    var c = V.currentCase; if(!c) return;
-    var total = c.price * (V.currentCount || 1);
+    if(!CURRENT_CASE) return;
+    var total = CURRENT_CASE.price * window._caseCount;
     var b = $('caseOpenBtn');
-    var p = PROFILE();
     if(b){
       b.textContent = 'ОТКРЫТЬ ЗА ' + total.toLocaleString('ru-RU') + ' G';
-      b.disabled = !p || p.balance < total;
+      b.disabled = !PROFILE || PROFILE.balance < total;
     }
-  }
-
-  async function doOpenCase(){
-    var V = window._v11 || {};
-    var c = V.currentCase;
-    var p = PROFILE();
-    if(!c || !p) return;
-    var count = V.currentCount || 1;
-    var total = c.price * count;
-    if(p.balance < total){ alert('Недостаточно баланса'); return; }
-
-    var nb = Math.round(p.balance - total);
-    if(window._v11 && _v11.profile) _v11.profile.balance = nb;
-    if(window.SD && SD.profile) SD.profile.balance = nb;
-
-    try{
-      var fb = window.__fb;
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid + '/balance'), nb);
-      var prev = (p.stats && p.stats.cases) || 0;
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid + '/stats'), { cases: prev + count });
-    }catch(e){ console.error('open case:', e); }
-
-    renderHeader(); renderProfile();
-    $('caseOpenBtn').style.display = 'none';
-
-    var wins = [];
-    for(var i=0;i<count;i++){
-      wins.push(pickSkin(c));
-    }
-
-    // Добавляем все скины в инвентарь
-    var inv = toArr(p.inventory);
-    wins.forEach(function(w){
-      if(w) inv.push({
-        w: w.w, s: w.s, r: w.r, img: w.img, p: Math.round(w.p||0),
-        t: w.t || 'skin', id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
-        received: false
-      });
-    });
-    if(window._v11 && _v11.profile) _v11.profile.inventory = inv;
-    if(window.SD && SD.profile) SD.profile.inventory = inv;
-    try{
-      var fb2 = window.__fb;
-      var uid2 = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      await fb2.dbMod.update(fb2.dbMod.ref(fb2.db, 'users/' + uid2), { inventory: inv });
-    }catch(e){}
-
-    // Показываем результаты
-    showSpinAnimation(wins, c);
   }
 
   function pickSkin(c){
     var pool = c.items.filter(Boolean);
     if(!pool.length) return null;
-    if(window._v11 && _v11.devMode){
-      return pool.reduce(function(a,b){ return a.p > b.p ? a : b; });
-    }
+    if(DEV){ return pool.reduce(function(a,b){ return a.p > b.p ? a : b; }); }
     var RCH = { Common:56.78, Uncommon:37.85, Rare:3.79, Epic:1.42, Legendary:0.14, Arcane:0.02, Nameless:0.005 };
     var groups = {};
     pool.forEach(function(s){ (groups[s.r] = groups[s.r] || []).push(s); });
-    var entries = Object.keys(groups).map(function(r){
-      return { r:r, arr:groups[r], w:RCH[r] || 1 };
-    });
-    var tw = entries.reduce(function(s,e){ return s+e.w; }, 0);
+    var entries = Object.keys(groups).map(function(r){ return { r:r, arr:groups[r], w:RCH[r] || 1 }; });
+    var tw = entries.reduce(function(s,e){ return s + e.w; }, 0);
     var roll = Math.random() * tw;
     var pick = entries[0];
     for(var i=0;i<entries.length;i++){
@@ -8221,16 +6894,67 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
     }
     var arr = pick.arr;
     var inner = arr.map(function(s){ return { s:s, w:1/Math.max(0.01, s.p) }; });
-    var ti = inner.reduce(function(s,x){ return s+x.w; }, 0);
+    var ti = inner.reduce(function(s,x){ return s + x.w; }, 0);
     var r2 = Math.random() * ti;
     for(var j=0;j<inner.length;j++){
       r2 -= inner[j].w;
       if(r2 <= 0) return inner[j].s;
     }
-    return arr[arr.length-1];
+    return arr[arr.length - 1];
   }
 
-  function showSpinAnimation(wins, c){
+  async function doOpenCase(){
+    if(!CURRENT_CASE || !PROFILE) return;
+    var count = window._caseCount || 1;
+    var total = CURRENT_CASE.price * count;
+    if(PROFILE.balance < total){ alert('Недостаточно баланса'); return; }
+
+    var ob = $('caseOpenBtn');
+    if(ob){ ob.disabled = true; ob.textContent = 'ОТКРЫВАЕМ...'; }
+
+    var nb = Math.round(PROFILE.balance - total);
+    PROFILE.balance = nb;
+    if(window.SD && SD.profile) SD.profile.balance = nb;
+
+    try{
+      var fb = window.__fb;
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/'+UID+'/balance'), nb);
+      var prev = (PROFILE.stats && PROFILE.stats.cases) || 0;
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/'+UID+'/stats'), { cases: prev + count });
+    }catch(e){ console.error(e); }
+
+    renderHeader();
+
+    // Собираем выигрыши
+    var wins = [];
+    for(var i=0;i<count;i++){ wins.push(pickSkin(CURRENT_CASE)); }
+
+    // Сохраняем в инвентарь
+    var inv = toArr(PROFILE.inventory);
+    wins.forEach(function(w){
+      if(!w) return;
+      inv.push({
+        w: w.w, s: w.s, r: w.r, img: w.img, p: Math.round(w.p||0),
+        t: w.t || 'skin',
+        id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+        received: false
+      });
+    });
+    PROFILE.inventory = inv;
+    if(window.SD && SD.profile) SD.profile.inventory = inv;
+
+    try{
+      var fb2 = window.__fb;
+      await fb2.dbMod.update(fb2.dbMod.ref(fb2.db, 'users/'+UID), { inventory: inv });
+    }catch(e){}
+
+    if(ob) ob.style.display = 'none';
+
+    // Анимация
+    animateSpin(wins);
+  }
+
+  function animateSpin(wins){
     var sa = $('spinArea');
     var track = $('spinTrack');
     if(!sa || !track) return;
@@ -8238,10 +6962,10 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 
     var win = wins[0];
     var ITEM_W = 126, WIN_IDX = 55, TOTAL = 65;
-    var pool = c.items.filter(Boolean);
+    var pool = CURRENT_CASE.items.filter(Boolean);
     var arr = [];
     for(var i=0;i<TOTAL;i++){
-      arr.push(i === WIN_IDX ? win : pool[Math.floor(Math.random()*pool.length)]);
+      arr.push(i === WIN_IDX ? win : pool[Math.floor(Math.random() * pool.length)]);
     }
     track.innerHTML = arr.map(function(s){
       return '<div class="spin-item"><img src="'+s.img+'"><b>'+esc(s.w)+' | '+esc(s.s)+'</b></div>';
@@ -8264,1527 +6988,114 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
       var curIdx = Math.floor(x / ITEM_W);
       if(curIdx !== lastIdx){
         lastIdx = curIdx;
-        if(t < 0.96 && SD && SD.tickSound) SD.tickSound();
+        if(t < 0.96 && SD.tickSound) SD.tickSound();
       }
-      if(t < 1){ requestAnimationFrame(frame); }
+      if(t < 1) requestAnimationFrame(frame);
       else {
         track.style.transform = 'translateX(' + (-targetX) + 'px)';
-        if(SD && SD.winSound) SD.winSound();
-        showResult(wins, c);
+        if(SD.winSound) SD.winSound();
+        showResult(wins);
       }
     }
     requestAnimationFrame(frame);
   }
 
-  function showResult(wins, c){
+  function showResult(wins){
     var box = $('spinResult');
     if(!box) return;
     box.classList.add('show');
 
     if(wins.length === 1){
       var w = wins[0];
-      var rc = SD && SD.rarityColor ? SD.rarityColor(w.r) : '#888';
+      var rc = SD.rarityColor ? SD.rarityColor(w.r) : '#888';
       box.innerHTML =
         '<div class="sr-label">ВЫПАЛО</div>'+
         '<img src="'+w.img+'">'+
-        '<div class="sr-rar" style="color:'+rc+'">'+esc(w.r||'')+'</div>'+
+        '<div class="sr-rar" style="color:'+rc+'">'+esc(w.r)+'</div>'+
         '<div class="sr-name">'+esc(w.w)+' | '+esc(w.s)+'</div>'+
-        '<div class="sr-price">'+Math.round(w.p||0)+' G</div>'+
+        '<div class="sr-price">'+Math.round(w.p)+' G</div>'+
         '<div class="sr-actions">'+
-          '<button class="sr-inv" id="srInvBtn">В инвентарь</button>'+
-          '<button class="sr-again" id="srAgainBtn">Открыть ещё</button>'+
-          '<button class="sr-sell" id="srSellBtn">Продать</button>'+
+          '<button class="sr-inv" data-a="inv">В инвентарь</button>'+
+          '<button class="sr-again" data-a="again">Открыть ещё</button>'+
+          '<button class="sr-sell" data-a="sell">Продать</button>'+
         '</div>';
-      if(SD && SD.ok) SD.ok('Добавлено', w.w + ' | ' + w.s, w.img);
     } else {
-      var total = wins.reduce(function(s,w){ return s + Math.round((w && w.p) || 0); }, 0);
+      var total = wins.reduce(function(s,x){ return s + Math.round((x && x.p) || 0); }, 0);
       box.innerHTML =
         '<div class="sr-label">'+wins.length+' КЕЙСОВ</div>'+
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0">'+
         wins.map(function(w){
-          if(!w) return '';
-          var rc = SD && SD.rarityColor ? SD.rarityColor(w.r) : '#888';
+          var rc = SD.rarityColor ? SD.rarityColor(w.r) : '#888';
           return '<div style="padding:6px;background:var(--surface-2);border-radius:8px;text-align:center">'+
             '<img src="'+w.img+'" style="width:100%;height:50px;object-fit:contain">'+
-            '<div style="font-size:9px;color:'+rc+'">'+esc(w.r||'')+'</div>'+
+            '<div style="font-size:9px;color:'+rc+'">'+esc(w.r)+'</div>'+
           '</div>';
         }).join('')+
         '</div><div class="sr-price">+'+total+' G</div>'+
         '<div class="sr-actions">'+
-          '<button class="sr-inv" id="srInvBtn">В инвентарь</button>'+
-          '<button class="sr-again" id="srAgainBtn">Открыть ещё</button>'+
+          '<button class="sr-inv" data-a="inv">В инвентарь</button>'+
+          '<button class="sr-again" data-a="again">Открыть ещё</button>'+
         '</div>';
-      if(SD && SD.ok) SD.ok('Добавлено', wins.length + ' скинов');
     }
-    // Обработчики для кнопок результата
-    var ib = $('srInvBtn');
-    if(ib) ib.onclick = function(e){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var m = $('caseModal'); if(m) m.classList.remove('show');
-      goScreen('inventory');
-    };
-    var ab = $('srAgainBtn');
-    if(ab) ab.onclick = function(e){
-      e.preventDefault(); e.stopImmediatePropagation();
-      box.classList.remove('show');
-      var sa = $('spinArea'); if(sa) sa.classList.remove('show');
-      var ob = $('caseOpenBtn'); if(ob){ ob.style.display = ''; updateCaseBtn(); }
-    };
-    var sb = $('srSellBtn');
-    if(sb) sb.onclick = function(e){
-      e.preventDefault(); e.stopImmediatePropagation();
-      var p = PROFILE();
-      if(!p) return;
-      var inv = toArr(p.inventory);
-      var w0 = wins[0];
-      if(w0){
-        var it = inv.find(function(x){ return x.w === w0.w && x.s === w0.s; });
-        if(it) sellSkin(it);
-      }
-    };
+
+    if(SD.ok) SD.ok('Добавлено', wins.length > 1 ? (wins.length + ' скинов') : (wins[0].w + ' | ' + wins[0].s), wins[0].img);
+
+    box.querySelectorAll('[data-a]').forEach(function(b){
+      b.onclick = function(ev){
+        ev.preventDefault();
+        var action = b.dataset.a;
+        if(action === 'inv'){ closeModal('caseModal'); goScreen('inventory'); }
+        else if(action === 'again'){
+          box.classList.remove('show');
+          var sa = $('spinArea'); if(sa) sa.classList.remove('show');
+          var ob = $('caseOpenBtn'); if(ob){ ob.style.display = ''; updateCaseBtn(); }
+        }
+        else if(action === 'sell'){
+          sellSkin(wins[0]);
+        }
+      };
+    });
   }
 
-  async function doUpgrade(){
-    var V = window._v11 || {};
-    var p = PROFILE();
-    if(!V.upSource || !V.upTarget){ alert('Выберите предмет и цель'); return; }
-    if(!p) return;
-    var srcP = V.upSource.received ? (V.upSource.p * 0.8) : V.upSource.p;
-    var tgtP = V.upTarget.p;
-    if(tgtP <= srcP){ alert('Цель должна быть дороже'); return; }
-    var baseChance = Math.min(92, (srcP/tgtP)*100);
-    var maxAdd = Math.max(0, 92 - baseChance);
-    var addPct = Math.min(V.upAdd || 0, maxAdd);
-    var addG = Math.round(tgtP * (addPct/100));
-    if(addG > (p.balance || 0)){ alert('Недостаточно средств'); return; }
-    var chance = baseChance + addPct;
-    var win = V.devMode ? true : (Math.random()*100 < chance);
-
-    var nb = Math.round((p.balance || 0) - addG);
-    var inv = toArr(p.inventory);
+  async function sellSkin(skin){
+    if(!PROFILE) return;
+    var inv = toArr(PROFILE.inventory);
     var idx = -1;
-    for(var i=0;i<inv.length;i++){ if(inv[i].id === V.upSource.id){ idx = i; break; } }
-    if(idx > -1) inv.splice(idx, 1);
-
-    if(win){
-      inv.push(Object.assign({}, V.upTarget, {
-        id: 'inv-' + Date.now(), received: false, t: V.upTarget.t || 'skin'
-      }));
-    }
-
-    if(window._v11 && _v11.profile){ _v11.profile.balance = nb; _v11.profile.inventory = inv; }
-    if(window.SD && SD.profile){ SD.profile.balance = nb; SD.profile.inventory = inv; }
-
+    for(var i=0;i<inv.length;i++){ if(inv[i].w === skin.w && inv[i].s === skin.s){ idx = i; break; } }
+    if(idx < 0) return;
+    var it = inv[idx];
+    inv.splice(idx, 1);
+    var pr = it.received ? Math.round((it.p||0)*0.8) : Math.round(it.p||0);
+    var nb = Math.round((PROFILE.balance || 0) + pr);
+    PROFILE.inventory = inv;
+    PROFILE.balance = nb;
+    if(window.SD && SD.profile){ SD.profile.inventory = inv; SD.profile.balance = nb; }
     try{
       var fb = window.__fb;
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: nb, inventory: inv });
-      var prev = (p.stats && p.stats.upgrades) || 0;
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid + '/stats'), { upgrades: prev + 1 });
-    }catch(e){ console.error('upgrade:', e); }
-
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/'+UID), { inventory: inv, balance: nb });
+    }catch(e){}
     renderHeader(); renderInventory(); renderProfile();
-
-    if(win){
-      if(SD && SD.winSound) SD.winSound();
-      if(SD && SD.ok) SD.ok('Апгрейд удался!', V.upTarget.w + ' | ' + V.upTarget.s, V.upTarget.img);
-      V.upSource = V.upTarget; V.upTarget = null; V.upAdd = 0;
-    } else {
-      if(SD && SD.err) SD.err('Апгрейд не удался', 'Скин сгорел');
-      V.upSource = null; V.upTarget = null; V.upAdd = 0;
-    }
-    renderUpgrade();
+    if(SD.ok) SD.ok('Продано', it.w + ' +' + pr + ' G', it.img);
   }
 
-  function openPickSource(){
-    var p = PROFILE();
-    var grid = $('pickSourceGrid'); if(!grid || !p) return;
-    var inv = toArr(p.inventory);
-    if(!inv.length){
-      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div>Пусто</div>';
-    } else {
-      grid.innerHTML = inv.map(function(s, i){
-        var rc = SD && SD.rarityColor ? SD.rarityColor(s.r) : '#888';
-        return '<div class="inv-card" style="--rc:'+rc+'" data-picksrc="'+i+'">'+
-          '<img src="'+s.img+'">'+
-          '<div class="ic-rar">'+esc(s.r||'')+'</div>'+
-          '<div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
-          '<div class="ic-price">'+Math.round(s.p||0)+' G</div>'+
-        '</div>';
-      }).join('');
-    }
-    grid.querySelectorAll('.inv-card[data-picksrc]').forEach(function(c){
-      c.onclick = function(e){
-        e.preventDefault(); e.stopImmediatePropagation();
-        if(window._v11){ _v11.upSource = inv[+c.dataset.picksrc]; _v11.upAdd = 0; }
-        closeModal('pickSourceModal');
-        renderUpgrade();
-      };
-    });
-    openModal('pickSourceModal');
-  }
-
-  function openPickTarget(){
-    var p = PROFILE();
-    var grid = $('pickTargetGrid'); if(!grid || !window.SD) return;
-    var V = window._v11 || {};
-    var srcP = V.upSource ? (V.upSource.received ? V.upSource.p*0.8 : V.upSource.p) : 0;
-    var list = (SD.ALL_SKINS || []).filter(function(s){ return s.p > srcP; }).slice(0, 80);
-    grid.innerHTML = list.map(function(s){
-      var rc = SD.rarityColor ? SD.rarityColor(s.r) : '#888';
-      return '<div class="inv-card" style="--rc:'+rc+'" data-tgt-w="'+esc(s.w)+'" data-tgt-s="'+esc(s.s)+'">'+
-        '<img src="'+s.img+'">'+
-        '<div class="ic-rar">'+esc(s.r||'')+'</div>'+
-        '<div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
-        '<div class="ic-price">'+Math.round(s.p||0)+' G</div>'+
-      '</div>';
-    }).join('');
-    grid.querySelectorAll('.inv-card[data-tgt-w]').forEach(function(c){
-      c.onclick = function(e){
-        e.preventDefault(); e.stopImmediatePropagation();
-        var w = c.dataset.tgtW, s = c.dataset.tgtS;
-        var f = (SD.ALL_SKINS || []).find(function(x){ return x.w === w && x.s === s; });
-        if(f && window._v11){ _v11.upTarget = f; _v11.upAdd = 0; }
-        closeModal('pickTargetModal');
-        renderUpgrade();
-      };
-    });
-    openModal('pickTargetModal');
-  }
-
-  async function doSpinRoulette(){
-    var p = PROFILE(); if(!p) return;
-    var price = 100;
-    if((p.balance || 0) < price){ alert('Недостаточно баланса'); return; }
-    var nb = Math.round((p.balance || 0) - price);
-    if(window._v11 && _v11.profile) _v11.profile.balance = nb;
-    if(window.SD && SD.profile) SD.profile.balance = nb;
-    try{
-      var fb = window.__fb;
-      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
-      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: nb });
-    }catch(e){}
-    renderHeader();
-    alert('Рулетка: 100 G списано. (Анимация — в следующей версии)');
-  }
-
-  // ====== Старт ======
-  setTimeout(function(){
-    console.log('✅ v12 готов');
-    // Скрываем лишние экраны при старте
-    var l = $('loginScreen');
-    var o = $('onboardScreen');
-    var a = $('app');
-    var p = PROFILE();
-    if(p && p.onboarded){
-      if(l) l.classList.add('hidden');
-      if(o) o.classList.add('hidden');
-      if(a) a.style.display = '';
-      renderHome(); renderProfile();
-    } else if(p){
-      if(l) l.classList.add('hidden');
-      if(o){ o.classList.remove('hidden'); o.style.display = 'flex'; }
-      if(a) a.style.display = 'none';
-    } else {
-      if(l){ l.classList.remove('hidden'); l.style.display = 'flex'; }
-      if(o) o.classList.add('hidden');
-      if(a) a.style.display = 'none';
-    }
-  }, 2000);
-
-  // Регулярное обновление UI
-  setInterval(function(){
-    renderHeader();
-  }, 2000);
-})();
-</script>
-<script>
-/* v13 — защита от наложения + правильная persistence */
-(function(){
-  console.log('🛡 v13 защита активна');
-
-  // ===== 1. MutationObserver — держим login/onboard скрытыми если мы залогинены =====
-  var loginEl = document.getElementById('loginScreen');
-  var onboardEl = document.getElementById('onboardScreen');
-
-  function isLoggedIn(){
-    var V = window._v11;
-    return V && V.profile && V.profile.onboarded;
-  }
-  function isOnboarded(){
-    var V = window._v11;
-    return V && V.profile && V.profile.playerId;
-  }
-
-  function enforceScreens(){
-    if(isLoggedIn()){
-      // Скрываем оба экрана — пользователь в системе
-      if(loginEl){
-        if(!loginEl.classList.contains('hidden')) loginEl.classList.add('hidden');
-        if(loginEl.style.display !== 'none') loginEl.style.display = 'none';
-      }
-      if(onboardEl){
-        if(!onboardEl.classList.contains('hidden')) onboardEl.classList.add('hidden');
-        if(onboardEl.style.display !== 'none') onboardEl.style.display = 'none';
-      }
-      var app = document.getElementById('app');
-      if(app && app.style.display === 'none') app.style.display = '';
-    } else if(isOnboarded()){
-      // Показываем онбординг
-      if(loginEl){
-        if(!loginEl.classList.contains('hidden')) loginEl.classList.add('hidden');
-        if(loginEl.style.display !== 'none') loginEl.style.display = 'none';
-      }
-      if(onboardEl){
-        if(onboardEl.classList.contains('hidden')) onboardEl.classList.remove('hidden');
-        if(onboardEl.style.display !== 'flex') onboardEl.style.display = 'flex';
-      }
-      var app2 = document.getElementById('app');
-      if(app2) app2.style.display = 'none';
-    }
-  }
-
-  // Подписываемся на изменения класса/стиля у обоих экранов
-  if(loginEl){
-    new MutationObserver(enforceScreens).observe(loginEl, {
-      attributes: true, attributeFilter: ['class','style']
-    });
-  }
-  if(onboardEl){
-    new MutationObserver(enforceScreens).observe(onboardEl, {
-      attributes: true, attributeFilter: ['class','style']
-    });
-  }
-
-  // Каждые 500 мс — проверяем (на всякий случай)
-  setInterval(enforceScreens, 500);
-
-  // ===== 2. Переопределяем SD.logout — чтобы корректно выйти и очистить =====
-  window._v13_logout = async function(){
-    try{
-      var fb = window.__fb;
-      if(fb && fb.auth){
-        await fb.authMod.signOut(fb.auth);
-      }
-      try{ localStorage.removeItem('sd_uid'); }catch(e){}
-      try{ localStorage.removeItem('sd_playerId'); }catch(e){}
-      // Сбросим сохранённые данные профиля
-      if(window._v11){
-        _v11.profile = null;
-        _v11.uid = null;
-        _v11.playerId = null;
-      }
-      location.reload();
-    }catch(e){ console.error('logout:', e); }
-  };
-
-  // Перебиваем .pm-item для Logout
-  document.addEventListener('click', function(e){
-    var pm = e.target.closest('.pm-item');
-    if(pm){
-      var oc = pm.getAttribute('onclick') || '';
-      if(oc.indexOf('SD.logout') > -1 || oc.indexOf('logout') > -1){
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        window._v13_logout();
-        return;
-      }
-    }
-  }, true);
-
-  // ===== 3. Автовосстановление сессии — периодически проверяем =====
-  function autologinCheck(){
-    try{
-      var fb = window.__fb;
-      if(!fb || !fb.auth) return;
-      var user = fb.auth.currentUser;
-      if(!user) return;
-      // Есть пользователь, но профиль не загружен — перезагрузим профиль
-      if(window._v11 && !_v11.profile){
-        console.log('🔄 Автовосстановление профиля...');
-        var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
-        fb.dbMod.get(ref).then(function(snap){
-          if(snap.exists()){
-            var data = snap.val();
-            // Нормализуем массивы
-            function toArr(v){
-              if(!v) return [];
-              if(Array.isArray(v)) return v.filter(Boolean);
-              if(typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);
-              return [];
-            }
-            data.inventory = toArr(data.inventory);
-            data.friends = toArr(data.friends);
-            data.friendRequests = toArr(data.friendRequests);
-            data.incomingTransfers = toArr(data.incomingTransfers);
-
-            _v11.profile = data;
-            _v11.uid = user.uid;
-            _v11.playerId = data.playerId;
-            if(window.SD){
-              SD.profile = data;
-              SD.uid = user.uid;
-              SD.playerId = data.playerId;
-            }
-            enforceScreens();
-            // Перерисуем
-            if(data.onboarded){
-              try{
-                if(window.goScreen) goScreen('home');
-              }catch(e){}
-            }
-            console.log('✅ Профиль восстановлен:', data.playerId);
-          }
-        }).catch(function(err){
-          console.error('autologin profile:', err);
-        });
-      }
-    }catch(e){}
-  }
-
-  // Проверяем через 1 сек после старта, потом каждые 2 сек
-  setTimeout(autologinCheck, 1000);
-  setInterval(autologinCheck, 2000);
-
-  // ===== 4. Перехват Google-входа — использование indexedDBLocalPersistence =====
-  var originalGoogleClick = null;
-
-  document.addEventListener('click', function(e){
-    if(e.target.closest('#googleLoginBtn')){
-      // Дадим v12/v11 обработчику выполниться, но подстрахуемся
-      setTimeout(function(){
-        // Если через 100мс ничего не произошло — вызываем напрямую
-        var fb = window.__fb;
-        if(!fb) return;
-        // Проверим, началась ли авторизация (появление попапа или редиректа)
-        // Просто на всякий случай — не мешаем
-      }, 500);
-    }
-  }, false);
-
-  // Перехватываем старый SD.loginGoogle и заменяем на безопасную версию
-  setTimeout(function(){
-    if(!window.SD) return;
-    window.SD.loginGoogle = async function(){
-      try{
-        var fb = window.__fb;
-        if(!fb) { alert('Firebase ещё загружается'); return; }
-
-        var prov = new fb.authMod.GoogleAuthProvider();
-        prov.setCustomParameters({ prompt: 'select_account' });
-
-        // Используем indexedDBLocalPersistence — обходит ITP Safari
-        var persistSet = false;
-        if(fb.authMod.indexedDBLocalPersistence){
-          try{
-            await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
-            persistSet = true;
-            console.log('✅ indexedDBLocalPersistence установлен');
-          }catch(e){ console.warn('indexedDB fail:', e); }
-        }
-        if(!persistSet && fb.authMod.browserLocalPersistence){
-          try{
-            await fb.authMod.setPersistence(fb.auth, fb.authMod.browserLocalPersistence);
-            console.log('✅ browserLocalPersistence установлен');
-          }catch(e){ console.warn('browserLocal fail:', e); }
-        }
-
-        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        if(isMobile){
-          await fb.authMod.signInWithRedirect(fb.auth, prov);
-        } else {
-          try{
-            await fb.authMod.signInWithPopup(fb.auth, prov);
-          }catch(err){
-            if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user')){
-              await fb.authMod.signInWithRedirect(fb.auth, prov);
-            } else throw err;
-          }
-        }
-      }catch(e){
-        console.error('google login (v13):', e);
-        alert('Ошибка входа: ' + (e.code || e.message || 'неизвестная'));
-      }
-    };
-    console.log('✅ SD.loginGoogle переопределён (v13)');
-  }, 1500);
-
-  // ===== 5. Обработка getRedirectResult для v13 =====
-  setTimeout(async function(){
-    try{
-      var fb = window.__fb;
-      if(!fb || !fb.auth) return;
-      var r = await fb.authMod.getRedirectResult(fb.auth);
-      if(r && r.user){
-        console.log('✅ v13: redirect успешен, user:', r.user.email);
-        // Убедимся, что профиль загружен
-        setTimeout(autologinCheck, 200);
-      }
-    }catch(e){
-      if(e && e.code !== 'auth/no-auth-event' && e.code !== 'auth/redirect-cancelled-by-user'){
-        console.warn('v13 redirect result:', e.code || e.message);
-      }
-    }
-  }, 2500);
-
-  console.log('✅ ПАТЧ v13 установлен');
-})();
-</script>
-<script>
-/* v14 — жёсткий фикс Google-входа */
-(function(){
-  console.log('🎯 v14 стартует');
-
-  // === 1. СРАЗУ при старте выставляем правильный persistence ===
-  // Это КРИТИЧНО — до любого signInWithRedirect
-  async function setupPersistence(){
-    try{
-      var fb = window.__fb;
-      if(!fb){ setTimeout(setupPersistence, 200); return; }
-      // В Safari лучше всего работает indexedDB — обходит ITP
-      if(fb.authMod.indexedDBLocalPersistence){
-        await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
-        console.log('✅ indexedDBLocalPersistence');
-      }
-    }catch(e){
-      console.warn('persistence:', e);
-    }
-  }
-  setupPersistence();
-
-  // === 2. Перехватываем клик по Google — ВСЕГДА redirect ===
-  document.addEventListener('click', function(e){
-    var btn = e.target.closest('#googleLoginBtn');
-    if(!btn) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-
-    console.log('🖱 Google нажат, начинаем вход...');
-
-    (async function(){
-      try{
-        var fb = window.__fb;
-        if(!fb){ alert('Firebase ещё загружается, подожди 2 секунды'); return; }
-
-        var prov = new fb.authMod.GoogleAuthProvider();
-        prov.setCustomParameters({ prompt: 'select_account' });
-
-        // ВСЕГДА redirect — это надёжнее всего в Safari
-        await fb.authMod.signInWithRedirect(fb.auth, prov);
-        console.log('➡ Редирект на Google...');
-      }catch(err){
-        console.error('login error:', err);
-        alert('Ошибка: ' + (err.code || err.message || 'неизвестная'));
-      }
-    })();
-  }, true); // capture: true — перехватываем до всех остальных
-
-  // === 3. При возврате с Google — ловим результат и загружаем профиль ===
-  async function handleReturn(){
-    try{
-      var fb = window.__fb;
-      if(!fb){ setTimeout(handleReturn, 300); return; }
-
-      // Ждём завершения redirect
-      var result = null;
-      try{
-        result = await fb.authMod.getRedirectResult(fb.auth);
-      }catch(e){
-        // Игнорируем «no-auth-event» — это норма когда возвращаешься не с Google
-        if(e.code !== 'auth/no-auth-event' && e.code !== 'auth/redirect-cancelled-by-user'){
-          console.warn('redirect result err:', e.code || e.message);
-        }
-      }
-
-      // Проверяем текущего юзера
-      var user = fb.auth.currentUser;
-
-      if(!result && !user){
-        console.log('⏳ Пользователь не найден после возврата');
-        return;
-      }
-
-      if(!user && result && result.user){
-        user = result.user;
-      }
-
-      if(!user){
-        console.log('⏳ Ждём авторизации...');
-        return;
-      }
-
-      console.log('✅ User найден:', user.email, user.uid);
-
-      // Пользователь есть — грузим профиль
-      var V = window._v11;
-      if(!V){ setTimeout(handleReturn, 300); return; }
-
-      // Если профиль уже загружен — не делаем ничего
-      if(V.profile && V.profile.playerId) return;
-
-      V.uid = user.uid;
-      V.user = user;
-      if(window.SD){ SD.uid = user.uid; SD.user = user; }
-
-      // Читаем профиль из Firebase
-      var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
-      var snap = await fb.dbMod.get(ref);
-
-      if(!snap.exists()){
-        // Новый игрок — создаём с ID
-        var cRef = fb.dbMod.ref(fb.db, 'counter/playerId');
-        var tx = await fb.dbMod.runTransaction(cRef, function(c){ return (c||0) + 1; });
-        var newId = String(tx.snapshot.val()).padStart(9, '0');
-
-        var defProfile = {
-          playerId: newId,
-          name: user.displayName || 'Игрок',
-          avatar: 0,
-          balance: 200,
-          inventory: [],
-          stats: { cases: 0, upgrades: 0 },
-          friends: [],
-          friendRequests: [],
-          incomingTransfers: [],
-          lastNickChange: 0,
-          language: 'ru',
-          accent: 'crimson',
-          bonus: { day: 0, lastClaim: 0 },
-          devMode: false,
-          onboarded: false,
-          createdAt: Date.now()
-        };
-        await fb.dbMod.set(ref, defProfile);
-        await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId), user.uid);
-
-        V.profile = defProfile;
-        V.playerId = newId;
-        if(window.SD){ SD.profile = defProfile; SD.playerId = newId; }
-
-        // Показываем онбординг
-        var l = document.getElementById('loginScreen');
-        var o = document.getElementById('onboardScreen');
-        var a = document.getElementById('app');
-        if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
-        if(o){ o.classList.remove('hidden'); o.style.display = 'flex'; }
-        var oid = document.getElementById('onboardId');
-        if(oid) oid.textContent = newId;
-        // Отрисуем аватарки
-        if(window._v11 && typeof renderOnboardAvatars === 'function'){
-          // v14 не имеет доступа, но мы можем вызвать через v11
-        }
-        console.log('✅ Новый игрок создан:', newId);
-        return;
-      }
-
-      // Профиль существует
-      var data = snap.val();
-
-      function toArr(v){
-        if(!v) return [];
-        if(Array.isArray(v)) return v.filter(Boolean);
-        if(typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);
-        return [];
-      }
-      data.inventory = toArr(data.inventory);
-      data.friends = toArr(data.friends);
-      data.friendRequests = toArr(data.friendRequests);
-      data.incomingTransfers = toArr(data.incomingTransfers);
-
-      V.profile = data;
-      V.playerId = data.playerId;
-      if(window.SD){ SD.profile = data; SD.playerId = data.playerId; }
-
-      if(data.onboarded){
-        // Скрываем логин + онбординг, показываем app
-        var l2 = document.getElementById('loginScreen');
-        var o2 = document.getElementById('onboardScreen');
-        var a2 = document.getElementById('app');
-        if(l2){ l2.classList.add('hidden'); l2.style.display = 'none'; }
-        if(o2){ o2.classList.add('hidden'); o2.style.display = 'none'; }
-        if(a2) a2.style.display = '';
-        console.log('✅ Профиль загружен, показываем app');
-      } else {
-        // Показываем онбординг
-        var l3 = document.getElementById('loginScreen');
-        var o3 = document.getElementById('onboardScreen');
-        var a3 = document.getElementById('app');
-        if(l3){ l3.classList.add('hidden'); l3.style.display = 'none'; }
-        if(o3){ o3.classList.remove('hidden'); o3.style.display = 'flex'; }
-        var oid3 = document.getElementById('onboardId');
-        if(oid3) oid3.textContent = data.playerId;
-        console.log('✅ Профиль без онбординга — показываем онбординг');
-      }
-    }catch(e){
-      console.error('handleReturn error:', e);
-      alert('Ошибка загрузки профиля: ' + (e.code || e.message || 'неизвестная'));
-    }
-  }
-
-  // Ждём Firebase и вызываем
-  setTimeout(handleReturn, 500);
-  setTimeout(handleReturn, 1500);
-  setTimeout(handleReturn, 3000);
-
-  // === 4. Периодически проверяем — если user есть, а profile нет → догрузить ===
-  setInterval(function(){
-    try{
-      var fb = window.__fb;
-      if(!fb || !fb.auth) return;
-      var user = fb.auth.currentUser;
-      var V = window._v11;
-      if(!user || !V) return;
-      if(V.profile && V.profile.playerId) return;
-      // Есть user но нет профиля — перезагружаем
-      handleReturn();
-    }catch(e){}
-  }, 3000);
-
-  // === 5. MutationObserver — не даём показать логин если user есть ===
-  var loginEl = document.getElementById('loginScreen');
-  if(loginEl){
-    new MutationObserver(function(){
-      try{
-        var fb = window.__fb;
-        var user = fb && fb.auth && fb.auth.currentUser;
-        if(!user) return;
-        // Пользователь авторизован — не даём показать логин
-        if(loginEl.classList.contains('hidden')) return;
-        // Есть user но логин показан → скрываем
-        loginEl.classList.add('hidden');
-        loginEl.style.display = 'none';
-        // И догружаем профиль
-        handleReturn();
-      }catch(e){}
-    }).observe(loginEl, { attributes: true, attributeFilter: ['class', 'style'] });
-  }
-
-  console.log('✅ ПАТЧ v14 установлен');
-})();
-</script>
-<script>
-/* v15 — диагностика с показом логов на экране */
-(function(){
-  // Лог-панель прямо на странице
-  var logBox = document.createElement('div');
-  logBox.id = 'v15log';
-  logBox.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;background:rgba(0,0,0,.95);color:#0f0;font-family:monospace;font-size:11px;padding:10px;border-radius:8px;z-index:999999;max-height:220px;overflow-y:auto;border:2px solid #0f0;line-height:1.4;';
-  logBox.innerHTML = '<div style="color:#ff0;font-weight:900;margin-bottom:6px">🔍 ДИАГНОСТИКА v15</div><div id="v15lines"></div><button id="v15copy" style="position:sticky;bottom:0;width:100%;margin-top:8px;padding:8px;background:#0f0;color:#000;border:none;border-radius:6px;font-weight:900;cursor:pointer">📋 Скопировать логи</button><button id="v15hide" style="width:100%;margin-top:4px;padding:6px;background:#333;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer">Скрыть панель</button>';
-  document.body.appendChild(logBox);
-
-  var lines = [];
-  var linesEl = document.getElementById('v15lines');
-  function log(msg){
-    var t = new Date().toLocaleTimeString();
-    lines.push('[' + t + '] ' + msg);
-    linesEl.innerHTML = lines.slice(-20).join('<br>');
-    logBox.scrollTop = logBox.scrollHeight;
-    console.log('[v15]', msg);
-  }
-  window._v15logs = function(){ return lines.join('\n'); };
-
-  document.getElementById('v15copy').onclick = function(){
-    var text = lines.join('\n');
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(text).then(function(){ alert('Логи скопированы'); });
-    } else {
-      alert(text);
-    }
-  };
-  document.getElementById('v15hide').onclick = function(){
-    logBox.style.display = 'none';
-  };
-
-  log('v15 старт');
-
-  // Ждём Firebase
-  (async function waitFB(){
-    var tries = 0;
-    while(!window.__fb && tries < 50){
-      await new Promise(function(r){ setTimeout(r, 200); });
-      tries++;
-    }
-    if(!window.__fb){
-      log('❌ Firebase не загрузился');
-      return;
-    }
-    var fb = window.__fb;
-    log('✅ Firebase OK');
-    log('currentUser: ' + (fb.auth.currentUser ? fb.auth.currentUser.email : 'null'));
-
-    // Пытаемся поставить persistence
-    try{
-      if(fb.authMod.indexedDBLocalPersistence){
-        await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
-        log('persistence: indexedDB ✅');
-      } else {
-        log('persistence: indexedDB недоступен');
-      }
-    }catch(e){ log('persist err: ' + (e.code || e.message)); }
-
-    // Пробуем getRedirectResult
-    try{
-      log('getRedirectResult вызываем...');
-      var res = await fb.authMod.getRedirectResult(fb.auth);
-      if(res && res.user){
-        log('✅ redirect result: ' + res.user.email);
-      } else {
-        log('redirect result: пусто (нет данных)');
-      }
-    }catch(e){
-      log('redirect err: ' + (e.code || e.message));
-    }
-
-    // Проверяем ещё раз currentUser
-    log('currentUser после redirect: ' + (fb.auth.currentUser ? fb.auth.currentUser.email : 'null'));
-
-    // Подписываемся на onAuthStateChanged
-    fb.authMod.onAuthStateChanged(fb.auth, function(user){
-      log('onAuthState: ' + (user ? user.email : 'null'));
-      if(user){
-        log('👤 USER НАЙДЕН! Скрываем логин, грузим профиль');
-        var l = document.getElementById('loginScreen');
-        var a = document.getElementById('app');
-        if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
-        if(a) a.style.display = '';
-
-        // Загружаем профиль
-        loadProfile(user);
-      } else {
-        log('user null — показываем логин');
-      }
-    });
-
-    async function loadProfile(user){
-      try{
-        var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
-        log('Читаем профиль...');
-        var snap = await fb.dbMod.get(ref);
-        log('snap.exists: ' + snap.exists());
-
-        if(snap.exists()){
-          var data = snap.val();
-          log('playerId: ' + (data.playerId || '?'));
-          log('onboarded: ' + (data.onboarded));
-
-          // Нормализация массивов
-          function toArr(v){
-            if(!v) return [];
-            if(Array.isArray(v)) return v.filter(Boolean);
-            if(typeof v === 'object') return Object.keys(v).sort(function(a,b){ return a-b; }).map(function(k){ return v[k]; }).filter(Boolean);
-            return [];
-          }
-          data.inventory = toArr(data.inventory);
-          data.friends = toArr(data.friends);
-          data.friendRequests = toArr(data.friendRequests);
-          data.incomingTransfers = toArr(data.incomingTransfers);
-
-          // Пишем во все места
-          if(window._v11){ _v11.profile = data; _v11.uid = user.uid; _v11.playerId = data.playerId; }
-          if(window.SD){ SD.profile = data; SD.uid = user.uid; SD.playerId = data.playerId; }
-
-          if(data.onboarded){
-            log('Показываем app');
-            var o = document.getElementById('onboardScreen');
-            if(o){ o.classList.add('hidden'); o.style.display = 'none'; }
-            var a2 = document.getElementById('app');
-            if(a2) a2.style.display = '';
-            // Перерисовываем
-            try{
-              if(window.goScreen) goScreen('home');
-            }catch(e){ log('goScreen err: ' + e.message); }
-          } else {
-            log('Показываем онбординг');
-            var o2 = document.getElementById('onboardScreen');
-            var a3 = document.getElementById('app');
-            if(o2){ o2.classList.remove('hidden'); o2.style.display = 'flex'; }
-            if(a3) a3.style.display = 'none';
-            var oid = document.getElementById('onboardId');
-            if(oid) oid.textContent = data.playerId;
-          }
-        } else {
-          log('⚠ Профиль не существует — нужен онбординг');
-        }
-      }catch(e){
-        log('❌ loadProfile: ' + (e.code || e.message));
-      }
-    }
-
-    // Привязываем Google заново — ТОЛЬКО POPUP
-    function bindGoogle(){
-      var btn = document.getElementById('googleLoginBtn');
-      if(!btn){ setTimeout(bindGoogle, 500); return; }
-      var fresh = btn.cloneNode(true);
-      btn.parentNode.replaceChild(fresh, btn);
-
-      fresh.addEventListener('click', async function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        log('🖱 Google click');
-        try{
-          var prov = new fb.authMod.GoogleAuthProvider();
-          prov.setCustomParameters({ prompt: 'select_account' });
-          log('signInWithPopup...');
-          var result = await fb.authMod.signInWithPopup(fb.auth, prov);
-          log('✅ popup OK: ' + result.user.email);
-        }catch(err){
-          log('❌ popup err: ' + (err.code || err.message));
-          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user')){
-            log('↪ Fallback на redirect');
-            try{
-              await fb.authMod.signInWithRedirect(fb.auth, prov);
-            }catch(e2){ log('redirect err: ' + (e2.code || e2.message)); }
-          }
-        }
-      }, true);
-
-      log('✅ Google-кнопка привязана (popup)');
-    }
-
-    // Ждём чуть и привязываем
-    setTimeout(bindGoogle, 500);
-
-    // Панель исчезнет через 60 секунд
-    setTimeout(function(){
-      if(logBox) logBox.style.opacity = '0.3';
-    }, 60000);
-
-  })();
-})();
-</script>
-<script>
-/* v16 — ЕДИНСТВЕННЫЙ обработчик Google через window */
-(function(){
-  var logBox = document.createElement('div');
-  logBox.id = 'v16log';
-  logBox.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;background:rgba(0,0,0,.95);color:#0ff;font-family:monospace;font-size:11px;padding:10px;border-radius:8px;z-index:9999999;max-height:220px;overflow-y:auto;border:2px solid #0ff;line-height:1.4;';
-  logBox.innerHTML = '<div style="color:#ff0;font-weight:900;margin-bottom:6px">🎯 v16 — GOOGLE FIX</div><div id="v16lines"></div><button id="v16copy" style="width:100%;margin-top:8px;padding:8px;background:#0ff;color:#000;border:none;border-radius:6px;font-weight:900;cursor:pointer">📋 Скопировать логи</button><button id="v16hide" style="width:100%;margin-top:4px;padding:6px;background:#333;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer">Скрыть</button>';
-  document.body.appendChild(logBox);
-
-  var lines = [];
-  function log(msg){
-    var t = new Date().toLocaleTimeString();
-    lines.push('[' + t + '] ' + msg);
-    document.getElementById('v16lines').innerHTML = lines.slice(-20).join('<br>');
-    logBox.scrollTop = logBox.scrollHeight;
-    console.log('[v16]', msg);
-  }
-  document.getElementById('v16copy').onclick = function(){
-    var text = lines.join('\n');
-    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
-    alert(text);
-  };
-  document.getElementById('v16hide').onclick = function(){ logBox.style.display = 'none'; };
-
-  log('старт');
-
-  function waitFB(cb){
-    if(window.__fb && window.__firebaseReady){ cb(window.__fb); return; }
-    setTimeout(function(){ waitFB(cb); }, 200);
-  }
-
-  waitFB(async function(fb){
-    log('Firebase OK');
-    try{
-      if(fb.authMod.indexedDBLocalPersistence){
-        await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
-        log('persistence ✅');
-      }
-    }catch(e){ log('persist err: ' + e.message); }
-
-    // ═══════════════════════════════════════════════
-    // ГЛАВНОЕ: window capture — САМЫЙ ПЕРВЫЙ обработчик
-    // Ни один cloneNode не может его перебить
-    // ═══════════════════════════════════════════════
-    var busy = false;
-    window.addEventListener('click', async function(e){
-      var btn = e.target.closest('#googleLoginBtn');
-      if(!btn) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
-      if(busy){ log('⏳ уже идёт вход'); return; }
-      busy = true;
-      log('🖱 КЛИК ПО GOOGLE');
-
-      try{
-        var prov = new fb.authMod.GoogleAuthProvider();
-        prov.setCustomParameters({ prompt: 'select_account' });
-
-        log('пробуем popup...');
-        try{
-          var res = await fb.authMod.signInWithPopup(fb.auth, prov);
-          log('✅ POPUP OK: ' + (res.user ? res.user.email : '?'));
-          busy = false;
-          return;
-        }catch(err){
-          log('❌ popup err: ' + (err.code || err.message));
-          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request')){
-            log('↪ fallback: redirect');
-            try{
-              await fb.authMod.signInWithRedirect(fb.auth, prov);
-              log('redirect запущен');
-            }catch(e2){ log('redirect err: ' + (e2.code || e2.message)); }
-          }
-        }
-      }catch(err){
-        log('❌ общая: ' + (err.code || err.message));
-      } finally {
-        busy = false;
-      }
-    }, true); // capture: true — на window это ПЕРВЫЙ из всех
-
-    // ═══════════════════════════════════════════════
-    // После успешного входа — грузим профиль
-    // ═══════════════════════════════════════════════
+  /* ====== Старт ====== */
+  waitFB(function(fb){
+    console.log('✅ Firebase OK');
     fb.authMod.onAuthStateChanged(fb.auth, async function(user){
-      log('onAuthState: ' + (user ? user.email : 'null'));
-      if(!user){ log('user null — на логине'); return; }
-
-      log('👤 user есть, грузим профиль');
-      try{
-        var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
-        var snap = await fb.dbMod.get(ref);
-
-        if(!snap.exists()){
-          log('⚠ профиль новый — создаём');
-          var cRef = fb.dbMod.ref(fb.db, 'counter/playerId');
-          var tx = await fb.dbMod.runTransaction(cRef, function(c){ return (c||0) + 1; });
-          var newId = String(tx.snapshot.val()).padStart(9, '0');
-          var defP = {
-            playerId: newId, name: user.displayName || 'Игрок', avatar: 0,
-            balance: 200, inventory: [], stats: { cases: 0, upgrades: 0 },
-            friends: [], friendRequests: [], incomingTransfers: [],
-            lastNickChange: 0, language: 'ru', accent: 'crimson',
-            bonus: { day: 0, lastClaim: 0 }, devMode: false,
-            onboarded: false, createdAt: Date.now()
-          };
-          await fb.dbMod.set(ref, defP);
-          await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId), user.uid);
-          if(window._v11){ _v11.profile = defP; _v11.uid = user.uid; _v11.playerId = newId; }
-          if(window.SD){ SD.profile = defP; SD.uid = user.uid; SD.playerId = newId; }
-          var l = document.getElementById('loginScreen');
-          var o = document.getElementById('onboardScreen');
-          var a = document.getElementById('app');
-          if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
-          if(o){ o.classList.remove('hidden'); o.style.display = 'flex'; }
-          if(a) a.style.display = 'none';
-          var oid = document.getElementById('onboardId');
-          if(oid) oid.textContent = newId;
-          log('✅ онбординг показан, ID=' + newId);
-          return;
-        }
-
-        var data = snap.val();
-        log('профиль загружен, ID=' + data.playerId);
-
-        function toArr(v){
-          if(!v) return [];
-          if(Array.isArray(v)) return v.filter(Boolean);
-          if(typeof v === 'object') return Object.keys(v).sort(function(a,b){ return a-b; }).map(function(k){ return v[k]; }).filter(Boolean);
-          return [];
-        }
-        data.inventory = toArr(data.inventory);
-        data.friends = toArr(data.friends);
-        data.friendRequests = toArr(data.friendRequests);
-        data.incomingTransfers = toArr(data.incomingTransfers);
-
-        if(window._v11){ _v11.profile = data; _v11.uid = user.uid; _v11.playerId = data.playerId; }
-        if(window.SD){ SD.profile = data; SD.uid = user.uid; SD.playerId = data.playerId; }
-
-        var l2 = document.getElementById('loginScreen');
-        var o2 = document.getElementById('onboardScreen');
-        var a2 = document.getElementById('app');
-        if(l2){ l2.classList.add('hidden'); l2.style.display = 'none'; }
-        if(o2){ o2.classList.add('hidden'); o2.style.display = 'none'; }
-        if(a2) a2.style.display = '';
-
-        if(data.onboarded){
-          log('✅ показываем APP');
-          try{ if(window.goScreen) goScreen('home'); }catch(e){}
-        } else {
-          log('⚠ нужен онбординг');
-          if(o2){ o2.classList.remove('hidden'); o2.style.display = 'flex'; }
-          if(a2) a2.style.display = 'none';
-          var oid2 = document.getElementById('onboardId');
-          if(oid2) oid2.textContent = data.playerId;
-        }
-      }catch(e){
-        log('❌ profile err: ' + (e.code || e.message));
+      console.log('onAuth:', user ? user.email : 'null');
+      if(user){
+        try{ await loadProfile(fb, user); }
+        catch(e){ console.error('loadProfile:', e); showApp(); }
+      } else {
+        PROFILE = null;
+        UID = null;
+        showLogin();
       }
     });
-
-    log('✅ v16 активен');
+    try{ fb.authMod.getRedirectResult(fb.auth); }catch(e){}
   });
-})();
-</script>
-<script>
-/* v18 — UPGRADE полностью */
-(function(){
-  console.log('🚀 v18 UPGRADE');
 
-  // ═══════════════════════════════════════════
-  // 1. Слот источника — открыть выбор из инвентаря
-  // ═══════════════════════════════════════════
-  function openPickSource(){
-    var V = window._v11 || {};
-    var p = (V.profile) || (window.SD && SD.profile);
-    if(!p) return;
-
-    var inv = p.inventory || [];
-    if(!Array.isArray(inv)) inv = Object.values(inv).filter(Boolean);
-
-    var grid = document.getElementById('pickSourceGrid');
-    if(!grid) return;
-
-    var searchEl = document.getElementById('pickSourceSearch');
-    if(searchEl) searchEl.value = '';
-
-    grid.innerHTML = renderInvCards(inv, 'picksrc');
-
-    grid.querySelectorAll('.inv-card[data-picksrc]').forEach(function(c){
-      c.onclick = function(e){
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        var idx = +c.dataset.picksrc;
-        var chosen = inv[idx];
-        if(chosen && window._v11){
-          _v11.upSource = chosen;
-          _v11.upAdd = 0;
-        }
-        // Обновляем UI сразу
-        renderUpgradeFull();
-        closeModal('pickSourceModal');
-      };
-    });
-
-    // Поиск в источнике
-    if(searchEl){
-      searchEl.oninput = function(){
-        var q = (searchEl.value || '').toLowerCase().trim();
-        var filtered = q ? inv.filter(function(s){
-          return (s.w + ' ' + s.s).toLowerCase().indexOf(q) > -1;
-        }) : inv;
-        grid.innerHTML = renderInvCards(filtered, 'picksrc');
-        // Переподключаем клики
-        grid.querySelectorAll('.inv-card[data-picksrc]').forEach(function(c){
-          c.onclick = function(e){
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            // ВАЖНО: индекс в filtered, но нам нужен элемент
-            var idxInFiltered = +c.dataset.picksrc;
-            var chosen = filtered[idxInFiltered];
-            if(chosen && window._v11){
-              _v11.upSource = chosen;
-              _v11.upAdd = 0;
-            }
-            renderUpgradeFull();
-            closeModal('pickSourceModal');
-          };
-        });
-      };
-    }
-
-    openModal('pickSourceModal');
-  }
-
-  // ═══════════════════════════════════════════
-  // 2. Слот цели — выбор из всех скинов
-  // ═══════════════════════════════════════════
-  function openPickTarget(){
-    var V = window._v11 || {};
-    if(!V.upSource){ alert('Сначала выберите свой предмет'); return; }
-
-    var grid = document.getElementById('pickTargetGrid');
-    if(!grid) return;
-
-    var searchEl = document.getElementById('pickTargetSearch');
-    var minEl = document.getElementById('pickTargetMin');
-    var maxEl = document.getElementById('pickTargetMax');
-    if(searchEl) searchEl.value = '';
-    if(minEl) minEl.value = '';
-    if(maxEl) maxEl.value = '';
-
-    filterTargets();
-
-    if(searchEl) searchEl.oninput = filterTargets;
-    if(minEl) minEl.oninput = filterTargets;
-    if(maxEl) maxEl.oninput = filterTargets;
-
-    openModal('pickTargetModal');
-  }
-
-  function filterTargets(){
-    var V = window._v11 || {};
-    var grid = document.getElementById('pickTargetGrid');
-    if(!grid) return;
-    if(!window.SD || !SD.ALL_SKINS){ grid.innerHTML = '<div class="inv-empty">Скины не загружены</div>'; return; }
-
-    var q = (document.getElementById('pickTargetSearch') || {}).value || '';
-    q = q.toLowerCase().trim();
-    var min = parseFloat((document.getElementById('pickTargetMin') || {}).value) || 0;
-    var max = parseFloat((document.getElementById('pickTargetMax') || {}).value) || Infinity;
-
-    var srcP = V.upSource ? (V.upSource.received ? V.upSource.p*0.8 : V.upSource.p) : 0;
-
-    var list = SD.ALL_SKINS.filter(function(s){
-      return s.p > srcP && s.p >= min && s.p <= max;
-    });
-
-    if(q){
-      list = list.filter(function(s){
-        return (s.w + ' ' + s.s + ' ' + s.r).toLowerCase().indexOf(q) > -1;
-      });
-    }
-
-    list = list.slice(0, 100);
-
-    if(!list.length){
-      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🔍</div>Ничего не найдено</div>';
-      return;
-    }
-
-    grid.innerHTML = list.map(function(s, i){
-      var rc = (window.SD && SD.rarityColor) ? SD.rarityColor(s.r) : '#888';
-      return '<div class="inv-card" style="--rc:'+rc+'" data-tgtidx="'+i+'">'+
-        '<img src="'+s.img+'" alt="">'+
-        '<div class="ic-rar">'+s.r+'</div>'+
-        '<div class="ic-name">'+s.w+' | '+s.s+'</div>'+
-        '<div class="ic-price">'+Math.round(s.p)+' G</div>'+
-      '</div>';
-    }).join('');
-
-    grid.querySelectorAll('.inv-card[data-tgtidx]').forEach(function(c){
-      c.onclick = function(e){
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        var idx = +c.dataset.tgtidx;
-        var chosen = list[idx];
-        if(chosen && window._v11){
-          _v11.upTarget = chosen;
-          _v11.upAdd = 0;
-        }
-        renderUpgradeFull();
-        closeModal('pickTargetModal');
-      };
-    });
-  }
-
-  // ═══════════════════════════════════════════
-  // 3. Рендер слотов + шанс + слайдер
-  // ═══════════════════════════════════════════
-  function renderUpgradeFull(){
-    var V = window._v11 || {};
-
-    // Слоты
-    var sImg = document.getElementById('upSourceImg');
-    var tImg = document.getElementById('upTargetImg');
-    var sEmp = document.getElementById('upSourceEmpty');
-    var tEmp = document.getElementById('upTargetEmpty');
-    var sSlot = document.getElementById('upSourceSlot');
-    var tSlot = document.getElementById('upTargetSlot');
-
-    if(V.upSource){
-      if(sImg){ sImg.src = V.upSource.img; sImg.style.display = 'block'; }
-      if(sEmp) sEmp.style.display = 'none';
-      if(sSlot) sSlot.classList.add('filled');
-    } else {
-      if(sImg) sImg.style.display = 'none';
-      if(sEmp) sEmp.style.display = '';
-      if(sSlot) sSlot.classList.remove('filled');
-    }
-
-    if(V.upTarget){
-      if(tImg){ tImg.src = V.upTarget.img; tImg.style.display = 'block'; }
-      if(tEmp) tEmp.style.display = 'none';
-      if(tSlot) tSlot.classList.add('filled');
-    } else {
-      if(tImg) tImg.style.display = 'none';
-      if(tEmp) tEmp.style.display = '';
-      if(tSlot) tSlot.classList.remove('filled');
-    }
-
-    // Шанс
-    var cv = document.getElementById('upChanceVal');
-    var lbl = document.getElementById('upgradeChanceLabel');
-
-    if(!V.upSource || !V.upTarget){
-      if(cv) cv.textContent = '0%';
-      if(lbl) lbl.textContent = '—';
-      var addVal0 = document.getElementById('upAddVal');
-      if(addVal0) addVal0.textContent = '+0 G';
-      var slider0 = document.getElementById('upSlider');
-      if(slider0){ slider0.max = 1; slider0.value = 0; slider0.style.setProperty('--fill', '0%'); }
-      drawArc(0);
-      return;
-    }
-
-    var srcP = V.upSource.received ? V.upSource.p * 0.8 : V.upSource.p;
-    var tgtP = V.upTarget.p;
-    var base = Math.min(92, (srcP / tgtP) * 100);
-    var maxAdd = Math.max(0, 92 - base);
-    var addPct = Math.min(V.upAdd || 0, maxAdd);
-    var chance = base + addPct;
-
-    if(cv) cv.textContent = chance.toFixed(2) + '%';
-    if(lbl) lbl.textContent = 'Шанс: ' + chance.toFixed(2) + '%';
-
-    // Добавляемая сумма
-    var addG = Math.round(tgtP * (addPct / 100));
-    var addVal = document.getElementById('upAddVal');
-    if(addVal) addVal.textContent = '+' + addG + ' G';
-
-    // Слайдер
-    var slider = document.getElementById('upSlider');
-    if(slider){
-      slider.min = 0;
-      slider.max = Math.max(1, Math.round(maxAdd));
-      slider.value = Math.min(V.upAdd || 0, maxAdd);
-      var fill = (slider.value / Math.max(1, slider.max)) * 100;
-      slider.style.setProperty('--fill', fill + '%');
-    }
-
-    // Дуга
-    drawArc(chance);
-  }
-
-  function drawArc(pct){
-    var path = document.getElementById('upChanceArc');
-    if(!path) return;
-    var p = Math.max(0, Math.min(100, pct));
-    if(p < 0.01){ path.setAttribute('d', ''); return; }
-    var cx = 130, cy = 130, r = 108;
-    var half = (p * 3.6) / 2;
-    var sA = (90 + half) * Math.PI / 180;
-    var eA = (90 - half) * Math.PI / 180;
-    var x1 = cx + r * Math.cos(sA);
-    var y1 = cy + r * Math.sin(sA);
-    var x2 = cx + r * Math.cos(eA);
-    var y2 = cy + r * Math.sin(eA);
-    var large = p > 50 ? 1 : 0;
-    path.setAttribute('d', 'M ' + x1 + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 ' + large + ' 0 ' + x2 + ' ' + y2);
-  }
-
-  // ═══════════════════════════════════════════
-  // 4. Обработчики кликов (через capture)
-  // ═══════════════════════════════════════════
-  window.addEventListener('click', function(e){
-    var t = e.target;
-
-    // Слот источника
-    if(t.closest('#upSourceSlot')){
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      openPickSource();
-      return;
-    }
-
-    // Слот цели
-    if(t.closest('#upTargetSlot')){
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      openPickTarget();
-      return;
-    }
-
-    // Пресеты
-    var pr = t.closest('.upgrade-presets button');
-    if(pr && pr.dataset.add !== undefined){
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if(window._v11) _v11.upAdd = +pr.dataset.add;
-      renderUpgradeFull();
-      return;
-    }
-
-    // Кнопка ПРОКАЧАТЬ
-    if(t.closest('#upgradeBtn')){
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      doUpgrade();
-      return;
-    }
-  }, true);
-
-  // ═══════════════════════════════════════════
-  // 5. Слайдер — input event
-  // ═══════════════════════════════════════════
-  window.addEventListener('input', function(e){
-    if(e.target && e.target.id === 'upSlider'){
-      if(window._v11) _v11.upAdd = +e.target.value;
-      renderUpgradeFull();
-    }
-  }, true);
-
-  window.addEventListener('change', function(e){
-    if(e.target && e.target.id === 'upSlider'){
-      if(window._v11) _v11.upAdd = +e.target.value;
-      renderUpgradeFull();
-    }
-  }, true);
-
-  // ═══════════════════════════════════════════
-  // 6. Действие АПГРЕЙД
-  // ═══════════════════════════════════════════
-  async function doUpgrade(){
-    var V = window._v11 || {};
-    var p = V.profile || (window.SD && SD.profile);
-    if(!p) return;
-    if(!V.upSource || !V.upTarget){ alert('Выберите предмет и цель'); return; }
-
-    var srcP = V.upSource.received ? V.upSource.p * 0.8 : V.upSource.p;
-    var tgtP = V.upTarget.p;
-    if(tgtP <= srcP){ alert('Цель должна быть дороже'); return; }
-
-    var base = Math.min(92, (srcP / tgtP) * 100);
-    var maxAdd = Math.max(0, 92 - base);
-    var addPct = Math.min(V.upAdd || 0, maxAdd);
-    var addG = Math.round(tgtP * (addPct / 100));
-    var chance = base + addPct;
-
-    if(addG > (p.balance || 0)){ alert('Недостаточно средств'); return; }
-
-    var btn = document.getElementById('upgradeBtn');
-    if(btn){ btn.disabled = true; btn.textContent = 'ПРОКАЧИВАЕМ...'; }
-
-    // Анимация стрелки
-    var arrow = document.getElementById('upArrow');
-    var win = V.devMode ? true : (Math.random() * 100 < chance);
-
-    if(arrow){
-      arrow.style.transition = 'none';
-      arrow.style.transform = 'translateX(-50%) rotate(0deg)';
-      void arrow.offsetWidth;
-      arrow.style.transition = 'transform 6.5s cubic-bezier(.15,.75,.2,1)';
-      var rotations = 3 + Math.random() * 2;
-      var finalAngle;
-      if(win){
-        var halfArc = Math.min(45, (chance * 3.6) / 2);
-        finalAngle = 180 + (Math.random() * 2 - 1) * halfArc;
-      } else {
-        var excludeHalf = Math.min(60, (chance * 3.6) / 2 + 10);
-        var a;
-        do { a = Math.random() * 360; }
-        while(Math.abs(((a - 180 + 540) % 360) - 180) < excludeHalf);
-        finalAngle = a;
-      }
-      var rot = 360 * rotations + finalAngle;
-      arrow.style.transform = 'translateX(-50%) rotate(' + rot + 'deg)';
-    }
-
-    // Обновляем баланс и инвентарь
-    var nb = Math.round((p.balance || 0) - addG);
-    var inv = Array.isArray(p.inventory) ? p.inventory.slice() : Object.values(p.inventory || {}).filter(Boolean);
-
-    // Убираем скин-источник
-    var idx = -1;
-    for(var i=0;i<inv.length;i++){
-      if(inv[i].id === V.upSource.id){ idx = i; break; }
-    }
-    if(idx > -1) inv.splice(idx, 1);
-
-    // Ждём 6.5 сек (анимация)
-    setTimeout(async function(){
-      if(win){
-        // Успех — добавляем целевой скин
-        inv.push(Object.assign({}, V.upTarget, {
-          id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
-          received: false,
-          t: V.upTarget.t || 'skin'
-        }));
-
-        if(V){ V.profile.balance = nb; V.profile.inventory = inv; }
-        if(window.SD && SD.profile){ SD.profile.balance = nb; SD.profile.inventory = inv; }
-
-        try{
-          var fb = window.__fb;
-          var uid = V.uid || (window.SD && SD.uid);
-          await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: nb, inventory: inv });
-          var prev = (p.stats && p.stats.upgrades) || 0;
-          await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid + '/stats'), { upgrades: prev + 1 });
-        }catch(e){ console.error(e); }
-
-        if(window.SD && SD.winSound) SD.winSound();
-        if(window.SD && SD.ok) SD.ok('Апгрейд удался!', V.upTarget.w + ' | ' + V.upTarget.s, V.upTarget.img);
-
-        // Ставим успешный скин как новое «своё»
-        V.upSource = V.upTarget;
-        V.upTarget = null;
-        V.upAdd = 0;
-      } else {
-        // Провал — скин сгорает
-        if(V){ V.profile.balance = nb; V.profile.inventory = inv; }
-        if(window.SD && SD.profile){ SD.profile.balance = nb; SD.profile.inventory = inv; }
-
-        try{
-          var fb2 = window.__fb;
-          var uid2 = V.uid || (window.SD && SD.uid);
-          await fb2.dbMod.update(fb2.dbMod.ref(fb2.db, 'users/' + uid2), { balance: nb, inventory: inv });
-          var prev2 = (p.stats && p.stats.upgrades) || 0;
-          await fb2.dbMod.update(fb2.dbMod.ref(fb2.db, 'users/' + uid2 + '/stats'), { upgrades: prev2 + 1 });
-        }catch(e){}
-
-        if(window.SD && SD.err) SD.err('Апгрейд не удался', 'Скин сгорел');
-        V.upSource = null;
-        V.upTarget = null;
-        V.upAdd = 0;
-      }
-
-      // Обновляем UI
-      var hb = document.getElementById('headerBalance');
-      if(hb) hb.textContent = nb.toLocaleString('ru-RU');
-      renderUpgradeFull();
-      if(window.renderInventory) renderInventory();
-
-      if(btn){ btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2.6"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span>ПРОКАЧАТЬ</span>'; }
-
-      if(arrow){
-        arrow.style.transition = 'none';
-        arrow.style.transform = 'translateX(-50%) rotate(0deg)';
-      }
-    }, 6700);
-  }
-
-  // ═══════════════════════════════════════════
-  // 7. Вспомогательные
-  // ═══════════════════════════════════════════
-  function renderInvCards(inv, key){
-    var arr = Array.isArray(inv) ? inv : Object.values(inv || {}).filter(Boolean);
-    if(!arr.length){
-      return '<div class="inv-empty"><div class="ie-emoji">🎒</div>Инвентарь пуст</div>';
-    }
-    return arr.map(function(s, i){
-      var rc = (window.SD && SD.rarityColor) ? SD.rarityColor(s.r) : '#888';
-      var price = s.received ? Math.round(s.p * 0.8) : Math.round(s.p || 0);
-      return '<div class="inv-card" style="--rc:' + rc + '" data-' + key + '="' + i + '">' +
-        (s.received ? '<div class="ic-tag">−20%</div>' : '') +
-        '<img src="' + s.img + '">' +
-        '<div class="ic-rar">' + (s.r || '') + '</div>' +
-        '<div class="ic-name">' + s.w + ' | ' + s.s + '</div>' +
-        '<div class="ic-price">' + price + ' G</div>' +
-      '</div>';
-    }).join('');
-  }
-
-  function openModal(id){ var m = document.getElementById(id); if(m) m.classList.add('show'); }
-  function closeModal(id){ var m = document.getElementById(id); if(m) m.classList.remove('show'); }
-
-  // ═══════════════════════════════════════════
-  // 8. Инициализация при переходе на UPGRADE
-  // ═══════════════════════════════════════════
-  setInterval(function(){
-    var scr = document.getElementById('screen-upgrade');
-    if(scr && scr.classList.contains('active')){
-      renderUpgradeFull();
-    }
-  }, 800);
-
-  console.log('✅ v18 UPGRADE готов');
+  console.log('✅ ФИНАЛЬНЫЙ патч готов');
 })();
 </script>
 </body>
