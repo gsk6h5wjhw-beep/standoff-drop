@@ -9155,6 +9155,174 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   })();
 })();
 </script>
+<script>
+/* v16 — ЕДИНСТВЕННЫЙ обработчик Google через window */
+(function(){
+  var logBox = document.createElement('div');
+  logBox.id = 'v16log';
+  logBox.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;background:rgba(0,0,0,.95);color:#0ff;font-family:monospace;font-size:11px;padding:10px;border-radius:8px;z-index:9999999;max-height:220px;overflow-y:auto;border:2px solid #0ff;line-height:1.4;';
+  logBox.innerHTML = '<div style="color:#ff0;font-weight:900;margin-bottom:6px">🎯 v16 — GOOGLE FIX</div><div id="v16lines"></div><button id="v16copy" style="width:100%;margin-top:8px;padding:8px;background:#0ff;color:#000;border:none;border-radius:6px;font-weight:900;cursor:pointer">📋 Скопировать логи</button><button id="v16hide" style="width:100%;margin-top:4px;padding:6px;background:#333;color:#fff;border:none;border-radius:6px;font-size:10px;cursor:pointer">Скрыть</button>';
+  document.body.appendChild(logBox);
+
+  var lines = [];
+  function log(msg){
+    var t = new Date().toLocaleTimeString();
+    lines.push('[' + t + '] ' + msg);
+    document.getElementById('v16lines').innerHTML = lines.slice(-20).join('<br>');
+    logBox.scrollTop = logBox.scrollHeight;
+    console.log('[v16]', msg);
+  }
+  document.getElementById('v16copy').onclick = function(){
+    var text = lines.join('\n');
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+    alert(text);
+  };
+  document.getElementById('v16hide').onclick = function(){ logBox.style.display = 'none'; };
+
+  log('старт');
+
+  function waitFB(cb){
+    if(window.__fb && window.__firebaseReady){ cb(window.__fb); return; }
+    setTimeout(function(){ waitFB(cb); }, 200);
+  }
+
+  waitFB(async function(fb){
+    log('Firebase OK');
+    try{
+      if(fb.authMod.indexedDBLocalPersistence){
+        await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
+        log('persistence ✅');
+      }
+    }catch(e){ log('persist err: ' + e.message); }
+
+    // ═══════════════════════════════════════════════
+    // ГЛАВНОЕ: window capture — САМЫЙ ПЕРВЫЙ обработчик
+    // Ни один cloneNode не может его перебить
+    // ═══════════════════════════════════════════════
+    var busy = false;
+    window.addEventListener('click', async function(e){
+      var btn = e.target.closest('#googleLoginBtn');
+      if(!btn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      if(busy){ log('⏳ уже идёт вход'); return; }
+      busy = true;
+      log('🖱 КЛИК ПО GOOGLE');
+
+      try{
+        var prov = new fb.authMod.GoogleAuthProvider();
+        prov.setCustomParameters({ prompt: 'select_account' });
+
+        log('пробуем popup...');
+        try{
+          var res = await fb.authMod.signInWithPopup(fb.auth, prov);
+          log('✅ POPUP OK: ' + (res.user ? res.user.email : '?'));
+          busy = false;
+          return;
+        }catch(err){
+          log('❌ popup err: ' + (err.code || err.message));
+          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request')){
+            log('↪ fallback: redirect');
+            try{
+              await fb.authMod.signInWithRedirect(fb.auth, prov);
+              log('redirect запущен');
+            }catch(e2){ log('redirect err: ' + (e2.code || e2.message)); }
+          }
+        }
+      }catch(err){
+        log('❌ общая: ' + (err.code || err.message));
+      } finally {
+        busy = false;
+      }
+    }, true); // capture: true — на window это ПЕРВЫЙ из всех
+
+    // ═══════════════════════════════════════════════
+    // После успешного входа — грузим профиль
+    // ═══════════════════════════════════════════════
+    fb.authMod.onAuthStateChanged(fb.auth, async function(user){
+      log('onAuthState: ' + (user ? user.email : 'null'));
+      if(!user){ log('user null — на логине'); return; }
+
+      log('👤 user есть, грузим профиль');
+      try{
+        var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
+        var snap = await fb.dbMod.get(ref);
+
+        if(!snap.exists()){
+          log('⚠ профиль новый — создаём');
+          var cRef = fb.dbMod.ref(fb.db, 'counter/playerId');
+          var tx = await fb.dbMod.runTransaction(cRef, function(c){ return (c||0) + 1; });
+          var newId = String(tx.snapshot.val()).padStart(9, '0');
+          var defP = {
+            playerId: newId, name: user.displayName || 'Игрок', avatar: 0,
+            balance: 200, inventory: [], stats: { cases: 0, upgrades: 0 },
+            friends: [], friendRequests: [], incomingTransfers: [],
+            lastNickChange: 0, language: 'ru', accent: 'crimson',
+            bonus: { day: 0, lastClaim: 0 }, devMode: false,
+            onboarded: false, createdAt: Date.now()
+          };
+          await fb.dbMod.set(ref, defP);
+          await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId), user.uid);
+          if(window._v11){ _v11.profile = defP; _v11.uid = user.uid; _v11.playerId = newId; }
+          if(window.SD){ SD.profile = defP; SD.uid = user.uid; SD.playerId = newId; }
+          var l = document.getElementById('loginScreen');
+          var o = document.getElementById('onboardScreen');
+          var a = document.getElementById('app');
+          if(l){ l.classList.add('hidden'); l.style.display = 'none'; }
+          if(o){ o.classList.remove('hidden'); o.style.display = 'flex'; }
+          if(a) a.style.display = 'none';
+          var oid = document.getElementById('onboardId');
+          if(oid) oid.textContent = newId;
+          log('✅ онбординг показан, ID=' + newId);
+          return;
+        }
+
+        var data = snap.val();
+        log('профиль загружен, ID=' + data.playerId);
+
+        function toArr(v){
+          if(!v) return [];
+          if(Array.isArray(v)) return v.filter(Boolean);
+          if(typeof v === 'object') return Object.keys(v).sort(function(a,b){ return a-b; }).map(function(k){ return v[k]; }).filter(Boolean);
+          return [];
+        }
+        data.inventory = toArr(data.inventory);
+        data.friends = toArr(data.friends);
+        data.friendRequests = toArr(data.friendRequests);
+        data.incomingTransfers = toArr(data.incomingTransfers);
+
+        if(window._v11){ _v11.profile = data; _v11.uid = user.uid; _v11.playerId = data.playerId; }
+        if(window.SD){ SD.profile = data; SD.uid = user.uid; SD.playerId = data.playerId; }
+
+        var l2 = document.getElementById('loginScreen');
+        var o2 = document.getElementById('onboardScreen');
+        var a2 = document.getElementById('app');
+        if(l2){ l2.classList.add('hidden'); l2.style.display = 'none'; }
+        if(o2){ o2.classList.add('hidden'); o2.style.display = 'none'; }
+        if(a2) a2.style.display = '';
+
+        if(data.onboarded){
+          log('✅ показываем APP');
+          try{ if(window.goScreen) goScreen('home'); }catch(e){}
+        } else {
+          log('⚠ нужен онбординг');
+          if(o2){ o2.classList.remove('hidden'); o2.style.display = 'flex'; }
+          if(a2) a2.style.display = 'none';
+          var oid2 = document.getElementById('onboardId');
+          if(oid2) oid2.textContent = data.playerId;
+        }
+      }catch(e){
+        log('❌ profile err: ' + (e.code || e.message));
+      }
+    });
+
+    log('✅ v16 активен');
+  });
+})();
+</script>
 </body>
 </html>
 
