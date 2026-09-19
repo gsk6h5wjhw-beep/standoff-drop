@@ -7098,6 +7098,1406 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   setTimeout(fix, 5000);
 })();
 </script>
+<script>
+/* v12 — единое делегирование, сносим все конфликты */
+(function(){
+  console.log('🚀 v12 инициализация...');
+
+  // ====== СНАЧАЛА: снимаем ВСЕ старые обработчики с кнопок ======
+  function stripHandlers(selector){
+    document.querySelectorAll(selector).forEach(function(el){
+      var fresh = el.cloneNode(true);
+      el.parentNode.replaceChild(fresh, el);
+    });
+  }
+
+  // ====== Хелперы ======
+  function $(id){ return document.getElementById(id); }
+  function toArr(v){
+    if(!v) return [];
+    if(Array.isArray(v)) return v.filter(Boolean);
+    if(typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);
+    return [];
+  }
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, function(m){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+  }
+  function V(){ return window._v11 || {}; }
+  function PROFILE(){ return (window._v11 && _v11.profile) || window.SD && SD.profile || null; }
+
+  // ====== Главный роутер экранов ======
+  function goScreen(name){
+    if(name === 'transfer'){
+      if(window._v11){ _v11.playersTab = 'transfer'; _v11.transferTab = 'send'; }
+      name = 'players';
+    }
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+    var t = $('screen-' + name);
+    if(t) t.classList.add('active');
+
+    var navKey = name;
+    if(['inventory','settings','bonus','topup','players'].indexOf(name) > -1) navKey = 'profile';
+    if(name === 'roulette') navKey = 'games';
+    document.querySelectorAll('#bottomNav .nav-item').forEach(function(i){
+      i.classList.toggle('active', i.dataset.nav === navKey);
+    });
+    window.scrollTo(0,0);
+    renderScreen(name);
+  }
+  window.goScreen = goScreen;
+
+  // ====== Рендеры с fallback ======
+  function renderScreen(name){
+    try{
+      if(name === 'home') renderHome();
+      else if(name === 'cases') renderCases();
+      else if(name === 'inventory') renderInventory();
+      else if(name === 'profile') renderProfile();
+      else if(name === 'settings') renderSettings();
+      else if(name === 'bonus') renderBonus();
+      else if(name === 'players') renderPlayers();
+      else if(name === 'upgrade') renderUpgrade();
+      else if(name === 'roulette') renderRoulette();
+    }catch(e){ console.error('render ' + name + ':', e); }
+  }
+
+  // ====== Рендер: Главная ======
+  function renderHome(){
+    var box = $('homeCases'); if(!box) return;
+    if(!window.SD || !SD.CASES) return;
+    box.innerHTML = SD.CASES.slice(0,6).map(caseCard).join('');
+  }
+  function caseCard(c){
+    var prem = c.tier === 'premium';
+    return '<div class="case-card '+(prem?'premium':'')+'" data-case-id="'+c.id+'">'+
+      '<div class="case-img"><img src="'+c.img+'" alt=""></div>'+
+      '<div class="case-name">'+esc(c.name)+'</div>'+
+      '<div class="case-price">'+c.price.toLocaleString('ru-RU')+'</div>'+
+    '</div>';
+  }
+
+  // ====== Рендер: Кейсы ======
+  function renderCases(){
+    var box = $('allCases'); if(!box) return;
+    if(!window.SD || !SD.CASES) return;
+    var f = (window._v11 && _v11.casesFilter) || 'all';
+    var list = SD.CASES.filter(function(c){ return f === 'all' || c.tier === f; });
+    var cnt = $('casesCount');
+    if(cnt) cnt.textContent = list.length;
+    box.innerHTML = list.map(caseCard).join('');
+  }
+
+  // ====== Рендер: Инвентарь ======
+  function renderInventory(){
+    var grid = $('inventoryGrid'); if(!grid) return;
+    var p = PROFILE();
+    var inv = toArr(p && p.inventory);
+    var f = (window._v11 && _v11.invFilter) || 'all';
+    var list = inv;
+    if(f === 'skin') list = inv.filter(function(s){ return s.t === 'skin' || !s.t; });
+    else if(f === 'knife') list = inv.filter(function(s){ return s.t === 'knife'; });
+    else if(f === 'gloves') list = inv.filter(function(s){ return s.t === 'gloves'; });
+
+    var cnt = $('invCountLabel');
+    if(cnt) cnt.textContent = list.length + ' шт.';
+
+    if(!list.length){
+      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div><div>Инвентарь пуст</div><div class="muted mt-8">Открой кейс, чтобы получить скин</div></div>';
+      return;
+    }
+    grid.innerHTML = list.map(function(s){
+      var price = s.received ? Math.round((s.p||0)*0.8) : Math.round(s.p||0);
+      var rc = (SD.rarityColor ? SD.rarityColor(s.r) : '#888');
+      return '<div class="inv-card" style="--rc:'+rc+'" data-inv-w="'+esc(s.w)+'" data-inv-s="'+esc(s.s)+'">'+
+        (s.received ? '<div class="ic-tag">−20%</div>' : '')+
+        '<img src="'+s.img+'" alt="">'+
+        '<div class="ic-rar">'+esc(s.r||'')+'</div>'+
+        '<div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
+        '<div class="ic-price">'+price+' G</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  // ====== Рендер: Профиль ======
+  function renderProfile(){
+    var p = PROFILE(); if(!p) return;
+    var avatarSrc = (function(a){
+      if(typeof a === 'number' && SD && SD.avatars && SD.avatars[a]) return SD.avatars[a];
+      if(typeof a === 'string' && a.length > 20) return a;
+      return SD && SD.avatars ? SD.avatars[0] : '';
+    })(p.avatar);
+
+    var pa = $('profileAvatar'); if(pa) pa.src = avatarSrc;
+    var pn = $('profileName'); if(pn) pn.textContent = p.name || 'Игрок';
+    var pid = $('profilePlayerId'); if(pid) pid.textContent = p.playerId || '000000000';
+    var pb = $('profileBalance'); if(pb) pb.textContent = Math.round(p.balance || 0).toLocaleString('ru-RU');
+    var sc = $('statCases'); if(sc) sc.textContent = (p.stats && p.stats.cases) || 0;
+    var su = $('statUpgrades'); if(su) su.textContent = (p.stats && p.stats.upgrades) || 0;
+    var sf = $('statFriends'); if(sf) sf.textContent = toArr(p.friends).length;
+    renderHeader();
+  }
+
+  // ====== Рендер: Шапка ======
+  function renderHeader(){
+    var p = PROFILE(); if(!p) return;
+    var hb = $('headerBalance');
+    if(hb) hb.textContent = Math.round(p.balance || 0).toLocaleString('ru-RU');
+    var ha = $('headerAvatar');
+    if(ha){
+      if(typeof p.avatar === 'number' && SD && SD.avatars && SD.avatars[p.avatar]) ha.src = SD.avatars[p.avatar];
+      else if(typeof p.avatar === 'string' && p.avatar.length > 20) ha.src = p.avatar;
+      else if(SD && SD.avatars) ha.src = SD.avatars[0];
+    }
+  }
+
+  // ====== Рендер: Настройки ======
+  function renderSettings(){
+    var p = PROFILE(); if(!p) return;
+    var ac = (window._v11 && _v11.accent) || 'crimson';
+    document.querySelectorAll('#accentPicker .accent-dot').forEach(function(d){
+      d.classList.toggle('active', d.dataset.accent === ac);
+    });
+    var lg = (window._v11 && _v11.lang) || 'ru';
+    document.querySelectorAll('.lang-btn').forEach(function(b){
+      b.classList.toggle('active', b.dataset.lang === lg);
+    });
+    var n = $('settingsNickname');
+    if(n) n.value = p.name || '';
+    var box = $('settingsAvatars');
+    if(box){
+      var cur = typeof p.avatar === 'number' ? p.avatar : 0;
+      box.innerHTML = (SD.avatars || []).map(function(src,i){
+        return '<button type="button" class="avatar-choice '+(i===cur?'active':'')+'" data-sav="'+i+'"><img src="'+src+'" alt=""></button>';
+      }).join('');
+    }
+  }
+
+  // ====== Рендер: Бонусы ======
+  var BONUS = [10,50,100,150,200,300,350,400,450,500];
+  function renderBonus(){
+    var p = PROFILE(); if(!p) return;
+    var box = $('bonusDays'); if(!box) return;
+    var day = (p.bonus && p.bonus.day) || 0;
+    var last = (p.bonus && p.bonus.lastClaim) || 0;
+    var today = new Date().toDateString();
+    var claimed = last && new Date(last).toDateString() === today;
+
+    box.innerHTML = BONUS.slice(0,5).map(function(r,i){
+      var d = i + 1;
+      var cl = day >= d;
+      var td = (day === d - 1 || (day === 0 && d === 1)) && !claimed && day < 10;
+      return '<div class="bonus-day '+(cl?'claimed ':'')+(td?'today':'')+'">'+
+        '<span class="bd-num">День '+d+'</span>'+
+        '<span class="bd-val">'+r+' G</span>'+
+      '</div>';
+    }).join('');
+
+    var btn = $('bonusTakeBtn');
+    if(btn){
+      if(claimed){ btn.disabled = true; btn.textContent = 'Приходи завтра'; }
+      else { btn.disabled = false; btn.textContent = '🎁 ЗАБРАТЬ БОНУС (+'+(BONUS[Math.min(day,9)]||10)+' G)'; }
+    }
+  }
+
+  // ====== Рендер: Игроки ======
+  function renderPlayers(){
+    var p = PROFILE(); if(!p) return;
+    var mid = $('myPlayerId');
+    if(mid) mid.textContent = p.playerId || '000000000';
+
+    // Друзья
+    var fl = $('friendsList');
+    if(fl){
+      var friends = toArr(p.friends);
+      if(!friends.length){
+        fl.innerHTML = '<div class="inv-empty"><div class="ie-emoji">👥</div><div>Пока нет друзей</div></div>';
+      } else {
+        fl.innerHTML = friends.map(function(x){
+          var av = (typeof x.avatar === 'number' && SD && SD.avatars) ? SD.avatars[x.avatar] : (SD && SD.avatars ? SD.avatars[0] : '');
+          return '<div class="friend-row"><div class="friend-avatar"><img src="'+av+'"></div>'+
+            '<div class="friend-info"><b>'+esc(x.name||'Игрок')+'</b><span>ID: '+esc(x.playerId||'—')+'</span></div></div>';
+        }).join('');
+      }
+    }
+
+    // Скины для передачи
+    var tsl = $('transferSkinsList');
+    if(tsl){
+      var inv = toArr(p.inventory);
+      var avail = inv.filter(function(s){ return !s.received; });
+      var selected = (window._v11 && _v11.transferSelected) || [];
+      if(!avail.length){
+        tsl.innerHTML = '<div class="inv-empty" style="grid-column:1/-1;padding:20px;font-size:13px">Инвентарь пуст</div>';
+      } else {
+        tsl.innerHTML = avail.map(function(s){
+          var idx = inv.indexOf(s);
+          var sel = selected.indexOf(idx) > -1;
+          return '<div class="transfer-skin '+(sel?'selected':'')+'" data-ts-idx="'+idx+'">'+
+            '<img src="'+s.img+'">'+
+            '<div class="ts-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
+          '</div>';
+        }).join('');
+      }
+      var cnt = $('transferSelectedCount');
+      if(cnt) cnt.textContent = '('+selected.length+'/5)';
+      var sb = $('sendTransferBtn');
+      if(sb) sb.disabled = !selected.length;
+    }
+
+    // Входящие
+    var itl = $('incomingTransfersList');
+    if(itl){
+      var list = toArr(p.incomingTransfers);
+      if(!list.length){
+        itl.innerHTML = '<div class="inv-empty" style="padding:60px 20px"><div class="ie-emoji">📭</div><div>Вам пока ничего не отправляли</div></div>';
+      } else {
+        itl.innerHTML = list.map(function(tr){
+          return '<div class="settings-block"><div style="font-weight:900;margin-bottom:8px">От: '+esc(tr.fromName||'Игрок')+'</div>'+
+            '<div class="row"><button class="btn btn-primary btn-sm" data-accept-tr="'+esc(tr.transferId)+'">Принять</button>'+
+            '<button class="btn btn-ghost btn-sm" data-decline-tr="'+esc(tr.transferId)+'">Отклонить</button></div></div>';
+        }).join('');
+      }
+    }
+  }
+
+  // ====== Рендер: UPGRADE ======
+  function renderUpgrade(){
+    var V = window._v11 || {};
+    var sImg = $('upSourceImg'), tImg = $('upTargetImg');
+    var sEmp = $('upSourceEmpty'), tEmp = $('upTargetEmpty');
+    var sSlot = $('upSourceSlot'), tSlot = $('upTargetSlot');
+
+    if(V.upSource){
+      if(sImg){ sImg.src = V.upSource.img; sImg.style.display = 'block'; }
+      if(sEmp) sEmp.style.display = 'none';
+      if(sSlot) sSlot.classList.add('filled');
+    } else {
+      if(sImg) sImg.style.display = 'none';
+      if(sEmp) sEmp.style.display = '';
+      if(sSlot) sSlot.classList.remove('filled');
+    }
+    if(V.upTarget){
+      if(tImg){ tImg.src = V.upTarget.img; tImg.style.display = 'block'; }
+      if(tEmp) tEmp.style.display = 'none';
+      if(tSlot) tSlot.classList.add('filled');
+    } else {
+      if(tImg) tImg.style.display = 'none';
+      if(tEmp) tEmp.style.display = '';
+      if(tSlot) tSlot.classList.remove('filled');
+    }
+    refreshChance();
+  }
+
+  function refreshChance(){
+    var V = window._v11 || {};
+    var cv = $('upChanceVal');
+    if(!V.upSource || !V.upTarget){
+      if(cv) cv.textContent = '0%';
+      var lbl = $('upgradeChanceLabel'); if(lbl) lbl.textContent = '—';
+      return;
+    }
+    var srcP = V.upSource.received ? V.upSource.p*0.8 : V.upSource.p;
+    var tgtP = V.upTarget.p;
+    var base = Math.min(92, (srcP/tgtP)*100);
+    var maxAdd = Math.max(0, 92 - base);
+    var add = Math.min(V.upAdd || 0, maxAdd);
+    var chance = base + add;
+
+    if(cv) cv.textContent = chance.toFixed(2) + '%';
+    var lbl = $('upgradeChanceLabel'); if(lbl) lbl.textContent = 'Шанс: ' + chance.toFixed(2) + '%';
+    var addG = Math.round(tgtP * (add/100));
+    var av = $('upAddVal'); if(av) av.textContent = '+' + addG + ' G';
+
+    // Слайдер
+    var slider = $('upSlider');
+    if(slider){
+      slider.max = Math.max(1, Math.round(maxAdd));
+      slider.value = Math.min(V.upAdd || 0, maxAdd);
+      var fill = (slider.value / Math.max(1, slider.max)) * 100;
+      slider.style.setProperty('--fill', fill + '%');
+    }
+
+    // Дуга
+    var path = $('upChanceArc');
+    if(path){
+      var p = Math.max(0, Math.min(100, chance));
+      if(p < 0.01){ path.setAttribute('d', ''); }
+      else {
+        var cx=130, cy=130, r=108;
+        var half = (p*3.6)/2;
+        var sA = (90+half)*Math.PI/180, eA = (90-half)*Math.PI/180;
+        var x1 = cx+r*Math.cos(sA), y1 = cy+r*Math.sin(sA);
+        var x2 = cx+r*Math.cos(eA), y2 = cy+r*Math.sin(eA);
+        var large = p > 50 ? 1 : 0;
+        path.setAttribute('d', 'M '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 0 '+x2+' '+y2);
+      }
+    }
+  }
+  window.refreshChance = refreshChance;
+
+  // ====== Рендер: Рулетка ======
+  function renderRoulette(){
+    var price = $('roulettePriceVal');
+    if(price) price.textContent = '100 G';
+  }
+
+  // ====== ВСЁ ДЕЛЕГИРОВАНИЕ ======
+  document.addEventListener('click', function(e){
+    var t = e.target;
+
+    // ===== Нижняя навигация =====
+    var nav = t.closest('#bottomNav .nav-item');
+    if(nav && nav.dataset.nav){
+      e.preventDefault(); e.stopImmediatePropagation();
+      goScreen(nav.dataset.nav);
+      return;
+    }
+
+    // ===== Логотип (1 тап = главная, 17 = dev) =====
+    var logo = t.closest('#mainLogo');
+    if(logo){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(!logo._t12) logo._t12 = 0;
+      logo._t12++;
+      clearTimeout(logo._t12t);
+      if(logo._t12 >= 17){
+        logo._t12 = 0;
+        if(SD.openModal) SD.openModal('devCodeModal');
+        return;
+      }
+      if(logo._t12 === 1) goScreen('home');
+      logo._t12t = setTimeout(function(){ logo._t12 = 0; }, 3000);
+      return;
+    }
+
+    // ===== Плюсик пополнения =====
+    if(t.closest('#headerPlus')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      openModal('topupModal');
+      return;
+    }
+
+    // ===== Быстрые кнопки (.quick-btn) =====
+    var qb = t.closest('.quick-btn');
+    if(qb){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var oc = qb.getAttribute('onclick') || '';
+      var m = oc.match(/SD\.go\(['"]([^'"]+)['"]\)/);
+      if(m) goScreen(m[1]);
+      // Если это пресет суммы — обрабатываем ниже
+      if(qb.dataset.amount){
+        var target = qb.closest('#topupModal') ? 'topupModalAmount' : 'topupAmount';
+        var inp = $(target);
+        if(inp) inp.value = qb.dataset.amount;
+      }
+      return;
+    }
+
+    // ===== Меню профиля (.pm-item) =====
+    var pm = t.closest('.pm-item');
+    if(pm){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var oc = pm.getAttribute('onclick') || '';
+      if(oc.indexOf('SD.support') > -1){
+        window.open('https://t.me/dev_so_drop', '_blank');
+        return;
+      }
+      if(oc.indexOf('SD.logout') > -1){
+        if(window.SD && SD.logout) SD.logout();
+        return;
+      }
+      var m2 = oc.match(/SD\.go\(['"]([^'"]+)['"]\)/);
+      if(m2) goScreen(m2[1]);
+      return;
+    }
+
+    // ===== Фильтры инвентаря =====
+    var invf = t.closest('#invFilters .inv-filter');
+    if(invf){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(window._v11) _v11.invFilter = invf.dataset.ifilter;
+      document.querySelectorAll('#invFilters .inv-filter').forEach(function(b){
+        b.classList.toggle('active', b === invf);
+      });
+      renderInventory();
+      return;
+    }
+
+    // ===== Фильтры кейсов =====
+    var cf = t.closest('#casesFilters .inv-filter');
+    if(cf){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(window._v11) _v11.casesFilter = cf.dataset.filter;
+      document.querySelectorAll('#casesFilters .inv-filter').forEach(function(b){
+        b.classList.toggle('active', b === cf);
+      });
+      renderCases();
+      return;
+    }
+
+    // ===== Язык =====
+    var lang = t.closest('.lang-btn');
+    if(lang){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(window._v11) _v11.lang = lang.dataset.lang;
+      if(window.SD) SD.lang = lang.dataset.lang;
+      document.querySelectorAll('.lang-btn').forEach(function(b){
+        b.classList.toggle('active', b.dataset.lang === lang.dataset.lang);
+      });
+      if(SD && SD.applyI18n) SD.applyI18n();
+      return;
+    }
+
+    // ===== Акцент =====
+    var acc = t.closest('#accentPicker .accent-dot');
+    if(acc){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var name = acc.dataset.accent;
+      if(window._v11) _v11.accent = name;
+      if(window.SD) SD.accent = name;
+      document.documentElement.setAttribute('data-accent', name);
+      document.querySelectorAll('#accentPicker .accent-dot').forEach(function(d){
+        d.classList.toggle('active', d.dataset.accent === name);
+      });
+      return;
+    }
+
+    // ===== Аватар в настройках =====
+    var sav = t.closest('#settingsAvatars .avatar-choice');
+    if(sav){
+      e.preventDefault(); e.stopImmediatePropagation();
+      document.querySelectorAll('#settingsAvatars .avatar-choice').forEach(function(b){
+        b.classList.remove('active');
+      });
+      sav.classList.add('active');
+      return;
+    }
+
+    // ===== Сохранить настройки профиля =====
+    if(t.closest('#saveProfileSettings')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      saveProfile();
+      return;
+    }
+
+    // ===== Кнопка «Начать играть» =====
+    if(t.closest('#onboardSave')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doFinishOnboard();
+      return;
+    }
+
+    // ===== Аватар в онбординге =====
+    var av = t.closest('#onboardAvatars .avatar-choice');
+    if(av){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(window._v11) _v11.onboardAvatar = +av.dataset.av;
+      document.querySelectorAll('#onboardAvatars .avatar-choice').forEach(function(b){
+        b.classList.toggle('active', b === av);
+      });
+      return;
+    }
+
+    // ===== Google Login =====
+    if(t.closest('#googleLoginBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doGoogleLogin();
+      return;
+    }
+
+    // ===== Копирование ID =====
+    if(t.closest('#profileCopyId')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var pid = ($('profilePlayerId') || {}).textContent || '';
+      navigator.clipboard.writeText(pid).then(function(){ alert('ID скопирован: ' + pid); });
+      return;
+    }
+    if(t.closest('#copyMyId')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var mid = ($('myPlayerId') || {}).textContent || '';
+      navigator.clipboard.writeText(mid).then(function(){ alert('ID скопирован: ' + mid); });
+      return;
+    }
+    if(t.closest('#onboardCopyId')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var oid = ($('onboardId') || {}).textContent || '';
+      navigator.clipboard.writeText(oid).then(function(){ alert('ID скопирован: ' + oid); });
+      return;
+    }
+
+    // ===== Пополнение =====
+    if(t.closest('#topupModalConfirm')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var a = parseInt(($('topupModalAmount') || {}).value, 10);
+      doTopup(a, true);
+      return;
+    }
+    if(t.closest('#topupConfirmBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var a2 = parseInt(($('topupAmount') || {}).value, 10);
+      doTopup(a2, false);
+      return;
+    }
+    if(t.closest('#profileTopupBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      goScreen('topup');
+      return;
+    }
+
+    // ===== Бонус =====
+    if(t.closest('#bonusTakeBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doClaimBonus();
+      return;
+    }
+
+    // ===== Апгрейд — слайдер =====
+    var slider = t.closest('#upSlider');
+    if(slider) return; // слайдер сам обрабатывает через input
+
+    // ===== Пресеты апгрейда =====
+    var pr = t.closest('.upgrade-presets button');
+    if(pr && pr.dataset.add !== undefined){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(window._v11) _v11.upAdd = +pr.dataset.add;
+      refreshChance();
+      return;
+    }
+
+    // ===== Кнопка ПРОКАЧАТЬ =====
+    if(t.closest('#upgradeBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doUpgrade();
+      return;
+    }
+
+    // ===== Слоты апгрейда =====
+    if(t.closest('#upSourceSlot')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      openPickSource();
+      return;
+    }
+    if(t.closest('#upTargetSlot')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(!window._v11 || !_v11.upSource){ alert('Сначала выберите свой предмет'); return; }
+      openPickTarget();
+      return;
+    }
+
+    // ===== Карточка скина (инвентарь) =====
+    var ic = t.closest('.inv-card[data-inv-w]');
+    if(ic){
+      e.preventDefault(); e.stopImmediatePropagation();
+      openSkinCard(ic.dataset.invW, ic.dataset.invS);
+      return;
+    }
+
+    // ===== Кейс — открыть =====
+    var cc = t.closest('.case-card[data-case-id]');
+    if(cc){
+      e.preventDefault(); e.stopImmediatePropagation();
+      openCase(cc.dataset.caseId);
+      return;
+    }
+
+    // ===== Кнопка количества =====
+    var cnt = t.closest('.count-btn');
+    if(cnt && cnt.parentNode && cnt.parentNode.id === 'caseCountRow'){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var v = parseInt(cnt.textContent, 10) || 1;
+      if(window._v11) _v11.currentCount = v;
+      cnt.parentNode.querySelectorAll('.count-btn').forEach(function(b){ b.classList.remove('active'); });
+      cnt.classList.add('active');
+      updateCaseBtn();
+      return;
+    }
+
+    // ===== Открыть кейс =====
+    if(t.closest('#caseOpenBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doOpenCase();
+      return;
+    }
+
+    // ===== Результат: В инвентарь / Открыть ещё / Продать =====
+    if(t.closest('#srInvBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      if(SD && SD.ok) SD.ok('Добавлено', '', '');
+      return;
+    }
+    if(t.closest('#srAgainBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var box = $('spinResult'); if(box) box.classList.remove('show');
+      var sa = $('spinArea'); if(sa) sa.classList.remove('show');
+      var ob = $('caseOpenBtn'); if(ob){ ob.style.display = ''; updateCaseBtn(); }
+      return;
+    }
+    if(t.closest('#srSellBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      // продадим первый скин из инвентаря
+      return;
+    }
+
+    // ===== Табы игроков =====
+    var pt = t.closest('#playersTabs button');
+    if(pt){
+      e.preventDefault(); e.stopImmediatePropagation();
+      document.querySelectorAll('#playersTabs button').forEach(function(b){ b.classList.remove('active'); });
+      pt.classList.add('active');
+      var tab = pt.dataset.tab;
+      var pf = $('playersFriends'), ptr = $('playersTransfer');
+      if(pf) pf.classList.toggle('hide', tab !== 'friends');
+      if(ptr) ptr.classList.toggle('hide', tab !== 'transfer');
+      return;
+    }
+    var tt = t.closest('#transferTabs button');
+    if(tt){
+      e.preventDefault(); e.stopImmediatePropagation();
+      document.querySelectorAll('#transferTabs button').forEach(function(b){ b.classList.remove('active'); });
+      tt.classList.add('active');
+      var tab2 = tt.dataset.ttab;
+      var ts = $('transferSend'), tr2 = $('transferReceive');
+      if(ts) ts.classList.toggle('hide', tab2 !== 'send');
+      if(tr2) tr2.classList.toggle('hide', tab2 !== 'receive');
+      return;
+    }
+
+    // ===== Добавить друга =====
+    if(t.closest('#addFriendBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doAddFriend();
+      return;
+    }
+    if(t.closest('#sendTransferBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doSendTransfer();
+      return;
+    }
+
+    // ===== Выбор скина для передачи =====
+    var tsk = t.closest('.transfer-skin[data-ts-idx]');
+    if(tsk){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var i = +tsk.dataset.tsIdx;
+      if(!window._v11) return;
+      if(!_v11.transferSelected) _v11.transferSelected = [];
+      var pos = _v11.transferSelected.indexOf(i);
+      if(pos > -1) _v11.transferSelected.splice(pos, 1);
+      else if(_v11.transferSelected.length < 5) _v11.transferSelected.push(i);
+      renderPlayers();
+      return;
+    }
+
+    // ===== Кнопка рулетки =====
+    if(t.closest('#spinRouletteBtn')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      doSpinRoulette();
+      return;
+    }
+
+    // ===== Dev-код =====
+    if(t.closest('#devCodeConfirm')){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var v = ($('devCodeInput') || {}).value || '';
+      if(v.trim() !== '5568228660007'){ alert('Неверный код'); return; }
+      if(window._v11) _v11.devMode = true;
+      if(window.SD) SD.devMode = true;
+      closeModal('devCodeModal');
+      alert('Режим разработчика активирован');
+      ['devCaseToggle','devUpgradeToggle','devRouletteToggle'].forEach(function(id){
+        var el = $(id); if(el) el.classList.add('show');
+      });
+      return;
+    }
+
+    // ===== Закрытие модалок =====
+    var sc = t.closest('.sheet-close');
+    if(sc && sc.dataset.close){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var m = $(sc.dataset.close);
+      if(m) m.classList.remove('show');
+      return;
+    }
+    if(t.classList && t.classList.contains('modal-back')){
+      t.classList.remove('show');
+      return;
+    }
+  }, true);
+
+  // ===== Слайдер апгрейда — отдельный обработчик =====
+  document.addEventListener('input', function(e){
+    if(e.target && e.target.id === 'upSlider'){
+      if(window._v11) _v11.upAdd = +e.target.value;
+      refreshChance();
+    }
+  }, true);
+
+  // ====== Действия ======
+  function openModal(id){ var m = $(id); if(m) m.classList.add('show'); }
+  function closeModal(id){ var m = $(id); if(m) m.classList.remove('show'); }
+
+  async function doGoogleLogin(){
+    try{
+      var fb = window.__fb;
+      if(!fb){ alert('Firebase ещё загружается, подожди 2 сек'); return; }
+      var prov = new fb.authMod.GoogleAuthProvider();
+      prov.setCustomParameters({ prompt: 'select_account' });
+      try{ await fb.authMod.setPersistence(fb.auth, fb.authMod.browserSessionPersistence); }catch(e){}
+      var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if(isMobile){
+        await fb.authMod.signInWithRedirect(fb.auth, prov);
+      } else {
+        try{ await fb.authMod.signInWithPopup(fb.auth, prov); }
+        catch(err){
+          if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user')){
+            await fb.authMod.signInWithRedirect(fb.auth, prov);
+          } else throw err;
+        }
+      }
+    }catch(e){
+      console.error('google login:', e);
+      alert('Ошибка входа: ' + (e.code || e.message || 'неизвестная'));
+    }
+  }
+
+  async function doFinishOnboard(){
+    var nEl = $('onboardName');
+    var name = (nEl && nEl.value || '').trim();
+    if(!name){ alert('Введите ник'); return; }
+    if(name.length < 2){ alert('Ник слишком короткий'); return; }
+
+    var uid = null;
+    try{
+      if(window._v11 && _v11.uid) uid = _v11.uid;
+      else if(window.SD && SD.uid) uid = SD.uid;
+      else if(window.__fb && __fb.auth && __fb.auth.currentUser) uid = __fb.auth.currentUser.uid;
+    }catch(e){}
+
+    if(!uid){ alert('Сессия потеряна. Войдите заново.'); location.reload(); return; }
+
+    var avatar = (window._v11 && _v11.onboardAvatar) || 0;
+    var btn = $('onboardSave');
+    if(btn){ btn.disabled = true; btn.textContent = 'Сохранение...'; }
+
+    try{
+      var fb = window.__fb;
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), {
+        name: name.slice(0,20),
+        avatar: avatar,
+        onboarded: true
+      });
+      if(window._v11 && _v11.profile){ _v11.profile.name = name; _v11.profile.avatar = avatar; _v11.profile.onboarded = true; }
+      if(window.SD && SD.profile){ SD.profile.name = name; SD.profile.avatar = avatar; SD.profile.onboarded = true; }
+
+      var ob = $('onboardScreen'); if(ob) ob.classList.add('hidden');
+      var lg = $('loginScreen'); if(lg) lg.classList.add('hidden');
+      var ap = $('app'); if(ap) ap.style.display = '';
+
+      renderHome(); renderProfile();
+      alert('✅ Добро пожаловать, ' + name + '!');
+    }catch(e){
+      console.error('finishOnboard:', e);
+      alert('Ошибка: ' + (e.code || e.message || 'неизвестная'));
+      if(btn){ btn.disabled = false; btn.textContent = 'Начать играть'; }
+    }
+  }
+
+  async function saveProfile(){
+    var p = PROFILE(); if(!p) return;
+    var nEl = $('settingsNickname');
+    var newName = (nEl && nEl.value || '').trim();
+    if(!newName){ alert('Введите ник'); return; }
+    var isChanged = newName !== (p.name || '');
+    var last = p.lastNickChange || 0;
+    var cool = 30 * 24 * 3600 * 1000;
+    if(isChanged && last && (Date.now() - last) < cool){
+      var left = Math.ceil((cool - (Date.now() - last)) / (24 * 3600 * 1000));
+      alert('Смена ника через ' + left + ' дн.');
+      return;
+    }
+    var sel = document.querySelector('#settingsAvatars .avatar-choice.active');
+    var newAvatar = sel ? +sel.dataset.sav : p.avatar;
+
+    var upd = { avatar: newAvatar };
+    if(isChanged){ upd.name = newName.slice(0,20); upd.lastNickChange = Date.now(); }
+
+    try{
+      var fb = window.__fb;
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), upd);
+      if(window._v11 && _v11.profile) Object.assign(_v11.profile, upd);
+      if(window.SD && SD.profile) Object.assign(SD.profile, upd);
+      renderProfile(); renderSettings();
+      alert('Сохранено');
+    }catch(e){
+      alert('Ошибка: ' + (e.code || e.message || ''));
+    }
+  }
+
+  async function doTopup(amount, fromModal){
+    amount = parseInt(amount, 10);
+    if(!amount || amount < 500 || amount > 2000){
+      alert('Введите сумму от 500 до 2000');
+      return;
+    }
+    try{
+      var fb = window.__fb;
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      var p = PROFILE();
+      var newBal = Math.round((p.balance || 0) + amount);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: newBal });
+      if(window._v11 && _v11.profile) _v11.profile.balance = newBal;
+      if(window.SD && SD.profile) SD.profile.balance = newBal;
+      renderHeader(); renderProfile();
+      if(fromModal) closeModal('topupModal');
+      else { var a = $('topupAmount'); if(a) a.value = ''; }
+      if(SD && SD.ok) SD.ok('Пополнено', '+' + amount + ' G');
+    }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
+  }
+
+  async function doClaimBonus(){
+    var p = PROFILE(); if(!p) return;
+    var last = (p.bonus && p.bonus.lastClaim) || 0;
+    var today = new Date().toDateString();
+    if(last && new Date(last).toDateString() === today){
+      alert('Приходи завтра');
+      return;
+    }
+    var day = (p.bonus && p.bonus.day) || 0;
+    var hrs = last ? (Date.now() - last) / 3600000 : 0;
+    if(last && hrs > 48) day = 0;
+    var nd = Math.min(day + 1, 10);
+    var rw = BONUS[nd - 1] || 10;
+    var nb = Math.round((p.balance || 0) + rw);
+    var nb2 = { day: nd, lastClaim: Date.now() };
+
+    try{
+      var fb = window.__fb;
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: nb, bonus: nb2 });
+      if(window._v11 && _v11.profile){ _v11.profile.balance = nb; _v11.profile.bonus = nb2; }
+      if(window.SD && SD.profile){ SD.profile.balance = nb; SD.profile.bonus = nb2; }
+      renderHeader(); renderProfile(); renderBonus();
+      if(SD && SD.ok) SD.ok('Бонус получен', '+' + rw + ' G');
+    }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
+  }
+
+  async function doAddFriend(){
+    var inp = $('friendIdInput');
+    var id = (inp && inp.value || '').trim();
+    if(!/^\d{9}$/.test(id)){ alert('ID должен быть 9 цифр'); return; }
+    var p = PROFILE();
+    if(id === (p && p.playerId)){ alert('Нельзя добавить себя'); return; }
+    try{
+      var fb = window.__fb;
+      var uSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'playerIds/' + id));
+      if(!uSnap.exists()){ alert('Игрок не найден'); return; }
+      var targetUid = uSnap.val();
+      var req = toArr((await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + targetUid + '/friendRequests'))).val());
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      req.push({ uid: uid, name: p.name || 'Игрок', playerId: p.playerId, avatar: p.avatar || 0, ts: Date.now() });
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + targetUid), { friendRequests: req });
+      inp.value = '';
+      alert('Запрос отправлен');
+    }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
+  }
+
+  async function doSendTransfer(){
+    var inp = $('transferIdInput');
+    var id = (inp && inp.value || '').trim();
+    if(!/^\d{9}$/.test(id)){ alert('ID должен быть 9 цифр'); return; }
+    var V11 = window._v11;
+    if(!V11 || !V11.transferSelected || !V11.transferSelected.length){ alert('Выберите скины'); return; }
+    try{
+      var fb = window.__fb;
+      var uSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'playerIds/' + id));
+      if(!uSnap.exists()){ alert('Игрок не найден'); return; }
+      var targetUid = uSnap.val();
+      var p = PROFILE();
+      var inv = toArr(p.inventory);
+      var skins = V11.transferSelected.map(function(i){ return inv[i]; }).filter(Boolean);
+      if(!skins.length) return;
+      var trs = toArr((await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + targetUid + '/incomingTransfers'))).val());
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      trs.push({
+        from: uid, fromName: p.name, fromPlayerId: p.playerId,
+        skins: skins, transferId: 'tr-' + Date.now(), ts: Date.now()
+      });
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + targetUid), { incomingTransfers: trs });
+
+      var idxs = V11.transferSelected.slice().sort(function(a,b){ return b-a; });
+      var newInv = inv.slice();
+      idxs.forEach(function(i){ newInv.splice(i, 1); });
+      if(window._v11 && _v11.profile) _v11.profile.inventory = newInv;
+      if(window.SD && SD.profile) SD.profile.inventory = newInv;
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { inventory: newInv });
+      V11.transferSelected = [];
+      renderPlayers();
+      inp.value = '';
+      alert('Отправлено');
+    }catch(e){ alert('Ошибка: ' + (e.code || e.message || '')); }
+  }
+
+  function openSkinCard(w, s){
+    var p = PROFILE(); if(!p) return;
+    var inv = toArr(p.inventory);
+    var skin = inv.find(function(x){ return x.w === w && x.s === s; });
+    if(!skin) return;
+    var m = $('skinCardModal'); if(!m) return;
+    var price = skin.received ? Math.round((skin.p||0)*0.8) : Math.round(skin.p||0);
+    var rc = SD && SD.rarityColor ? SD.rarityColor(skin.r) : '#888';
+    $('skinCardBody').innerHTML =
+      '<div style="text-align:center;padding:14px 0">'+
+        '<img src="'+skin.img+'" style="width:220px;height:160px;object-fit:contain;display:block;margin:0 auto 8px">'+
+        '<div style="font-size:12px;font-weight:1000;color:'+rc+';text-transform:uppercase;margin-bottom:6px">'+esc(skin.r||'')+'</div>'+
+        '<div style="font-size:20px;font-weight:900;margin-bottom:12px">'+esc(skin.w)+' | '+esc(skin.s)+'</div>'+
+        '<div style="font-size:22px;font-weight:1000;color:var(--gold);margin-bottom:18px">'+price+' G</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+          '<button class="btn btn-gold" id="scSell">💰 Продать</button>'+
+          '<button class="btn btn-primary" id="scUp">⚡ Апгрейд</button>'+
+        '</div>'+
+      '</div>';
+    m.classList.add('show');
+
+    $('scSell').onclick = async function(){
+      await sellSkin(skin);
+      m.classList.remove('show');
+    };
+    $('scUp').onclick = function(){
+      if(window._v11){ _v11.upSource = skin; _v11.upAdd = 0; }
+      m.classList.remove('show');
+      goScreen('upgrade');
+    };
+  }
+
+  async function sellSkin(skin){
+    var p = PROFILE(); if(!p) return;
+    var inv = toArr(p.inventory);
+    var idx = -1;
+    for(var i=0;i<inv.length;i++){
+      if(inv[i].w === skin.w && inv[i].s === skin.s){ idx = i; break; }
+    }
+    if(idx < 0) return;
+    var it = inv[idx];
+    inv.splice(idx, 1);
+    var pr = it.received ? Math.round((it.p||0)*0.8) : Math.round(it.p||0);
+    var nb = Math.round((p.balance || 0) + pr);
+
+    if(window._v11 && _v11.profile){ _v11.profile.inventory = inv; _v11.profile.balance = nb; }
+    if(window.SD && SD.profile){ SD.profile.inventory = inv; SD.profile.balance = nb; }
+
+    try{
+      var fb = window.__fb;
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { inventory: inv, balance: nb });
+    }catch(e){ console.error('sell:', e); }
+
+    renderHeader(); renderInventory(); renderProfile();
+    if(SD && SD.ok) SD.ok('Продано', it.w + ' +' + pr + ' G', it.img);
+  }
+
+  function openCase(caseId){
+    if(!window.SD || !SD.CASES) return;
+    var c = SD.CASES.find(function(x){ return x.id === caseId; });
+    if(!c) return;
+    if(window._v11){ _v11.currentCase = c; _v11.currentCount = 1; }
+    $('caseModalImg').src = c.img;
+    $('caseModalTitle').textContent = c.name;
+    $('caseModalSub').textContent = c.items.length + ' предметов';
+
+    var row = $('caseCountRow');
+    row.innerHTML = '';
+    for(var i=1;i<=10;i++){
+      var b = document.createElement('button');
+      b.className = 'count-btn' + (i===1?' active':'');
+      b.textContent = i;
+      b.dataset.val = i;
+      row.appendChild(b);
+    }
+
+    var cont = $('caseContents');
+    if(cont){
+      cont.innerHTML = c.items.map(function(s){
+        var rc = SD.rarityColor ? SD.rarityColor(s.r) : '#888';
+        return '<div class="contents-item">'+
+          '<img src="'+s.img+'">'+
+          '<div class="ci-rar" style="color:'+rc+'">'+esc(s.r||'')+'</div>'+
+          '<div class="ci-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
+          '<div class="ci-price">'+Math.round(s.p||0)+' G</div>'+
+        '</div>';
+      }).join('');
+    }
+
+    updateCaseBtn();
+    ['spinArea','multiSpins','spinResult'].forEach(function(id){
+      var el = $(id); if(el){ el.classList.remove('show'); if(id!=='spinArea') el.innerHTML=''; }
+    });
+    $('caseOpenBtn').style.display = '';
+    openModal('caseModal');
+  }
+
+  function updateCaseBtn(){
+    var V = window._v11 || {};
+    var c = V.currentCase; if(!c) return;
+    var total = c.price * (V.currentCount || 1);
+    var b = $('caseOpenBtn');
+    var p = PROFILE();
+    if(b){
+      b.textContent = 'ОТКРЫТЬ ЗА ' + total.toLocaleString('ru-RU') + ' G';
+      b.disabled = !p || p.balance < total;
+    }
+  }
+
+  async function doOpenCase(){
+    var V = window._v11 || {};
+    var c = V.currentCase;
+    var p = PROFILE();
+    if(!c || !p) return;
+    var count = V.currentCount || 1;
+    var total = c.price * count;
+    if(p.balance < total){ alert('Недостаточно баланса'); return; }
+
+    var nb = Math.round(p.balance - total);
+    if(window._v11 && _v11.profile) _v11.profile.balance = nb;
+    if(window.SD && SD.profile) SD.profile.balance = nb;
+
+    try{
+      var fb = window.__fb;
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid + '/balance'), nb);
+      var prev = (p.stats && p.stats.cases) || 0;
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid + '/stats'), { cases: prev + count });
+    }catch(e){ console.error('open case:', e); }
+
+    renderHeader(); renderProfile();
+    $('caseOpenBtn').style.display = 'none';
+
+    var wins = [];
+    for(var i=0;i<count;i++){
+      wins.push(pickSkin(c));
+    }
+
+    // Добавляем все скины в инвентарь
+    var inv = toArr(p.inventory);
+    wins.forEach(function(w){
+      if(w) inv.push({
+        w: w.w, s: w.s, r: w.r, img: w.img, p: Math.round(w.p||0),
+        t: w.t || 'skin', id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+        received: false
+      });
+    });
+    if(window._v11 && _v11.profile) _v11.profile.inventory = inv;
+    if(window.SD && SD.profile) SD.profile.inventory = inv;
+    try{
+      var fb2 = window.__fb;
+      var uid2 = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      await fb2.dbMod.update(fb2.dbMod.ref(fb2.db, 'users/' + uid2), { inventory: inv });
+    }catch(e){}
+
+    // Показываем результаты
+    showSpinAnimation(wins, c);
+  }
+
+  function pickSkin(c){
+    var pool = c.items.filter(Boolean);
+    if(!pool.length) return null;
+    if(window._v11 && _v11.devMode){
+      return pool.reduce(function(a,b){ return a.p > b.p ? a : b; });
+    }
+    var RCH = { Common:56.78, Uncommon:37.85, Rare:3.79, Epic:1.42, Legendary:0.14, Arcane:0.02, Nameless:0.005 };
+    var groups = {};
+    pool.forEach(function(s){ (groups[s.r] = groups[s.r] || []).push(s); });
+    var entries = Object.keys(groups).map(function(r){
+      return { r:r, arr:groups[r], w:RCH[r] || 1 };
+    });
+    var tw = entries.reduce(function(s,e){ return s+e.w; }, 0);
+    var roll = Math.random() * tw;
+    var pick = entries[0];
+    for(var i=0;i<entries.length;i++){
+      roll -= entries[i].w;
+      if(roll <= 0){ pick = entries[i]; break; }
+    }
+    var arr = pick.arr;
+    var inner = arr.map(function(s){ return { s:s, w:1/Math.max(0.01, s.p) }; });
+    var ti = inner.reduce(function(s,x){ return s+x.w; }, 0);
+    var r2 = Math.random() * ti;
+    for(var j=0;j<inner.length;j++){
+      r2 -= inner[j].w;
+      if(r2 <= 0) return inner[j].s;
+    }
+    return arr[arr.length-1];
+  }
+
+  function showSpinAnimation(wins, c){
+    var sa = $('spinArea');
+    var track = $('spinTrack');
+    if(!sa || !track) return;
+    sa.classList.add('show');
+
+    var win = wins[0];
+    var ITEM_W = 126, WIN_IDX = 55, TOTAL = 65;
+    var pool = c.items.filter(Boolean);
+    var arr = [];
+    for(var i=0;i<TOTAL;i++){
+      arr.push(i === WIN_IDX ? win : pool[Math.floor(Math.random()*pool.length)]);
+    }
+    track.innerHTML = arr.map(function(s){
+      return '<div class="spin-item"><img src="'+s.img+'"><b>'+esc(s.w)+' | '+esc(s.s)+'</b></div>';
+    }).join('');
+
+    var viewportW = track.parentNode.clientWidth || 320;
+    var targetX = WIN_IDX * ITEM_W + (ITEM_W-8)/2 - viewportW/2;
+    var start = performance.now();
+    var DUR = 4200;
+    var lastIdx = -1;
+
+    track.style.transition = 'none';
+    track.style.transform = 'translateX(0)';
+
+    function frame(now){
+      var t = Math.min(1, (now-start)/DUR);
+      var e = 1 - Math.pow(1-t, 4);
+      var x = targetX * e;
+      track.style.transform = 'translateX(' + (-x) + 'px)';
+      var curIdx = Math.floor(x / ITEM_W);
+      if(curIdx !== lastIdx){
+        lastIdx = curIdx;
+        if(t < 0.96 && SD && SD.tickSound) SD.tickSound();
+      }
+      if(t < 1){ requestAnimationFrame(frame); }
+      else {
+        track.style.transform = 'translateX(' + (-targetX) + 'px)';
+        if(SD && SD.winSound) SD.winSound();
+        showResult(wins, c);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function showResult(wins, c){
+    var box = $('spinResult');
+    if(!box) return;
+    box.classList.add('show');
+
+    if(wins.length === 1){
+      var w = wins[0];
+      var rc = SD && SD.rarityColor ? SD.rarityColor(w.r) : '#888';
+      box.innerHTML =
+        '<div class="sr-label">ВЫПАЛО</div>'+
+        '<img src="'+w.img+'">'+
+        '<div class="sr-rar" style="color:'+rc+'">'+esc(w.r||'')+'</div>'+
+        '<div class="sr-name">'+esc(w.w)+' | '+esc(w.s)+'</div>'+
+        '<div class="sr-price">'+Math.round(w.p||0)+' G</div>'+
+        '<div class="sr-actions">'+
+          '<button class="sr-inv" id="srInvBtn">В инвентарь</button>'+
+          '<button class="sr-again" id="srAgainBtn">Открыть ещё</button>'+
+          '<button class="sr-sell" id="srSellBtn">Продать</button>'+
+        '</div>';
+      if(SD && SD.ok) SD.ok('Добавлено', w.w + ' | ' + w.s, w.img);
+    } else {
+      var total = wins.reduce(function(s,w){ return s + Math.round((w && w.p) || 0); }, 0);
+      box.innerHTML =
+        '<div class="sr-label">'+wins.length+' КЕЙСОВ</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0">'+
+        wins.map(function(w){
+          if(!w) return '';
+          var rc = SD && SD.rarityColor ? SD.rarityColor(w.r) : '#888';
+          return '<div style="padding:6px;background:var(--surface-2);border-radius:8px;text-align:center">'+
+            '<img src="'+w.img+'" style="width:100%;height:50px;object-fit:contain">'+
+            '<div style="font-size:9px;color:'+rc+'">'+esc(w.r||'')+'</div>'+
+          '</div>';
+        }).join('')+
+        '</div><div class="sr-price">+'+total+' G</div>'+
+        '<div class="sr-actions">'+
+          '<button class="sr-inv" id="srInvBtn">В инвентарь</button>'+
+          '<button class="sr-again" id="srAgainBtn">Открыть ещё</button>'+
+        '</div>';
+      if(SD && SD.ok) SD.ok('Добавлено', wins.length + ' скинов');
+    }
+    // Обработчики для кнопок результата
+    var ib = $('srInvBtn');
+    if(ib) ib.onclick = function(e){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var m = $('caseModal'); if(m) m.classList.remove('show');
+      goScreen('inventory');
+    };
+    var ab = $('srAgainBtn');
+    if(ab) ab.onclick = function(e){
+      e.preventDefault(); e.stopImmediatePropagation();
+      box.classList.remove('show');
+      var sa = $('spinArea'); if(sa) sa.classList.remove('show');
+      var ob = $('caseOpenBtn'); if(ob){ ob.style.display = ''; updateCaseBtn(); }
+    };
+    var sb = $('srSellBtn');
+    if(sb) sb.onclick = function(e){
+      e.preventDefault(); e.stopImmediatePropagation();
+      var p = PROFILE();
+      if(!p) return;
+      var inv = toArr(p.inventory);
+      var w0 = wins[0];
+      if(w0){
+        var it = inv.find(function(x){ return x.w === w0.w && x.s === w0.s; });
+        if(it) sellSkin(it);
+      }
+    };
+  }
+
+  async function doUpgrade(){
+    var V = window._v11 || {};
+    var p = PROFILE();
+    if(!V.upSource || !V.upTarget){ alert('Выберите предмет и цель'); return; }
+    if(!p) return;
+    var srcP = V.upSource.received ? (V.upSource.p * 0.8) : V.upSource.p;
+    var tgtP = V.upTarget.p;
+    if(tgtP <= srcP){ alert('Цель должна быть дороже'); return; }
+    var baseChance = Math.min(92, (srcP/tgtP)*100);
+    var maxAdd = Math.max(0, 92 - baseChance);
+    var addPct = Math.min(V.upAdd || 0, maxAdd);
+    var addG = Math.round(tgtP * (addPct/100));
+    if(addG > (p.balance || 0)){ alert('Недостаточно средств'); return; }
+    var chance = baseChance + addPct;
+    var win = V.devMode ? true : (Math.random()*100 < chance);
+
+    var nb = Math.round((p.balance || 0) - addG);
+    var inv = toArr(p.inventory);
+    var idx = -1;
+    for(var i=0;i<inv.length;i++){ if(inv[i].id === V.upSource.id){ idx = i; break; } }
+    if(idx > -1) inv.splice(idx, 1);
+
+    if(win){
+      inv.push(Object.assign({}, V.upTarget, {
+        id: 'inv-' + Date.now(), received: false, t: V.upTarget.t || 'skin'
+      }));
+    }
+
+    if(window._v11 && _v11.profile){ _v11.profile.balance = nb; _v11.profile.inventory = inv; }
+    if(window.SD && SD.profile){ SD.profile.balance = nb; SD.profile.inventory = inv; }
+
+    try{
+      var fb = window.__fb;
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: nb, inventory: inv });
+      var prev = (p.stats && p.stats.upgrades) || 0;
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid + '/stats'), { upgrades: prev + 1 });
+    }catch(e){ console.error('upgrade:', e); }
+
+    renderHeader(); renderInventory(); renderProfile();
+
+    if(win){
+      if(SD && SD.winSound) SD.winSound();
+      if(SD && SD.ok) SD.ok('Апгрейд удался!', V.upTarget.w + ' | ' + V.upTarget.s, V.upTarget.img);
+      V.upSource = V.upTarget; V.upTarget = null; V.upAdd = 0;
+    } else {
+      if(SD && SD.err) SD.err('Апгрейд не удался', 'Скин сгорел');
+      V.upSource = null; V.upTarget = null; V.upAdd = 0;
+    }
+    renderUpgrade();
+  }
+
+  function openPickSource(){
+    var p = PROFILE();
+    var grid = $('pickSourceGrid'); if(!grid || !p) return;
+    var inv = toArr(p.inventory);
+    if(!inv.length){
+      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div>Пусто</div>';
+    } else {
+      grid.innerHTML = inv.map(function(s, i){
+        var rc = SD && SD.rarityColor ? SD.rarityColor(s.r) : '#888';
+        return '<div class="inv-card" style="--rc:'+rc+'" data-picksrc="'+i+'">'+
+          '<img src="'+s.img+'">'+
+          '<div class="ic-rar">'+esc(s.r||'')+'</div>'+
+          '<div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
+          '<div class="ic-price">'+Math.round(s.p||0)+' G</div>'+
+        '</div>';
+      }).join('');
+    }
+    grid.querySelectorAll('.inv-card[data-picksrc]').forEach(function(c){
+      c.onclick = function(e){
+        e.preventDefault(); e.stopImmediatePropagation();
+        if(window._v11){ _v11.upSource = inv[+c.dataset.picksrc]; _v11.upAdd = 0; }
+        closeModal('pickSourceModal');
+        renderUpgrade();
+      };
+    });
+    openModal('pickSourceModal');
+  }
+
+  function openPickTarget(){
+    var p = PROFILE();
+    var grid = $('pickTargetGrid'); if(!grid || !window.SD) return;
+    var V = window._v11 || {};
+    var srcP = V.upSource ? (V.upSource.received ? V.upSource.p*0.8 : V.upSource.p) : 0;
+    var list = (SD.ALL_SKINS || []).filter(function(s){ return s.p > srcP; }).slice(0, 80);
+    grid.innerHTML = list.map(function(s){
+      var rc = SD.rarityColor ? SD.rarityColor(s.r) : '#888';
+      return '<div class="inv-card" style="--rc:'+rc+'" data-tgt-w="'+esc(s.w)+'" data-tgt-s="'+esc(s.s)+'">'+
+        '<img src="'+s.img+'">'+
+        '<div class="ic-rar">'+esc(s.r||'')+'</div>'+
+        '<div class="ic-name">'+esc(s.w)+' | '+esc(s.s)+'</div>'+
+        '<div class="ic-price">'+Math.round(s.p||0)+' G</div>'+
+      '</div>';
+    }).join('');
+    grid.querySelectorAll('.inv-card[data-tgt-w]').forEach(function(c){
+      c.onclick = function(e){
+        e.preventDefault(); e.stopImmediatePropagation();
+        var w = c.dataset.tgtW, s = c.dataset.tgtS;
+        var f = (SD.ALL_SKINS || []).find(function(x){ return x.w === w && x.s === s; });
+        if(f && window._v11){ _v11.upTarget = f; _v11.upAdd = 0; }
+        closeModal('pickTargetModal');
+        renderUpgrade();
+      };
+    });
+    openModal('pickTargetModal');
+  }
+
+  async function doSpinRoulette(){
+    var p = PROFILE(); if(!p) return;
+    var price = 100;
+    if((p.balance || 0) < price){ alert('Недостаточно баланса'); return; }
+    var nb = Math.round((p.balance || 0) - price);
+    if(window._v11 && _v11.profile) _v11.profile.balance = nb;
+    if(window.SD && SD.profile) SD.profile.balance = nb;
+    try{
+      var fb = window.__fb;
+      var uid = (window._v11 && _v11.uid) || (window.SD && SD.uid);
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { balance: nb });
+    }catch(e){}
+    renderHeader();
+    alert('Рулетка: 100 G списано. (Анимация — в следующей версии)');
+  }
+
+  // ====== Старт ======
+  setTimeout(function(){
+    console.log('✅ v12 готов');
+    // Скрываем лишние экраны при старте
+    var l = $('loginScreen');
+    var o = $('onboardScreen');
+    var a = $('app');
+    var p = PROFILE();
+    if(p && p.onboarded){
+      if(l) l.classList.add('hidden');
+      if(o) o.classList.add('hidden');
+      if(a) a.style.display = '';
+      renderHome(); renderProfile();
+    } else if(p){
+      if(l) l.classList.add('hidden');
+      if(o){ o.classList.remove('hidden'); o.style.display = 'flex'; }
+      if(a) a.style.display = 'none';
+    } else {
+      if(l){ l.classList.remove('hidden'); l.style.display = 'flex'; }
+      if(o) o.classList.add('hidden');
+      if(a) a.style.display = 'none';
+    }
+  }, 2000);
+
+  // Регулярное обновление UI
+  setInterval(function(){
+    renderHeader();
+  }, 2000);
+})();
+</script>
 </body>
 </html>
 
