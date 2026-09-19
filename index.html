@@ -6105,49 +6105,365 @@ document.addEventListener('DOMContentLoaded', ()=>{
 console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v31 loaded');
 </script>
 <script>
-/* ПАТЧ v6 — свайп-закрытие модалок, кнопки Назад, фиксы навигации */
+/* ПАТЧ v7 — фикс профиля, инвентаря, кнопок, онбординга */
 (function(){
+  function normalizeArray(v){
+    if(!v) return [];
+    if(Array.isArray(v)) return v.filter(Boolean);
+    if(typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);
+    return [];
+  }
+  window._sdNormArray = normalizeArray;
+
   function applyPatch(){
     if(typeof window.SD === 'undefined'){ setTimeout(applyPatch, 300); return; }
+    if(!window.waitFirebase){ setTimeout(applyPatch, 300); return; }
 
-    /* === 1) SD.go — без блокировок === */
-    SD.go = function(screen){
-      try{
-        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-        var target = document.getElementById('screen-'+screen);
-        if(target) target.classList.add('active');
-        SD.currentScreen = screen;
+    /* === 1) Нормализация данных от Firebase === */
+    var origEnsure = window.ensureProfile;
+    window.ensureProfile = ensureProfile = async function(user){
+      var fb = await waitFirebase();
+      var uid = user.uid;
+      SD.uid = uid;
+      SD.user = user;
+      try{ localStorage.setItem('sd_uid', JSON.stringify(uid)); }catch(e){}
 
-        var navKey = screen;
-        if(screen==='inventory'||screen==='settings'||screen==='bonus'||screen==='topup'||screen==='players') navKey = 'profile';
-        if(screen==='roulette') navKey = 'games';
-        document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
-          item.classList.toggle('active', item.dataset.nav === navKey);
-        });
+      var snap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + uid));
+      if(!snap.exists()){
+        // Создаём новый профиль
+        var counterRef = fb.dbMod.ref(fb.db, 'counter/playerId');
+        var res = await fb.dbMod.runTransaction(counterRef, function(cur){ return (cur||0) + 1; });
+        var newId = String(res.snapshot.val()).padStart(9,'0');
+        var defaultProfile = {
+          playerId: newId,
+          name: user.displayName || 'Игрок',
+          avatar: 0,
+          balance: 200,
+          inventory: [],
+          stats: { cases: 0, upgrades: 0 },
+          friends: [],
+          friendRequests: [],
+          incomingTransfers: [],
+          lastNickChange: 0,
+          language: SD.lang,
+          accent: SD.accent,
+          bonus: { day: 0, lastClaim: 0 },
+          devMode: false,
+          onboarded: false,
+          createdAt: Date.now()
+        };
+        await fb.dbMod.set(fb.dbMod.ref(fb.db, 'users/' + uid), defaultProfile);
+        await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId), uid);
+        SD.playerId = newId;
+        SD.profile = defaultProfile;
+        try{ localStorage.setItem('sd_playerId', JSON.stringify(newId)); }catch(e){}
+        SD.showOnboard(newId);
+        return { needOnboard: true };
+      } else {
+        var data = snap.val();
+        // Нормализуем массивы
+        data.inventory = normalizeArray(data.inventory);
+        data.friends = normalizeArray(data.friends);
+        data.friendRequests = normalizeArray(data.friendRequests);
+        data.incomingTransfers = normalizeArray(data.incomingTransfers);
 
-        window.scrollTo(0,0);
-        try{ if(screen==='home' && typeof renderHome === 'function') renderHome(); }catch(e){}
-        try{ if(screen==='cases' && typeof renderAllCases === 'function') renderAllCases(); }catch(e){}
-        try{ if(screen==='inventory' && typeof renderInventory === 'function') renderInventory(); }catch(e){}
-        try{ if(screen==='profile' && typeof renderProfile === 'function') renderProfile(); }catch(e){}
-        try{ if(screen==='settings' && typeof renderSettings === 'function') renderSettings(); }catch(e){}
-        try{ if(screen==='bonus' && typeof renderBonus === 'function') renderBonus(); }catch(e){}
-        try{ if(screen==='players' && typeof renderPlayers === 'function') renderPlayers(); }catch(e){}
-        try{ if(screen==='upgrade' && typeof renderUpgrade === 'function') renderUpgrade(); }catch(e){}
-        try{ if(screen==='roulette' && typeof renderRoulette === 'function') renderRoulette(); }catch(e){}
+        SD.profile = data;
+        SD.playerId = data.playerId;
+        try{ localStorage.setItem('sd_playerId', JSON.stringify(data.playerId)); }catch(e){}
 
-        // Автопоявление кнопки Назад
-        addBackButtons();
-      }catch(e){ console.error('SD.go:', e); }
+        // Если ID битый — перезапишем
+        if(!data.playerId || /^0+$/.test(data.playerId)){
+          var cRef = fb.dbMod.ref(fb.db, 'counter/playerId');
+          var r2 = await fb.dbMod.runTransaction(cRef, function(cur){ return (cur||0) + 1; });
+          var newId2 = String(r2.snapshot.val()).padStart(9,'0');
+          await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { playerId: newId2, onboarded: false });
+          await fb.dbMod.set(fb.dbMod.ref(fb.db, 'playerIds/' + newId2), uid);
+          SD.playerId = newId2;
+          SD.profile.playerId = newId2;
+          SD.showOnboard(newId2);
+          return { needOnboard: true };
+        }
+
+        if(data.accent){ SD.accent = data.accent; document.documentElement.setAttribute('data-accent', data.accent); }
+        if(data.language){ SD.lang = data.language; }
+        SD.devMode = !!data.devMode;
+
+        if(!data.onboarded){
+          SD.showOnboard(data.playerId);
+          return { needOnboard: true };
+        }
+      }
+      return { needOnboard: false };
     };
 
-    /* === 2) АВТО-КНОПКИ НАЗАД на все экраны (кроме Главной) === */
+    /* === 2) Онбординг — гарантированно работает === */
+    SD.finishOnboard = async function(){
+      var name = (document.getElementById('onboardName').value || '').trim();
+      if(!name){ SD.err('Ошибка','Введите ник'); return; }
+      if(name.length < 2){ SD.err('Ошибка','Ник слишком короткий'); return; }
+      var fb = await waitFirebase();
+      try{
+        await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), {
+          name: name.slice(0,20),
+          avatar: onboardState.avatar,
+          onboarded: true
+        });
+        SD.profile.name = name;
+        SD.profile.avatar = onboardState.avatar;
+        SD.profile.onboarded = true;
+        document.getElementById('onboardScreen').classList.add('hidden');
+        document.getElementById('loginScreen').classList.add('hidden');
+        initAppUI();
+      }catch(e){
+        console.error('finishOnboard error:', e);
+        alert('Ошибка сохранения: ' + (e.code || e.message || 'unknown'));
+      }
+    };
+
+    /* === 3) addSkinToInv — с await + рендер === */
+    window.addSkinToInv = addSkinToInv = async function(skin){
+      if(!SD.profile) return;
+      var inv = normalizeArray(SD.profile.inventory);
+      inv.push({
+        w: skin.w, s: skin.s, r: skin.r, img: skin.img,
+        p: Math.round(skin.p),
+        t: skin.t || 'skin',
+        id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+        received: false
+      });
+      SD.profile.inventory = inv;
+      try{
+        await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), { inventory: inv });
+        if(typeof renderInventory === 'function') renderInventory();
+      }catch(e){ console.error('addSkinToInv:', e); }
+    };
+
+    /* === 4) sellSkin — с округлением === */
+    window.sellSkin = sellSkin = async function(skin){
+      if(!SD.profile) return;
+      var inv = normalizeArray(SD.profile.inventory);
+      var idx = inv.findIndex(function(s){ return s.w === skin.w && s.s === skin.s && !s._sold; });
+      if(idx === -1) idx = 0;
+      var item = inv[idx];
+      if(!item) return;
+      inv.splice(idx, 1);
+      var price = item.received ? Math.round(item.p * 0.8) : Math.round(item.p);
+      var newBal = Math.round((SD.profile.balance || 0) + price);
+      SD.profile.inventory = inv;
+      SD.profile.balance = newBal;
+      try{
+        await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), { inventory: inv, balance: newBal });
+      }catch(e){ console.error(e); }
+      if(typeof SD.updateBalanceUI === 'function') SD.updateBalanceUI(newBal, true);
+      if(typeof renderInventory === 'function') renderInventory();
+      SD.ok(SD.t('soldToast'), item.w + ' | ' + item.s + ' • +' + price + ' G', item.img);
+    };
+
+    /* === 5) Кнопки после выпадения — НЕ закрывают модалку === */
+    window.showSingleResult = showSingleResult = function(win, caseObj){
+      var box = document.getElementById('spinResult');
+      box.classList.add('show');
+      box.innerHTML = 
+        '<div class="sr-label">' + SD.t('dropLabel') + '</div>' +
+        '<img src="' + win.img + '" alt="">' +
+        '<div class="sr-rar" style="color:' + SD.rarityColor(win.r) + '">' + (SD.t('r'+win.r)||win.r) + '</div>' +
+        '<div class="sr-name">' + win.w + ' | ' + win.s + '</div>' +
+        '<div class="sr-price">' + win.p + ' G</div>' +
+        '<div class="sr-actions">' +
+          '<button class="sr-inv" id="srInvBtn">' + SD.t('inInventory') + '</button>' +
+          '<button class="sr-again" id="srAgainBtn">' + SD.t('openAgain') + '<br><span style="font-size:11px;opacity:.85">' + (caseObj.price*currentCaseCount) + ' G</span></button>' +
+          '<button class="sr-sell" id="srSellBtn">' + SD.t('sell') + '<br><span style="font-size:11px">' + win.p + ' G</span></button>' +
+        '</div>';
+
+      document.getElementById('srInvBtn').onclick = function(){
+        // Только уведомление — скин уже в инвентаре
+        SD.ok(SD.t('addedToast'), win.w + ' | ' + win.s, win.img);
+      };
+      document.getElementById('srAgainBtn').onclick = function(){
+        box.classList.remove('show');
+        document.getElementById('spinArea').classList.remove('show');
+        document.getElementById('caseOpenBtn').style.display = '';
+        if(typeof updateOpenButton === 'function') updateOpenButton();
+      };
+      document.getElementById('srSellBtn').onclick = function(){
+        sellSkin(win);
+        // НЕ закрываем модалку
+      };
+    };
+
+    /* === 6) Кнопки «Пополнить» — работают === */
+    function bindTopup(){
+      var hp = document.getElementById('headerPlus');
+      if(hp && !hp._t7){ hp._t7 = true; hp.onclick = function(){ openModal('topupModal'); }; }
+      var pb = document.getElementById('profileTopupBtn');
+      if(pb && !pb._t7){ pb._t7 = true; pb.onclick = function(){ SD.go('topup'); }; }
+      var tm = document.getElementById('topupModalConfirm');
+      if(tm && !tm._t7){ tm._t7 = true; tm.onclick = function(){
+        var a = parseInt(document.getElementById('topupModalAmount').value, 10);
+        SD.doTopup(a, true);
+      }; }
+      var tc = document.getElementById('topupConfirmBtn');
+      if(tc && !tc._t7){ tc._t7 = true; tc.onclick = function(){
+        var a = parseInt(document.getElementById('topupAmount').value, 10);
+        SD.doTopup(a, false);
+      }; }
+      document.querySelectorAll('#topupModal .quick-btn, #topupPresets .quick-btn').forEach(function(b){
+        if(b._t7) return; b._t7 = true;
+        b.onclick = function(){
+          var target = b.closest('#topupModal') ? 'topupModalAmount' : 'topupAmount';
+          document.getElementById(target).value = b.dataset.amount;
+        };
+      });
+    }
+    bindTopup();
+    setInterval(bindTopup, 1500);
+
+    /* === 7) Передача скинов — рендер работает === */
+    window.renderTransferSkins = renderTransferSkins = function(){
+      var box = document.getElementById('transferSkinsList');
+      if(!box) return;
+      var inv = normalizeArray(SD.profile ? SD.profile.inventory : []);
+      var available = inv.filter(function(s){ return !s.received; });
+      if(!available.length){
+        box.innerHTML = '<div class="inv-empty" style="grid-column:1/-1;padding:20px;font-size:13px">' + SD.t('emptyInv') + '</div>';
+        return;
+      }
+      box.innerHTML = available.map(function(s){
+        var realIdx = inv.indexOf(s);
+        var isSel = SD.transferSelected.indexOf(realIdx) > -1;
+        return '<div class="transfer-skin ' + (isSel?'selected':'') + '" data-ts-idx="' + realIdx + '">' +
+          '<img src="' + s.img + '" alt="">' +
+          '<div class="ts-name">' + s.w + ' | ' + s.s + '</div>' +
+        '</div>';
+      }).join('');
+      box.querySelectorAll('.transfer-skin').forEach(function(el){
+        el.onclick = function(){ toggleTransferSelection(+el.dataset.tsIdx); };
+      });
+      updateTransferCount();
+    };
+
+    /* === 8) Инвентарь — рендер с нормализацией === */
+    window.renderInventory = renderInventory = function(){
+      var grid = document.getElementById('inventoryGrid');
+      if(!grid) return;
+      var inv = normalizeArray(SD.profile ? SD.profile.inventory : []);
+      var list = inv;
+      if(SD.invFilter === 'skin') list = inv.filter(function(s){ return s.t === 'skin' || !s.t; });
+      else if(SD.invFilter === 'knife') list = inv.filter(function(s){ return s.t === 'knife'; });
+      else if(SD.invFilter === 'gloves') list = inv.filter(function(s){ return s.t === 'gloves'; });
+
+      var cnt = document.getElementById('invCountLabel');
+      if(cnt) cnt.textContent = list.length + ' шт.';
+
+      if(!list.length){
+        grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div><div>' + SD.t('emptyInv') + '</div><div class="muted mt-8">' + SD.t('emptyInvSub') + '</div></div>';
+        return;
+      }
+
+      grid.innerHTML = list.map(function(s){
+        var realIdx = inv.indexOf(s);
+        var price = s.received ? Math.round(s.p*0.8) : Math.round(s.p);
+        var priceHtml = s.received
+          ? '<span class="ic-price discount">' + Math.round(s.p) + ' G</span><span class="ic-price-after">' + price + ' G</span>'
+          : '<span class="ic-price">' + price + ' G</span>';
+        return '<div class="inv-card" style="--rc:' + SD.rarityColor(s.r) + '" data-inv-idx="' + realIdx + '">' +
+          (s.received ? '<div class="ic-tag">−20%</div>' : '') +
+          '<img src="' + s.img + '" alt="">' +
+          '<div class="ic-rar">' + (SD.t('r'+s.r)||s.r) + '</div>' +
+          '<div class="ic-name">' + s.w + ' | ' + s.s + '</div>' +
+          priceHtml +
+        '</div>';
+      }).join('');
+      grid.querySelectorAll('.inv-card').forEach(function(c){
+        c.onclick = function(){
+          var idx = +c.dataset.invIdx;
+          var skin = inv[idx];
+          if(skin && typeof openSkinCard === 'function') openSkinCard(skin, idx);
+        };
+      });
+    };
+
+    /* === 9) Аватар — рендер работает === */
+    window.refreshHeaderUI = refreshHeaderUI = function(){
+      if(!SD.profile) return;
+      var hb = document.getElementById('headerBalance');
+      if(hb) hb.textContent = Math.round(SD.profile.balance || 0).toLocaleString('ru-RU');
+      var av = document.getElementById('headerAvatar');
+      if(av){
+        var a = SD.profile.avatar;
+        if(typeof a === 'number' && SD.avatars && SD.avatars[a]) av.src = SD.avatars[a];
+        else if(typeof a === 'string' && a.length > 20) av.src = a;
+        else if(SD.avatars) av.src = SD.avatars[0];
+      }
+    };
+
+    /* === 10) Профиль — с округлением и аватаром === */
+    window.renderProfile = renderProfile = function(){
+      if(!SD.profile) return;
+      var p = SD.profile;
+      var av = document.getElementById('profileAvatar');
+      if(av){
+        var a = p.avatar;
+        if(typeof a === 'number' && SD.avatars[a]) av.src = SD.avatars[a];
+        else if(typeof a === 'string' && a.length > 20) av.src = a;
+        else if(SD.avatars) av.src = SD.avatars[0];
+      }
+      document.getElementById('profileName').textContent = p.name || 'Игрок';
+      document.getElementById('profilePlayerId').textContent = p.playerId || '000000000';
+      document.getElementById('profileBalance').textContent = Math.round(p.balance || 0).toLocaleString('ru-RU');
+      document.getElementById('statCases').textContent = (p.stats && p.stats.cases) || 0;
+      document.getElementById('statUpgrades').textContent = (p.stats && p.stats.upgrades) || 0;
+      document.getElementById('statFriends').textContent = normalizeArray(p.friends).length;
+      refreshHeaderUI();
+    };
+
+    /* === 11) Округление всех цен в базе при старте === */
+    if(window.ALL_SKINS && !window._skinsRounded){
+      window._skinsRounded = true;
+      ALL_SKINS.forEach(function(s){ s.p = Math.round(s.p); });
+    }
+
+    /* === 12) Кнопки Назад + Свайп-закрытие — из v6 === */
+    document.querySelectorAll('.modal-back').forEach(function(modal){
+      if(modal._swipeReady) return;
+      modal._swipeReady = true;
+      var sheet = modal.querySelector('.modal-sheet');
+      if(!sheet) return;
+      var handle = sheet.querySelector('.sheet-handle');
+      if(!handle) return;
+      var startY = 0, curY = 0, dragging = false;
+      handle.style.cursor = 'grab';
+      handle.style.touchAction = 'none';
+      handle.style.padding = '12px 0';
+      handle.style.marginTop = '-6px';
+
+      function onStart(y){ dragging = true; startY = y; curY = 0; sheet.style.transition = 'none'; }
+      function onMove(y){ if(!dragging) return; curY = y - startY; if(curY < 0) curY *= 0.3; sheet.style.transform = 'translateY(' + curY + 'px)'; }
+      function onEnd(){
+        if(!dragging) return;
+        dragging = false;
+        sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1.1)';
+        if(curY > 100){
+          sheet.style.transform = 'translateY(100%)';
+          setTimeout(function(){ modal.classList.remove('show'); sheet.style.transform = ''; sheet.style.transition = ''; }, 260);
+        } else {
+          sheet.style.transform = '';
+          setTimeout(function(){ sheet.style.transition = ''; }, 300);
+        }
+      }
+      handle.addEventListener('touchstart', function(e){ onStart(e.touches[0].clientY); }, {passive:true});
+      document.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientY); }, {passive:true});
+      document.addEventListener('touchend', function(){ if(dragging) onEnd(); }, {passive:true});
+      handle.addEventListener('mousedown', function(e){ e.preventDefault(); onStart(e.clientY); });
+      document.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientY); });
+      document.addEventListener('mouseup', function(){ if(dragging) onEnd(); });
+    });
+
+    /* === 13) Кнопки Назад автопоявление === */
     function addBackButtons(){
-      var screens = document.querySelectorAll('.screen');
-      screens.forEach(function(scr){
+      document.querySelectorAll('.screen').forEach(function(scr){
         if(scr.id === 'screen-home') return;
         if(scr.querySelector('.auto-back-btn')) return;
-        // Ищем sectionhead
         var head = scr.querySelector('.sectionhead');
         if(!head) return;
         var btn = document.createElement('button');
@@ -6158,185 +6474,10 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
         head.appendChild(btn);
       });
     }
+    addBackButtons();
+    setInterval(addBackButtons, 1500);
 
-    /* === 3) ЛОГОТИП: 1 тап — главная, 17 — dev === */
-    var logo = document.getElementById('mainLogo');
-    if(logo && !logo._patched){
-      logo._patched = true;
-      var clone = logo.cloneNode(true);
-      logo.parentNode.replaceChild(clone, logo);
-      var taps = 0, resetTimer = null;
-      clone.onclick = function(){
-        taps++;
-        if(taps >= 17){
-          taps = 0;
-          clearTimeout(resetTimer);
-          if(typeof openDevCode === 'function') openDevCode();
-          else if(SD.openModal) SD.openModal('devCodeModal');
-          return;
-        }
-        if(taps === 1) SD.go('home');
-        clearTimeout(resetTimer);
-        resetTimer = setTimeout(function(){ taps = 0; }, 3000);
-      };
-    }
-
-    /* === 4) НИЖНЕЕ МЕНЮ === */
-    document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
-      if(item._patched) return;
-      item._patched = true;
-      var clone = item.cloneNode(true);
-      item.parentNode.replaceChild(clone, item);
-      clone.onclick = function(){ SD.go(clone.dataset.nav); };
-    });
-
-    /* === 5) ФИЛЬТРЫ ИНВЕНТАРЯ === */
-    document.querySelectorAll('#invFilters .inv-filter').forEach(function(btn){
-      if(btn._patched) return;
-      btn._patched = true;
-      var clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.onclick = function(){
-        SD.invFilter = clone.dataset.ifilter;
-        document.querySelectorAll('#invFilters .inv-filter').forEach(b=>b.classList.remove('active'));
-        clone.classList.add('active');
-        if(typeof renderInventory === 'function') renderInventory();
-      };
-    });
-
-    /* === 6) ФИЛЬТРЫ КЕЙСОВ === */
-    document.querySelectorAll('#casesFilters .inv-filter').forEach(function(btn){
-      if(btn._patched) return;
-      btn._patched = true;
-      var clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.onclick = function(){
-        SD.casesFilter = clone.dataset.filter;
-        document.querySelectorAll('#casesFilters .inv-filter').forEach(b=>b.classList.remove('active'));
-        clone.classList.add('active');
-        if(typeof renderAllCases === 'function') renderAllCases();
-      };
-    });
-
-    /* === 7) ЯЗЫК === */
-    document.querySelectorAll('.lang-btn').forEach(function(btn){
-      if(btn._patched) return;
-      btn._patched = true;
-      var clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.onclick = function(){
-        SD.lang = clone.dataset.lang;
-        try{ localStorage.setItem('sd_lang', JSON.stringify(SD.lang)); }catch(e){}
-        document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active', b.dataset.lang===SD.lang));
-        if(typeof SD.applyI18n === 'function') SD.applyI18n();
-        if(typeof SD.saveSetting === 'function') SD.saveSetting('language', SD.lang);
-      };
-    });
-
-    /* === 8) АКЦЕНТЫ === */
-    document.querySelectorAll('#accentPicker .accent-dot').forEach(function(btn){
-      if(btn._patched) return;
-      btn._patched = true;
-      var clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.onclick = function(){
-        var name = clone.dataset.accent;
-        SD.accent = name;
-        document.documentElement.setAttribute('data-accent', name);
-        try{ localStorage.setItem('sd_accent', JSON.stringify(name)); }catch(e){}
-        document.querySelectorAll('#accentPicker .accent-dot').forEach(d=>d.classList.toggle('active', d.dataset.accent===name));
-        if(typeof SD.saveSetting === 'function') SD.saveSetting('accent', name);
-      };
-    });
-
-    /* === 9) INLINE onclick-кнопки (быстрые, меню профиля) === */
-    document.querySelectorAll('.quick-btn, .pm-item').forEach(function(btn){
-      if(btn._patched) return;
-      var oc = btn.getAttribute('onclick');
-      if(!oc) return;
-      btn._patched = true;
-      var clone = btn.cloneNode(true);
-      btn.parentNode.replaceChild(clone, btn);
-      clone.onclick = new Function(oc);
-    });
-
-    /* === 10) СВАЙП-ЗАКРЫТИЕ МОДАЛОК по серой полоске === */
-    document.querySelectorAll('.modal-back').forEach(function(modal){
-      if(modal._swipeReady) return;
-      modal._swipeReady = true;
-      var sheet = modal.querySelector('.modal-sheet');
-      if(!sheet) return;
-      var handle = sheet.querySelector('.sheet-handle');
-      if(!handle) return;
-
-      var startY = 0, curY = 0, dragging = false;
-
-      function onStart(y){
-        dragging = true;
-        startY = y;
-        curY = 0;
-        sheet.style.transition = 'none';
-      }
-      function onMove(y){
-        if(!dragging) return;
-        curY = y - startY;
-        if(curY < 0) curY = curY * 0.3; // вверх — с сопротивлением
-        sheet.style.transform = 'translateY(' + curY + 'px)';
-      }
-      function onEnd(){
-        if(!dragging) return;
-        dragging = false;
-        sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1.1)';
-        if(curY > 100){
-          // Закрываем
-          sheet.style.transform = 'translateY(100%)';
-          setTimeout(function(){
-            modal.classList.remove('show');
-            sheet.style.transform = '';
-            sheet.style.transition = '';
-          }, 260);
-        } else {
-          // Возвращаем на место
-          sheet.style.transform = '';
-          setTimeout(function(){ sheet.style.transition = ''; }, 300);
-        }
-      }
-
-      // Touch
-      handle.addEventListener('touchstart', function(e){
-        var t = e.touches[0];
-        onStart(t.clientY);
-      }, {passive:true});
-      document.addEventListener('touchmove', function(e){
-        if(!dragging) return;
-        var t = e.touches[0];
-        onMove(t.clientY);
-      }, {passive:true});
-      document.addEventListener('touchend', function(){
-        if(dragging) onEnd();
-      }, {passive:true});
-
-      // Mouse (десктоп)
-      handle.addEventListener('mousedown', function(e){
-        e.preventDefault();
-        onStart(e.clientY);
-      });
-      document.addEventListener('mousemove', function(e){
-        if(!dragging) return;
-        onMove(e.clientY);
-      });
-      document.addEventListener('mouseup', function(){
-        if(dragging) onEnd();
-      });
-
-      // Курсор
-      handle.style.cursor = 'grab';
-      handle.style.touchAction = 'none';
-      handle.style.padding = '12px 0';
-      handle.style.marginTop = '-6px';
-    });
-
-    /* === 11) АНТИ-ДВОЙНОЙ-КЛИК — разрешаем все кнопки === */
+    /* === 14) Перебиваем анти-двойной-клик === */
     function markButtons(){
       document.querySelectorAll('button, .btn, .nav-item, .quick-btn, .pm-item, .inv-filter, .accent-dot, .lang-btn, .avatar-choice, .count-btn, .case-card, .inv-card').forEach(function(el){
         el.dataset._dblAllowed = '1';
@@ -6345,29 +6486,13 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
     markButtons();
     setInterval(markButtons, 800);
 
-    /* === 12) ЗВУК — активируем AudioContext по первому тапу === */
-    if(!window._sdSoundReady){
-      window._sdSoundReady = true;
-      function unlockAudio(){
-        try{
-          var C = window.AudioContext || window.webkitAudioContext;
-          if(!C) return;
-          if(!window._sdAC) window._sdAC = new C();
-          if(window._sdAC.state === 'suspended') window._sdAC.resume();
-        }catch(e){}
-        document.removeEventListener('touchstart', unlockAudio);
-        document.removeEventListener('click', unlockAudio);
-      }
-      document.addEventListener('touchstart', unlockAudio, {passive:true});
-      document.addEventListener('click', unlockAudio, {passive:true});
-    }
-
-    console.log('✅ ПАТЧ v6 применён');
+    console.log('✅ ПАТЧ v7 применён');
   }
 
   applyPatch();
-  setTimeout(applyPatch, 1500);
-  setTimeout(applyPatch, 4000);
+  setTimeout(applyPatch, 1000);
+  setTimeout(applyPatch, 3000);
+  setTimeout(applyPatch, 6000);
 })();
 </script>
 </body>
