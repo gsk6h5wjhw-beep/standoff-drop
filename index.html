@@ -8498,6 +8498,238 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   }, 2000);
 })();
 </script>
+<script>
+/* v13 — защита от наложения + правильная persistence */
+(function(){
+  console.log('🛡 v13 защита активна');
+
+  // ===== 1. MutationObserver — держим login/onboard скрытыми если мы залогинены =====
+  var loginEl = document.getElementById('loginScreen');
+  var onboardEl = document.getElementById('onboardScreen');
+
+  function isLoggedIn(){
+    var V = window._v11;
+    return V && V.profile && V.profile.onboarded;
+  }
+  function isOnboarded(){
+    var V = window._v11;
+    return V && V.profile && V.profile.playerId;
+  }
+
+  function enforceScreens(){
+    if(isLoggedIn()){
+      // Скрываем оба экрана — пользователь в системе
+      if(loginEl){
+        if(!loginEl.classList.contains('hidden')) loginEl.classList.add('hidden');
+        if(loginEl.style.display !== 'none') loginEl.style.display = 'none';
+      }
+      if(onboardEl){
+        if(!onboardEl.classList.contains('hidden')) onboardEl.classList.add('hidden');
+        if(onboardEl.style.display !== 'none') onboardEl.style.display = 'none';
+      }
+      var app = document.getElementById('app');
+      if(app && app.style.display === 'none') app.style.display = '';
+    } else if(isOnboarded()){
+      // Показываем онбординг
+      if(loginEl){
+        if(!loginEl.classList.contains('hidden')) loginEl.classList.add('hidden');
+        if(loginEl.style.display !== 'none') loginEl.style.display = 'none';
+      }
+      if(onboardEl){
+        if(onboardEl.classList.contains('hidden')) onboardEl.classList.remove('hidden');
+        if(onboardEl.style.display !== 'flex') onboardEl.style.display = 'flex';
+      }
+      var app2 = document.getElementById('app');
+      if(app2) app2.style.display = 'none';
+    }
+  }
+
+  // Подписываемся на изменения класса/стиля у обоих экранов
+  if(loginEl){
+    new MutationObserver(enforceScreens).observe(loginEl, {
+      attributes: true, attributeFilter: ['class','style']
+    });
+  }
+  if(onboardEl){
+    new MutationObserver(enforceScreens).observe(onboardEl, {
+      attributes: true, attributeFilter: ['class','style']
+    });
+  }
+
+  // Каждые 500 мс — проверяем (на всякий случай)
+  setInterval(enforceScreens, 500);
+
+  // ===== 2. Переопределяем SD.logout — чтобы корректно выйти и очистить =====
+  window._v13_logout = async function(){
+    try{
+      var fb = window.__fb;
+      if(fb && fb.auth){
+        await fb.authMod.signOut(fb.auth);
+      }
+      try{ localStorage.removeItem('sd_uid'); }catch(e){}
+      try{ localStorage.removeItem('sd_playerId'); }catch(e){}
+      // Сбросим сохранённые данные профиля
+      if(window._v11){
+        _v11.profile = null;
+        _v11.uid = null;
+        _v11.playerId = null;
+      }
+      location.reload();
+    }catch(e){ console.error('logout:', e); }
+  };
+
+  // Перебиваем .pm-item для Logout
+  document.addEventListener('click', function(e){
+    var pm = e.target.closest('.pm-item');
+    if(pm){
+      var oc = pm.getAttribute('onclick') || '';
+      if(oc.indexOf('SD.logout') > -1 || oc.indexOf('logout') > -1){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        window._v13_logout();
+        return;
+      }
+    }
+  }, true);
+
+  // ===== 3. Автовосстановление сессии — периодически проверяем =====
+  function autologinCheck(){
+    try{
+      var fb = window.__fb;
+      if(!fb || !fb.auth) return;
+      var user = fb.auth.currentUser;
+      if(!user) return;
+      // Есть пользователь, но профиль не загружен — перезагрузим профиль
+      if(window._v11 && !_v11.profile){
+        console.log('🔄 Автовосстановление профиля...');
+        var ref = fb.dbMod.ref(fb.db, 'users/' + user.uid);
+        fb.dbMod.get(ref).then(function(snap){
+          if(snap.exists()){
+            var data = snap.val();
+            // Нормализуем массивы
+            function toArr(v){
+              if(!v) return [];
+              if(Array.isArray(v)) return v.filter(Boolean);
+              if(typeof v === 'object') return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(Boolean);
+              return [];
+            }
+            data.inventory = toArr(data.inventory);
+            data.friends = toArr(data.friends);
+            data.friendRequests = toArr(data.friendRequests);
+            data.incomingTransfers = toArr(data.incomingTransfers);
+
+            _v11.profile = data;
+            _v11.uid = user.uid;
+            _v11.playerId = data.playerId;
+            if(window.SD){
+              SD.profile = data;
+              SD.uid = user.uid;
+              SD.playerId = data.playerId;
+            }
+            enforceScreens();
+            // Перерисуем
+            if(data.onboarded){
+              try{
+                if(window.goScreen) goScreen('home');
+              }catch(e){}
+            }
+            console.log('✅ Профиль восстановлен:', data.playerId);
+          }
+        }).catch(function(err){
+          console.error('autologin profile:', err);
+        });
+      }
+    }catch(e){}
+  }
+
+  // Проверяем через 1 сек после старта, потом каждые 2 сек
+  setTimeout(autologinCheck, 1000);
+  setInterval(autologinCheck, 2000);
+
+  // ===== 4. Перехват Google-входа — использование indexedDBLocalPersistence =====
+  var originalGoogleClick = null;
+
+  document.addEventListener('click', function(e){
+    if(e.target.closest('#googleLoginBtn')){
+      // Дадим v12/v11 обработчику выполниться, но подстрахуемся
+      setTimeout(function(){
+        // Если через 100мс ничего не произошло — вызываем напрямую
+        var fb = window.__fb;
+        if(!fb) return;
+        // Проверим, началась ли авторизация (появление попапа или редиректа)
+        // Просто на всякий случай — не мешаем
+      }, 500);
+    }
+  }, false);
+
+  // Перехватываем старый SD.loginGoogle и заменяем на безопасную версию
+  setTimeout(function(){
+    if(!window.SD) return;
+    window.SD.loginGoogle = async function(){
+      try{
+        var fb = window.__fb;
+        if(!fb) { alert('Firebase ещё загружается'); return; }
+
+        var prov = new fb.authMod.GoogleAuthProvider();
+        prov.setCustomParameters({ prompt: 'select_account' });
+
+        // Используем indexedDBLocalPersistence — обходит ITP Safari
+        var persistSet = false;
+        if(fb.authMod.indexedDBLocalPersistence){
+          try{
+            await fb.authMod.setPersistence(fb.auth, fb.authMod.indexedDBLocalPersistence);
+            persistSet = true;
+            console.log('✅ indexedDBLocalPersistence установлен');
+          }catch(e){ console.warn('indexedDB fail:', e); }
+        }
+        if(!persistSet && fb.authMod.browserLocalPersistence){
+          try{
+            await fb.authMod.setPersistence(fb.auth, fb.authMod.browserLocalPersistence);
+            console.log('✅ browserLocalPersistence установлен');
+          }catch(e){ console.warn('browserLocal fail:', e); }
+        }
+
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if(isMobile){
+          await fb.authMod.signInWithRedirect(fb.auth, prov);
+        } else {
+          try{
+            await fb.authMod.signInWithPopup(fb.auth, prov);
+          }catch(err){
+            if(err && (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user')){
+              await fb.authMod.signInWithRedirect(fb.auth, prov);
+            } else throw err;
+          }
+        }
+      }catch(e){
+        console.error('google login (v13):', e);
+        alert('Ошибка входа: ' + (e.code || e.message || 'неизвестная'));
+      }
+    };
+    console.log('✅ SD.loginGoogle переопределён (v13)');
+  }, 1500);
+
+  // ===== 5. Обработка getRedirectResult для v13 =====
+  setTimeout(async function(){
+    try{
+      var fb = window.__fb;
+      if(!fb || !fb.auth) return;
+      var r = await fb.authMod.getRedirectResult(fb.auth);
+      if(r && r.user){
+        console.log('✅ v13: redirect успешен, user:', r.user.email);
+        // Убедимся, что профиль загружен
+        setTimeout(autologinCheck, 200);
+      }
+    }catch(e){
+      if(e && e.code !== 'auth/no-auth-event' && e.code !== 'auth/redirect-cancelled-by-user'){
+        console.warn('v13 redirect result:', e.code || e.message);
+      }
+    }
+  }, 2500);
+
+  console.log('✅ ПАТЧ v13 установлен');
+})();
+</script>
 </body>
 </html>
 
