@@ -6104,7 +6104,40 @@ document.addEventListener('DOMContentLoaded', ()=>{
    ============================================================ */
 console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v31 loaded');
 </script>
+<script>
+(function(){
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+  function init(){
+    if(!window.SD || !window.waitFirebase){ setTimeout(init, 300); return; }
+
+    SD.loginGoogle = async function(){
+      try{
+        const fb = await waitFirebase();
+        const provider = new fb.authMod.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        if(isMobile){
+          await fb.authMod.signInWithRedirect(fb.auth, provider);
+        } else {
+          await fb.authMod.signInWithPopup(fb.auth, provider);
+        }
+      }catch(err){
+        console.error('login error:', err);
+        alert('Ошибка входа: ' + (err.code || err.message || 'unknown'));
+      }
+    };
+
+    (async ()=>{
+      try{
+        const fb = await waitFirebase();
+        const r = await fb.authMod.getRedirectResult(fb.auth);
+        if(r && r.user) console.log('Redirect OK:', r.user.email);
+      }catch(e){ console.error('redirect result:', e) }
+    })();
+  }
+  init();
+})();
+</script>
 </body>
 </html>
 
