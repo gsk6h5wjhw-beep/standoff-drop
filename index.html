@@ -6105,120 +6105,271 @@ document.addEventListener('DOMContentLoaded', ()=>{
 console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v31 loaded');
 </script>
 <script>
-/* ПАТЧ v3 — точная диагностика ошибки профиля */
+/* ПАТЧ v6 — свайп-закрытие модалок, кнопки Назад, фиксы навигации */
 (function(){
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  function applyPatch(){
+    if(typeof window.SD === 'undefined'){ setTimeout(applyPatch, 300); return; }
 
-  function init(){
-    if(!window.SD || !window.waitFirebase){ setTimeout(init, 300); return; }
-
-    // 1) Переопределяем loginGoogle
-    SD.loginGoogle = async function(){
+    /* === 1) SD.go — без блокировок === */
+    SD.go = function(screen){
       try{
-        const fb = await waitFirebase();
-        const provider = new fb.authMod.GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        if(isMobile){
-          await fb.authMod.signInWithRedirect(fb.auth, provider);
-        } else {
-          await fb.authMod.signInWithPopup(fb.auth, provider);
-        }
-      }catch(err){
-        console.error('login error:', err);
-        alert('Ошибка входа: ' + (err.code || err.message || 'unknown'));
-      }
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        var target = document.getElementById('screen-'+screen);
+        if(target) target.classList.add('active');
+        SD.currentScreen = screen;
+
+        var navKey = screen;
+        if(screen==='inventory'||screen==='settings'||screen==='bonus'||screen==='topup'||screen==='players') navKey = 'profile';
+        if(screen==='roulette') navKey = 'games';
+        document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
+          item.classList.toggle('active', item.dataset.nav === navKey);
+        });
+
+        window.scrollTo(0,0);
+        try{ if(screen==='home' && typeof renderHome === 'function') renderHome(); }catch(e){}
+        try{ if(screen==='cases' && typeof renderAllCases === 'function') renderAllCases(); }catch(e){}
+        try{ if(screen==='inventory' && typeof renderInventory === 'function') renderInventory(); }catch(e){}
+        try{ if(screen==='profile' && typeof renderProfile === 'function') renderProfile(); }catch(e){}
+        try{ if(screen==='settings' && typeof renderSettings === 'function') renderSettings(); }catch(e){}
+        try{ if(screen==='bonus' && typeof renderBonus === 'function') renderBonus(); }catch(e){}
+        try{ if(screen==='players' && typeof renderPlayers === 'function') renderPlayers(); }catch(e){}
+        try{ if(screen==='upgrade' && typeof renderUpgrade === 'function') renderUpgrade(); }catch(e){}
+        try{ if(screen==='roulette' && typeof renderRoulette === 'function') renderRoulette(); }catch(e){}
+
+        // Автопоявление кнопки Назад
+        addBackButtons();
+      }catch(e){ console.error('SD.go:', e); }
     };
 
-    // 2) Перепривязываем кнопку
-    const oldBtn = document.getElementById('googleLoginBtn');
-    if(oldBtn){
-      const newBtn = oldBtn.cloneNode(true);
-      oldBtn.parentNode.replaceChild(newBtn, oldBtn);
-      newBtn.addEventListener('click', SD.loginGoogle, {passive:true});
+    /* === 2) АВТО-КНОПКИ НАЗАД на все экраны (кроме Главной) === */
+    function addBackButtons(){
+      var screens = document.querySelectorAll('.screen');
+      screens.forEach(function(scr){
+        if(scr.id === 'screen-home') return;
+        if(scr.querySelector('.auto-back-btn')) return;
+        // Ищем sectionhead
+        var head = scr.querySelector('.sectionhead');
+        if(!head) return;
+        var btn = document.createElement('button');
+        btn.className = 'btn btn-ghost btn-sm auto-back-btn';
+        btn.textContent = '← Назад';
+        btn.style.flex = '0 0 auto';
+        btn.onclick = function(){ SD.go('home'); };
+        head.appendChild(btn);
+      });
     }
 
-    // 3) Возврат с redirect
-    (async ()=>{
-      try{
-        const fb = await waitFirebase();
-        const r = await fb.authMod.getRedirectResult(fb.auth);
-        if(r && r.user) console.log('Redirect OK:', r.user.email);
-      }catch(e){ console.error('redirect result:', e) }
-    })();
+    /* === 3) ЛОГОТИП: 1 тап — главная, 17 — dev === */
+    var logo = document.getElementById('mainLogo');
+    if(logo && !logo._patched){
+      logo._patched = true;
+      var clone = logo.cloneNode(true);
+      logo.parentNode.replaceChild(clone, logo);
+      var taps = 0, resetTimer = null;
+      clone.onclick = function(){
+        taps++;
+        if(taps >= 17){
+          taps = 0;
+          clearTimeout(resetTimer);
+          if(typeof openDevCode === 'function') openDevCode();
+          else if(SD.openModal) SD.openModal('devCodeModal');
+          return;
+        }
+        if(taps === 1) SD.go('home');
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(function(){ taps = 0; }, 3000);
+      };
+    }
 
-    // 4) ДИАГНОСТИКА: перехватываем ошибку профиля
-    // Через 5 секунд после загрузки — проверяем, что случилось
-    setTimeout(async ()=>{
-      const loginVisible = document.getElementById('loginScreen') && !document.getElementById('loginScreen').classList.contains('hidden');
-      const onboardVisible = document.getElementById('onboardScreen') && !document.getElementById('onboardScreen').classList.contains('hidden');
-      const app = document.getElementById('app');
-      const appEmpty = app && app.offsetHeight < 50;
+    /* === 4) НИЖНЕЕ МЕНЮ === */
+    document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
+      if(item._patched) return;
+      item._patched = true;
+      var clone = item.cloneNode(true);
+      item.parentNode.replaceChild(clone, item);
+      clone.onclick = function(){ SD.go(clone.dataset.nav); };
+    });
 
-      // Если логин скрыт, онбординг скрыт, но приложение пустое — профиль не загрузился
-      if(!loginVisible && !onboardVisible && appEmpty){
-        console.warn('=== ДИАГНОСТИКА ===');
-        try{
-          const fb = await waitFirebase();
-          const user = fb.auth.currentUser;
+    /* === 5) ФИЛЬТРЫ ИНВЕНТАРЯ === */
+    document.querySelectorAll('#invFilters .inv-filter').forEach(function(btn){
+      if(btn._patched) return;
+      btn._patched = true;
+      var clone = btn.cloneNode(true);
+      btn.parentNode.replaceChild(clone, btn);
+      clone.onclick = function(){
+        SD.invFilter = clone.dataset.ifilter;
+        document.querySelectorAll('#invFilters .inv-filter').forEach(b=>b.classList.remove('active'));
+        clone.classList.add('active');
+        if(typeof renderInventory === 'function') renderInventory();
+      };
+    });
 
-          let info = 'ДИАГНОСТИКА:\n\n';
-          info += 'Пользователь: ' + (user ? user.email : 'НЕТ') + '\n';
-          info += 'UID: ' + (user ? user.uid : 'НЕТ') + '\n\n';
+    /* === 6) ФИЛЬТРЫ КЕЙСОВ === */
+    document.querySelectorAll('#casesFilters .inv-filter').forEach(function(btn){
+      if(btn._patched) return;
+      btn._patched = true;
+      var clone = btn.cloneNode(true);
+      btn.parentNode.replaceChild(clone, btn);
+      clone.onclick = function(){
+        SD.casesFilter = clone.dataset.filter;
+        document.querySelectorAll('#casesFilters .inv-filter').forEach(b=>b.classList.remove('active'));
+        clone.classList.add('active');
+        if(typeof renderAllCases === 'function') renderAllCases();
+      };
+    });
 
-          if(user){
-            // Пробуем прочитать свой профиль
-            try{
-              const snap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + user.uid));
-              info += 'users/{uid}: ' + (snap.exists() ? 'ЕСТЬ' : 'НЕТ') + '\n';
-              if(snap.exists()){
-                const d = snap.val();
-                info += '  playerId: ' + (d.playerId || '—') + '\n';
-                info += '  name: ' + (d.name || '—') + '\n';
-                info += '  balance: ' + (d.balance || 0) + '\n';
-                info += '  onboarded: ' + (d.onboarded) + '\n';
-              }
-            }catch(e1){
-              info += 'ОШИБКА чтения users/{uid}: ' + (e1.code || e1.message) + '\n';
-            }
+    /* === 7) ЯЗЫК === */
+    document.querySelectorAll('.lang-btn').forEach(function(btn){
+      if(btn._patched) return;
+      btn._patched = true;
+      var clone = btn.cloneNode(true);
+      btn.parentNode.replaceChild(clone, btn);
+      clone.onclick = function(){
+        SD.lang = clone.dataset.lang;
+        try{ localStorage.setItem('sd_lang', JSON.stringify(SD.lang)); }catch(e){}
+        document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active', b.dataset.lang===SD.lang));
+        if(typeof SD.applyI18n === 'function') SD.applyI18n();
+        if(typeof SD.saveSetting === 'function') SD.saveSetting('language', SD.lang);
+      };
+    });
 
-            // Пробуем прочитать counter
-            try{
-              const cSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'counter/playerId'));
-              info += 'counter/playerId: ' + (cSnap.exists() ? cSnap.val() : 'НЕТ') + '\n';
-            }catch(e2){
-              info += 'ОШИБКА чтения counter: ' + (e2.code || e2.message) + '\n';
-            }
+    /* === 8) АКЦЕНТЫ === */
+    document.querySelectorAll('#accentPicker .accent-dot').forEach(function(btn){
+      if(btn._patched) return;
+      btn._patched = true;
+      var clone = btn.cloneNode(true);
+      btn.parentNode.replaceChild(clone, btn);
+      clone.onclick = function(){
+        var name = clone.dataset.accent;
+        SD.accent = name;
+        document.documentElement.setAttribute('data-accent', name);
+        try{ localStorage.setItem('sd_accent', JSON.stringify(name)); }catch(e){}
+        document.querySelectorAll('#accentPicker .accent-dot').forEach(d=>d.classList.toggle('active', d.dataset.accent===name));
+        if(typeof SD.saveSetting === 'function') SD.saveSetting('accent', name);
+      };
+    });
 
-            // Пробуем прочитать playerIds
-            try{
-              const pSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'playerIds'));
-              info += 'playerIds: ' + (pSnap.exists() ? 'ЕСТЬ (' + Object.keys(pSnap.val()||{}).length + ')' : 'НЕТ') + '\n';
-            }catch(e3){
-              info += 'ОШИБКА чтения playerIds: ' + (e3.code || e3.message) + '\n';
-            }
-          }
+    /* === 9) INLINE onclick-кнопки (быстрые, меню профиля) === */
+    document.querySelectorAll('.quick-btn, .pm-item').forEach(function(btn){
+      if(btn._patched) return;
+      var oc = btn.getAttribute('onclick');
+      if(!oc) return;
+      btn._patched = true;
+      var clone = btn.cloneNode(true);
+      btn.parentNode.replaceChild(clone, btn);
+      clone.onclick = new Function(oc);
+    });
 
-          alert(info);
-          console.log(info);
+    /* === 10) СВАЙП-ЗАКРЫТИЕ МОДАЛОК по серой полоске === */
+    document.querySelectorAll('.modal-back').forEach(function(modal){
+      if(modal._swipeReady) return;
+      modal._swipeReady = true;
+      var sheet = modal.querySelector('.modal-sheet');
+      if(!sheet) return;
+      var handle = sheet.querySelector('.sheet-handle');
+      if(!handle) return;
 
-          // Предлагаем выход, чтобы начать заново
-          if(confirm('Выйти из аккаунта и начать заново?')){
-            try{
-              await fb.authMod.signOut(fb.auth);
-              localStorage.clear();
-              location.reload();
-            }catch(e){}
-          }
-        }catch(err){
-          alert('Диагностика упала: ' + (err.code || err.message));
+      var startY = 0, curY = 0, dragging = false;
+
+      function onStart(y){
+        dragging = true;
+        startY = y;
+        curY = 0;
+        sheet.style.transition = 'none';
+      }
+      function onMove(y){
+        if(!dragging) return;
+        curY = y - startY;
+        if(curY < 0) curY = curY * 0.3; // вверх — с сопротивлением
+        sheet.style.transform = 'translateY(' + curY + 'px)';
+      }
+      function onEnd(){
+        if(!dragging) return;
+        dragging = false;
+        sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1.1)';
+        if(curY > 100){
+          // Закрываем
+          sheet.style.transform = 'translateY(100%)';
+          setTimeout(function(){
+            modal.classList.remove('show');
+            sheet.style.transform = '';
+            sheet.style.transition = '';
+          }, 260);
+        } else {
+          // Возвращаем на место
+          sheet.style.transform = '';
+          setTimeout(function(){ sheet.style.transition = ''; }, 300);
         }
       }
-    }, 5000);
+
+      // Touch
+      handle.addEventListener('touchstart', function(e){
+        var t = e.touches[0];
+        onStart(t.clientY);
+      }, {passive:true});
+      document.addEventListener('touchmove', function(e){
+        if(!dragging) return;
+        var t = e.touches[0];
+        onMove(t.clientY);
+      }, {passive:true});
+      document.addEventListener('touchend', function(){
+        if(dragging) onEnd();
+      }, {passive:true});
+
+      // Mouse (десктоп)
+      handle.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        onStart(e.clientY);
+      });
+      document.addEventListener('mousemove', function(e){
+        if(!dragging) return;
+        onMove(e.clientY);
+      });
+      document.addEventListener('mouseup', function(){
+        if(dragging) onEnd();
+      });
+
+      // Курсор
+      handle.style.cursor = 'grab';
+      handle.style.touchAction = 'none';
+      handle.style.padding = '12px 0';
+      handle.style.marginTop = '-6px';
+    });
+
+    /* === 11) АНТИ-ДВОЙНОЙ-КЛИК — разрешаем все кнопки === */
+    function markButtons(){
+      document.querySelectorAll('button, .btn, .nav-item, .quick-btn, .pm-item, .inv-filter, .accent-dot, .lang-btn, .avatar-choice, .count-btn, .case-card, .inv-card').forEach(function(el){
+        el.dataset._dblAllowed = '1';
+      });
+    }
+    markButtons();
+    setInterval(markButtons, 800);
+
+    /* === 12) ЗВУК — активируем AudioContext по первому тапу === */
+    if(!window._sdSoundReady){
+      window._sdSoundReady = true;
+      function unlockAudio(){
+        try{
+          var C = window.AudioContext || window.webkitAudioContext;
+          if(!C) return;
+          if(!window._sdAC) window._sdAC = new C();
+          if(window._sdAC.state === 'suspended') window._sdAC.resume();
+        }catch(e){}
+        document.removeEventListener('touchstart', unlockAudio);
+        document.removeEventListener('click', unlockAudio);
+      }
+      document.addEventListener('touchstart', unlockAudio, {passive:true});
+      document.addEventListener('click', unlockAudio, {passive:true});
+    }
+
+    console.log('✅ ПАТЧ v6 применён');
   }
-  init();
+
+  applyPatch();
+  setTimeout(applyPatch, 1500);
+  setTimeout(applyPatch, 4000);
 })();
 </script>
-
 </body>
 </html>
 
