@@ -3554,5 +3554,14 @@ console.log('✅ Arrow fixed: revolving around wheel center');
   console.log('✅ UPGRADE v4 загружен');
 })();
 </script>
+<style>
+/* Скрываем debug-окно апгрейда */
+#_upDebug { display: none !important; }
+</style>
+<script>
+// Отключаем debug-логи в консоли
+window._upgradeDebugOff = true;
+console.log('✅ Debug overlay отключён');
+</script>
 </body>
 </html>
