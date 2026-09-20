@@ -3373,5 +3373,186 @@ console.log('✅ Arrow fixed: revolving around wheel center');
   console.log('✅ Финальный патч апгрейда применён');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   FINAL FIX: возвращаем top к исходному -8px.
+   Теперь transform-origin (12px 138px) точно попадает
+   в центр колеса, и кончик стрелки описывает круг радиуса 118
+   ровно по дуге.
+   ═══════════════════════════════════════════════════════ */
+.upgrade-arrow-top {
+  top: -8px !important;
+  border-left: 12px solid transparent !important;
+  border-right: 12px solid transparent !important;
+  border-top: 20px solid #ffffff !important;
+  transform-origin: 12px 138px !important;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,.9)) drop-shadow(0 2px 3px rgba(0,0,0,.9)) !important;
+}
+#upChanceArc { stroke-linecap: butt !important; }
+</style>
+
+<div id="_upDebug" style="display:none;position:fixed;top:8px;left:8px;right:8px;z-index:999999;background:rgba(0,0,0,.92);color:#0f0;padding:10px;font:11px ui-monospace,Menlo,monospace;border-radius:8px;line-height:1.5;pointer-events:none;white-space:pre-wrap;"></div>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 UPGRADE FINAL v4 — единая геометрия');
+
+  const DEBUG = true;
+  const dbg = document.getElementById('_upDebug');
+  function showDebug(obj){
+    if(!DEBUG || !dbg) return;
+    dbg.style.display = 'block';
+    dbg.textContent = Object.keys(obj).map(k => k + ': ' + obj[k]).join('\n');
+    clearTimeout(dbg._t);
+    dbg._t = setTimeout(() => { dbg.style.display = 'none'; }, 8000);
+  }
+
+  // ── 1. Дуга: r=118, центр внизу (SVG 90°) ──
+  window.drawArc = function(p){
+    const path = document.getElementById('upChanceArc');
+    if(!path) return;
+    const cx = 130, cy = 130, r = 118;
+    p = Math.max(0, Math.min(100, p));
+    if(p < 0.01){ path.setAttribute('d',''); return; }
+    const halfDeg = p * 1.8;
+    const startRad = (90 + halfDeg) * Math.PI / 180;
+    const endRad = (90 - halfDeg) * Math.PI / 180;
+    const x1 = cx + r * Math.cos(startRad), y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad), y2 = cy + r * Math.sin(endRad);
+    const largeArc = p > 50 ? 1 : 0;
+    path.setAttribute('d', `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 0 ${x2} ${y2}`);
+  };
+
+  // ── 2. runUpgrade: один roll → один угол → один результат ──
+  window.SD.runUpgrade = function(){
+    if(!SD.upSource || !SD.upTarget){ SD.err('Ошибка','Сначала выберите предмет'); return; }
+    if(SD.upTarget.p <= SD.upSource.p){ SD.err('Ошибка','Цель должна быть дороже'); return; }
+
+    const d = computeChance();
+    if(d.addG > (SD.profile.balance || 0)){ SD.err('Ошибка','Недостаточно средств'); return; }
+
+    const btn = document.getElementById('upgradeBtn');
+    if(btn) btn.disabled = true;
+
+    // Списание
+    const nb = (SD.profile.balance || 0) - d.addG;
+    const inv = toArr(SD.profile.inventory);
+    const srcIdx = inv.findIndex(s => s.id === SD.upSource.id);
+    if(srcIdx > -1) inv.splice(srcIdx, 1);
+    SD.profile.balance = nb; SD.profile.inventory = inv;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, `users/${SD.uid}`), { balance: nb, inventory: inv });
+    SD.updateBalanceUI(nb, true);
+
+    const prev = (SD.profile.stats && SD.profile.stats.upgrades) || 0;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, `users/${SD.uid}/stats`), { upgrades: prev + 1 });
+
+    // ОДИН ROLL
+    const roll = Math.random() * 100;
+    const isWin = SD.devMode ? true : (roll < d.chance);
+
+    // Win-зона в CSS: центр = 180° (низ колеса), полуширина = chance*1.8°
+    const halfWidth = d.chance * 1.8;
+    let finalAngle;
+
+    if(isWin){
+      const safe = halfWidth * 0.9;   // 10% отступ от краёв
+      finalAngle = 180 + (Math.random() * 2 - 1) * safe;
+    } else {
+      const margin = 5;                // 5° запас от края win-зоны
+      const zoneEnd = 180 + halfWidth + margin;
+      const loseSize = 360 - 2 * halfWidth - 2 * margin;
+      finalAngle = zoneEnd + Math.random() * loseSize;
+      if(finalAngle >= 360) finalAngle -= 360;
+    }
+
+    // Проверка: попадает ли финальный угол в win-зону
+    const distFromCenter = Math.abs(((finalAngle - 180 + 540) % 360) - 180);
+    const inWinZone = distFromCenter <= halfWidth;
+
+    console.log('🎲 UPGRADE:', {
+      chance: d.chance.toFixed(2),
+      roll: roll.toFixed(2),
+      isWin,
+      halfWidth: halfWidth.toFixed(2),
+      winZone: '[' + (180-halfWidth).toFixed(1) + '°, ' + (180+halfWidth).toFixed(1) + '°]',
+      finalAngle: finalAngle.toFixed(2),
+      inWinZone,
+      MATCH: inWinZone === isWin
+    });
+
+    showDebug({
+      chance: d.chance.toFixed(2) + '%',
+      roll: roll.toFixed(2),
+      isWin: isWin ? '✅ WIN' : '❌ LOSE',
+      'win-зона CSS': (180-halfWidth).toFixed(1) + '° .. ' + (180+halfWidth).toFixed(1) + '°',
+      'finalAngle': finalAngle.toFixed(1) + '°',
+      'в зоне?': inWinZone ? '✅ да' : '❌ нет',
+      'совпало?': inWinZone === isWin ? '✅ OK' : '❌ РАССИНХРОН'
+    });
+
+    // Анимация
+    const arrow = document.getElementById('upArrow');
+    const spins = 3 + Math.floor(Math.random() * 3);
+    if(arrow){
+      arrow.style.transition = 'none';
+      arrow.style.transform = 'translateX(-50%) rotate(0deg)';
+      void arrow.offsetWidth;
+      arrow.style.transition = 'transform 6.5s cubic-bezier(.15,.75,.2,1)';
+      arrow.style.transform = `translateX(-50%) rotate(${spins * 360 + finalAngle}deg)`;
+    }
+
+    // Результат
+    setTimeout(() => {
+      if(isWin){
+        const target = SD.upTarget;
+        const newInv = toArr(SD.profile.inventory);
+        newInv.push({
+          w: target.w, s: target.s, r: target.r, file: target.file,
+          p: Math.round(target.p),
+          id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+          received: false
+        });
+        SD.profile.inventory = newInv;
+        fb.dbMod.update(fb.dbMod.ref(fb.db, `users/${SD.uid}`), { inventory: newInv });
+        winSound();
+        SD.ok('Апгрейд выполнен!', target.w + ' | ' + target.s);
+        SD.upSource = target; SD.upTarget = null; SD.upAddPercent = 0;
+      } else {
+        SD.err('Апгрейд не удался', 'Скин сгорел');
+        SD.upSource = null; SD.upTarget = null; SD.upAddPercent = 0;
+      }
+      if(btn) btn.disabled = false;
+      renderUpgrade();
+      renderInventory();
+    }, 6700);
+  };
+
+  // ── 3. Гарантированная привязка кнопки ──
+  function rebind(){
+    const btn = document.getElementById('upgradeBtn');
+    if(!btn) return false;
+    btn.onclick = null;
+    btn.onclick = function(e){ if(e) e.preventDefault(); window.SD.runUpgrade(); };
+    console.log('✅ Кнопка UPGRADE → v4');
+    return true;
+  }
+  if(!rebind()){
+    document.addEventListener('DOMContentLoaded', rebind);
+    setTimeout(rebind, 500);
+    setTimeout(rebind, 2000);
+  }
+  setInterval(function(){
+    const btn = document.getElementById('upgradeBtn');
+    if(btn && btn.onclick !== window.SD.runUpgrade && !btn._v4){
+      btn.onclick = null;
+      btn.onclick = function(e){ if(e) e.preventDefault(); window.SD.runUpgrade(); };
+      btn._v4 = true;
+    }
+  }, 800);
+
+  console.log('✅ UPGRADE v4 загружен');
+})();
+</script>
 </body>
 </html>
