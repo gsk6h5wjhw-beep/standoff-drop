@@ -2688,5 +2688,15 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   console.log('🎯 FINAL FIX загружен (popup mode)');
 })();
 </script>
+<style>
+/* Стрелка едет ПО КРУГУ, не крутится как юла.
+   transform-origin = центр колеса (12px от угла стрелки по X, 138px по Y) */
+.upgrade-arrow-top{
+  transform-origin: 12px 138px !important;
+}
+</style>
+<script>
+console.log('✅ Arrow fixed: revolving around wheel center');
+</script>
 </body>
 </html>
