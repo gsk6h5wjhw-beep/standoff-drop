@@ -2914,5 +2914,99 @@ console.log('✅ Arrow fixed: revolving around wheel center');
   console.log('✅ Upgrade logic synchronized: arrow lands inside/outside win-zone correctly');
 })();
 </script>
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 Upgrade Fix #2: removing 45° cap, syncing win/lose with visual arc');
+
+  // Полная замена runUpgrade — синхронизировано с drawArc
+  window.SD.runUpgrade = function(){
+    if(!SD.upSource || !SD.upTarget){ SD.err('Ошибка','Сначала выберите предмет'); return; }
+    if(SD.upTarget.p <= SD.upSource.p){ SD.err('Ошибка','Цель должна быть дороже'); return; }
+
+    const d = computeChance();
+    if(d.addG > (SD.profile.balance || 0)){ SD.err('Ошибка','Недостаточно средств'); return; }
+
+    const btn = document.getElementById('upgradeBtn');
+    if(btn) btn.disabled = true;
+
+    // Списываем средства и предмет
+    const nb = (SD.profile.balance || 0) - d.addG;
+    const inv = toArr(SD.profile.inventory);
+    const srcIdx = inv.findIndex(s => s.id === SD.upSource.id);
+    if(srcIdx > -1) inv.splice(srcIdx, 1);
+    SD.profile.balance = nb;
+    SD.profile.inventory = inv;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, `users/${SD.uid}`), { balance: nb, inventory: inv });
+    SD.updateBalanceUI(nb, true);
+
+    const prev = (SD.profile.stats && SD.profile.stats.upgrades) || 0;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, `users/${SD.uid}/stats`), { upgrades: prev + 1 });
+
+    // Определяем win/lose
+    const win = SD.devMode ? true : (Math.random() * 100 < d.chance);
+
+    // ── ГЛАВНОЕ: halfDeg без cap, синхронно с drawArc ──
+    // Win-зона в CSS: центр = 180° (низ колеса), половина = chance*3.6/2
+    const halfDeg = (d.chance * 3.6) / 2;
+    let finalAngle;
+
+    if(win){
+      // Стрелка строго ВНУТРИ зоны (запас 85%, чтобы не на самом краю)
+      const offset = (Math.random() * 2 - 1) * halfDeg * 0.85;
+      finalAngle = 180 + offset;
+    } else {
+      // Стрелка строго СНАРУЖИ зоны (+8° запас)
+      const margin = 8;
+      const excludeStart = 180 - halfDeg - margin;
+      const excludeEnd   = 180 + halfDeg + margin;
+      let guard = 0;
+      do {
+        finalAngle = Math.random() * 360;
+        guard++;
+        if(guard > 200){ finalAngle = 0; break; } // safety для 92%
+      } while (finalAngle > excludeStart && finalAngle < excludeEnd);
+    }
+
+    // Анимация стрелки
+    const arrow = document.getElementById('upArrow');
+    const totalRot = 3 + Math.random() * 2;
+    if(arrow){
+      arrow.style.transition = 'none';
+      arrow.style.transform = 'translateX(-50%) rotate(0deg)';
+      void arrow.offsetWidth;
+      arrow.style.transition = 'transform 6.5s cubic-bezier(.15,.75,.2,1)';
+      arrow.style.transform = `translateX(-50%) rotate(${360 * totalRot + finalAngle}deg)`;
+    }
+
+    // Результат через 6.7 сек
+    setTimeout(() => {
+      if(win){
+        const target = SD.upTarget;
+        const newInv = toArr(SD.profile.inventory);
+        newInv.push({
+          w: target.w, s: target.s, r: target.r, file: target.file,
+          p: Math.round(target.p),
+          id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+          received: false
+        });
+        SD.profile.inventory = newInv;
+        fb.dbMod.update(fb.dbMod.ref(fb.db, `users/${SD.uid}`), { inventory: newInv });
+        winSound();
+        SD.ok('Апгрейд выполнен!', `${target.w} | ${target.s}`);
+        SD.upSource = target; SD.upTarget = null; SD.upAddPercent = 0;
+      } else {
+        SD.err('Апгрейд не удался', 'Скин сгорел');
+        SD.upSource = null; SD.upTarget = null; SD.upAddPercent = 0;
+      }
+      if(btn) btn.disabled = false;
+      renderUpgrade();
+      renderInventory();
+    }, 6700);
+  };
+
+  console.log('✅ Готово: логика стрелки синхронизирована с дугой (без cap 45°)');
+})();
+</script>
 </body>
 </html>
