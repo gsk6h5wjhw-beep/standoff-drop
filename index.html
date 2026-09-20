@@ -2707,5 +2707,39 @@ console.log('✅ Arrow fixed: revolving around wheel center');
 }
 </style>
 <script>console.log('✅ Arrow lands ON the arc');</script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   FIX: стрелка апгрейда катается ПО КРУГУ вокруг центра колеса
+   (transform-origin = центр колеса, а не точка рядом)
+   ═══════════════════════════════════════════════════════ */
+.upgrade-arrow-top{
+  transform-origin: 12px 138px !important;
+}
+</style>
+<script>
+(function(){
+  // Патчим drawArc: радиус дуги 118px, чтобы совпасть
+  // с траекторией кончика стрелки (иначе она садится снаружи)
+  function patch(){
+    if(typeof window.drawArc !== 'function'){ setTimeout(patch, 200); return; }
+    window.drawArc = function(p){
+      const path = document.getElementById('upChanceArc');
+      if(!path) return;
+      const cx=130, cy=130, r=118;
+      p = Math.max(0, Math.min(100, p));
+      if(p < 0.01){ path.setAttribute('d',''); return; }
+      const half = (p * 3.6) / 2;
+      const sA = (90 + half) * Math.PI/180;
+      const eA = (90 - half) * Math.PI/180;
+      const x1 = cx + r*Math.cos(sA), y1 = cy + r*Math.sin(sA);
+      const x2 = cx + r*Math.cos(eA), y2 = cy + r*Math.sin(eA);
+      const largeArc = p > 50 ? 1 : 0;
+      path.setAttribute('d','M '+x1+' '+y1+' A '+r+' '+r+' 0 '+largeArc+' 0 '+x2+' '+y2);
+    };
+    console.log('✅ Arrow + arc fixed');
+  }
+  patch();
+})();
+</script>
 </body>
 </html>
