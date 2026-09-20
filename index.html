@@ -2074,5 +2074,146 @@ window.addEventListener('error', e => console.error('[SD error]', e.error || e.m
 window.addEventListener('unhandledrejection', e => console.error('[SD promise]', e.reason));
 console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v32 loaded');
 </script>
+<script type="module">
+/* ═══════════════════════════════════════════════════════════
+   ФИНАЛЬНЫЙ ПАТЧ для iPhone + Vercel
+   Google Login + защита от падений
+   ═══════════════════════════════════════════════════════════ */
+(async function(){
+  'use strict';
+
+  // ── 1. Включаем :active-анимации на iPhone ──────────────
+  document.addEventListener('touchstart', function(){}, { passive: true });
+
+  // ── 2. Проверка, что skins.js загрузился ────────────────
+  setTimeout(function(){
+    if(typeof window.SD_CASES === 'undefined' || !window.SD_CASES || !window.SD_CASES.length){
+      console.error('❌ skins.js не загружен');
+      if(!document.getElementById('_skinsErr')){
+        var b = document.createElement('div');
+        b.id = '_skinsErr';
+        b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#ff2e63;color:#fff;padding:14px;font:900 13px -apple-system,sans-serif;text-align:center;line-height:1.4';
+        b.innerHTML = '❌ Файл <b>skins.js</b> не найден<br><span style="font-size:11px;opacity:.9">Положи его рядом с index.html в той же папке</span>';
+        document.body.appendChild(b);
+      }
+    } else {
+      console.log('✅ skins.js OK, кейсов:', window.SD_CASES.length);
+    }
+  }, 3000);
+
+  // ── 3. Firebase (переиспользует существующий или создаёт) ──
+  var cfg = {
+    apiKey: "AIzaSyC79CsYTIjr2lahLJv2U1HX_1laEU7-31E",
+    authDomain: "shursh-messenger.firebaseapp.com",
+    databaseURL: "https://shursh-messenger-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "shursh-messenger",
+    storageBucket: "shursh-messenger.firebasestorage.app",
+    messagingSenderId: "1063665415609",
+    appId: "1:1063665415609:web:d5069aef0e640e23f2b268"
+  };
+
+  var appMod, authMod, app, auth;
+  try {
+    appMod  = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    authMod = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js");
+    try { app = appMod.getApp(); } catch(e){ app = appMod.initializeApp(cfg); }
+    auth = authMod.getAuth(app);
+    console.log('✅ Firebase патч готов, домен:', location.hostname);
+  } catch(err){
+    console.error('❌ Firebase init failed:', err);
+    return;
+  }
+
+  // ── 4. Заменяем Google-кнопку (клон = чистые обработчики) ─
+  function bindGoogle(){
+    var btn = document.getElementById('googleLoginBtn');
+    if(!btn) return false;
+    if(btn._patched) return true;
+
+    var fresh = btn.cloneNode(true);
+    fresh._patched = true;
+    fresh.style.pointerEvents = 'auto';
+    fresh.style.cursor = 'pointer';
+    fresh.style.webkitTapHighlightColor = 'transparent';
+    btn.parentNode.replaceChild(fresh, btn);
+
+    fresh.addEventListener('click', async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      var orig = fresh.innerHTML;
+      fresh.disabled = true;
+      fresh.style.opacity = '0.6';
+      fresh.innerHTML = '<span style="color:#1a1a1a;font-weight:900">Подключение…</span>';
+
+      try {
+        var provider = new authMod.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+
+        // На iPhone/iPad — только redirect (popup не работает в iOS Safari)
+        var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if(isIOS){
+          console.log('📱 iOS → signInWithRedirect');
+          await authMod.signInWithRedirect(auth, provider);
+          return;
+        }
+        // Desktop — popup с fallback
+        try {
+          await authMod.signInWithPopup(auth, provider);
+        } catch(err){
+          var c = (err && err.code) || '';
+          if(c.indexOf('popup') > -1 || c.indexOf('cancelled') > -1){
+            await authMod.signInWithRedirect(auth, provider);
+          } else throw err;
+        }
+      } catch(err){
+        console.error('❌ login:', err);
+        fresh.disabled = false;
+        fresh.style.opacity = '';
+        fresh.innerHTML = orig;
+
+        var msg = (err && (err.code || err.message)) || 'Неизвестная ошибка';
+        if(msg.indexOf('unauthorized-domain') > -1){
+          alert('🔴 ДОМЕН НЕ РАЗРЕШЁН\n\n' + location.hostname +
+                '\n\nЗайди в Firebase Console:\nAuthentication → Settings → Authorized domains → добавь этот домен');
+        } else if(msg.indexOf('operation-not-allowed') > -1){
+          alert('🔴 Google-вход выключен\n\nFirebase Console → Authentication → Sign-in method → Google → Enable');
+        } else if(msg.indexOf('popup-closed') > -1){
+          alert('Окно закрыто, попробуй ещё раз');
+        } else if(msg.indexOf('network') > -1){
+          alert('Нет интернета');
+        } else {
+          alert('Ошибка:\n' + msg);
+        }
+      }
+    }, true);
+
+    console.log('✅ Кнопка Google привязана');
+    return true;
+  }
+
+  // Пытаемся привязать сразу и с задержками
+  if(!bindGoogle()){
+    document.addEventListener('DOMContentLoaded', bindGoogle);
+    setTimeout(bindGoogle, 300);
+    setTimeout(bindGoogle, 1000);
+    setTimeout(bindGoogle, 2500);
+  }
+
+  // ── 5. Возврат с redirect-входа ─────────────────────────
+  try {
+    authMod.getRedirectResult(auth).then(function(res){
+      if(res && res.user) console.log('✅ Вход завершён:', res.user.email);
+    }).catch(function(e){
+      if(e && e.code && e.code !== 'auth/no-auth-event') console.warn('redirect:', e);
+    });
+  } catch(e){}
+
+  console.log('%c🎯 ПАТЧ ЗАГРУЖЕН','color:#20d66b;font-weight:900');
+  console.log('   домен:', location.hostname);
+  console.log('   skins.js:', typeof window.SD_CASES !== 'undefined' ? '✅' : '❌');
+})();
+</script>
 </body>
 </html>
