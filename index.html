@@ -2215,5 +2215,129 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   console.log('   skins.js:', typeof window.SD_CASES !== 'undefined' ? '✅' : '❌');
 })();
 </script>
+<script type="module">
+/* ═══════════════════════════════════════════════════════════
+   FINAL FIX — Google Login на iPhone через POPUP
+   ═══════════════════════════════════════════════════════════ */
+(async function(){
+  'use strict';
+
+  // Ждём Firebase
+  function waitFB(){
+    return new Promise(function(resolve){
+      if(window.__firebaseReady && window.__fb) return resolve(window.__fb);
+      window.addEventListener('fb-ready', function(){ resolve(window.__fb); }, { once: true });
+      setTimeout(function(){ resolve(window.__fb || null); }, 10000);
+    });
+  }
+
+  var fb = await waitFB();
+  if(!fb){ console.error('❌ Firebase не загружен'); return; }
+  var auth = fb.auth;
+  var authMod = fb.authMod;
+
+  // Обрабатываем возврат со старого редиректа (если был)
+  authMod.getRedirectResult(auth).then(function(res){
+    if(res && res.user) console.log('✅ Redirect вернул юзера:', res.user.email);
+  }).catch(function(e){
+    if(e && e.code !== 'auth/no-auth-event') console.warn('redirect:', e.code);
+  });
+
+  // Новая функция входа — POPUP первым (работает на iOS 16+)
+  async function login(){
+    var btn = document.getElementById('googleLoginBtn');
+    var orig = btn ? btn.innerHTML : '';
+    if(btn){
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+      btn.innerHTML = '<span style="color:#1a1a1a;font-weight:900">Подключение…</span>';
+    }
+
+    var provider = new authMod.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    try {
+      console.log('🔐 Пробуем POPUP...');
+      var result = await authMod.signInWithPopup(auth, provider);
+      console.log('✅ POPUP успех:', result.user.email);
+      // Дальше onAuthStateChanged в основном скрипте сам переключит экран
+    } catch(popErr){
+      console.warn('❌ Popup failed:', popErr.code);
+
+      // Fallback на redirect, если попап заблокирован
+      if(popErr.code === 'auth/popup-blocked' ||
+         popErr.code === 'auth/popup-closed-by-user' ||
+         popErr.code === 'auth/cancelled-popup-request'){
+        try {
+          console.log('↩️ Fallback на redirect...');
+          await authMod.signInWithRedirect(auth, provider);
+          return;
+        } catch(redErr){
+          popErr = redErr;
+        }
+      }
+
+      // Показываем ошибку
+      if(btn){ btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = orig; }
+      var msg = popErr.code || popErr.message || 'Ошибка';
+      if(msg.indexOf('unauthorized-domain') > -1){
+        alert('🔴 Домен не разрешён.\n\nFirebase Console → Authentication → Settings → Authorized domains\n\nДобавь: standoff-drop.vercel.app');
+      } else if(msg.indexOf('operation-not-allowed') > -1){
+        alert('🔴 Google-вход выключен.\nFirebase Console → Authentication → Sign-in method → Google → Enable');
+      } else if(msg.indexOf('popup-closed') > -1){
+        alert('Окно входа закрыто. Попробуй ещё раз.');
+      } else {
+        alert('Ошибка входа:\n' + msg);
+      }
+    }
+  }
+
+  // Перепривязываем кнопку (клон снимает ВСЕ старые обработчики)
+  function rebind(){
+    var btn = document.getElementById('googleLoginBtn');
+    if(!btn || btn._finalBound) return false;
+    var fresh = btn.cloneNode(true);
+    fresh._finalBound = true;
+    fresh.style.pointerEvents = 'auto';
+    fresh.style.cursor = 'pointer';
+    fresh.style.webkitTapHighlightColor = 'transparent';
+    btn.parentNode.replaceChild(fresh, btn);
+    fresh.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      login();
+    }, true);
+    console.log('✅ Google button rebind (popup mode)');
+    return true;
+  }
+
+  if(!rebind()){
+    document.addEventListener('DOMContentLoaded', rebind);
+    setTimeout(rebind, 300);
+    setTimeout(rebind, 1000);
+    setTimeout(rebind, 2500);
+  }
+
+  // Принудительно скрываем login, если юзер уже авторизован
+  function forceApp(){
+    if(!auth.currentUser) return;
+    var login = document.getElementById('loginScreen');
+    var onboard = document.getElementById('onboardScreen');
+    if(login && !login.classList.contains('hidden')){
+      console.log('🔄 Принудительно скрываем login для:', auth.currentUser.email);
+      login.classList.add('hidden');
+    }
+  }
+  authMod.onAuthStateChanged(auth, function(u){
+    if(u){ console.log('✅ Auth state:', u.email); forceApp(); }
+  });
+  if(auth.currentUser) forceApp();
+  setTimeout(forceApp, 1000);
+  setTimeout(forceApp, 2500);
+
+  console.log('🎯 FINAL FIX загружен (popup mode)');
+})();
+</script>
 </body>
 </html>
