@@ -2741,5 +2741,58 @@ console.log('✅ Arrow fixed: revolving around wheel center');
   patch();
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   ARROW FIX:
+   1. Белая тонкая стрелка — не сливается с заливкой
+   2. После апгрейда НЕ сбрасывается наверх — остаётся
+      там, где остановилась (видно win/lose)
+   ═══════════════════════════════════════════════════════ */
+.upgrade-arrow-top{
+  top: -4px !important;
+  border-left: 9px solid transparent !important;
+  border-right: 9px solid transparent !important;
+  border-top: 16px solid #ffffff !important;
+  transform-origin: 9px 134px !important;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,.85)) drop-shadow(0 2px 3px rgba(0,0,0,.9)) !important;
+}
+</style>
+<script>
+(function(){
+  // Перехватываем setTimeout с задержкой 6700мс (сброс стрелки)
+  // и после его выполнения возвращаем стрелку на место
+  function patch(){
+    if(window._arrowLockPatched) return;
+    window._arrowLockPatched = true;
+
+    var _orig = window.setTimeout;
+    window.setTimeout = function(fn, delay){
+      if(delay === 6700 && typeof fn === 'function' && !fn._protectSkip){
+        var wrapped = function(){
+          var arrow = document.getElementById('upArrow');
+          var savedTransform = arrow ? arrow.style.transform : '';
+          var savedTransition = arrow ? arrow.style.transition : '';
+
+          // Даём оригинальному колбэку сбросить стрелку и показать тост
+          fn.apply(this, arguments);
+
+          // Возвращаем стрелку на её финальную позицию
+          if(arrow && savedTransform){
+            arrow.style.transition = 'none';
+            arrow.style.transform = savedTransform;
+            console.log('🎯 Стрелка осталась на месте:', savedTransform);
+          }
+        };
+        wrapped._protectSkip = true;
+        return _orig.call(this, wrapped, delay);
+      }
+      return _orig.apply(this, arguments);
+    };
+
+    console.log('✅ Arrow lock enabled');
+  }
+  patch();
+})();
+</script>
 </body>
 </html>
