@@ -2698,5 +2698,14 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 <script>
 console.log('✅ Arrow fixed: revolving around wheel center');
 </script>
+<style>
+/* Fix: arrow stops INSIDE the colored zone, not outside.
+   Меняем origin так, чтобы кончик стрелки крутился на том же радиусе,
+   что и закрашенная дуга (108px), а не снаружи (118px). */
+.upgrade-arrow-top{
+  transform-origin: 12px 118px !important;
+}
+</style>
+<script>console.log('✅ Arrow lands ON the arc');</script>
 </body>
 </html>
