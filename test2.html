@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test2</title>
+</head>
+<body style="margin:0;padding:20px;font-family:-apple-system,sans-serif;background:#111;color:#fff">
+
+<h1 id="status" style="font-size:20px;margin-bottom:20px">⏳ Проверка...</h1>
+
+<button id="btn" style="padding:20px 30px;font-size:18px;font-weight:900;background:#ff2e63;color:#fff;border:0;border-radius:12px;width:100%;min-height:60px">
+  НАЖМИ МЕНЯ
+</button>
+
+<div id="log" style="margin-top:20px;padding:14px;background:#222;border-radius:10px;font-size:13px;line-height:1.7;white-space:pre-wrap"></div>
+
+<script>
+(function(){
+  var status = document.getElementById('status');
+  var log = document.getElementById('log');
+  var btn = document.getElementById('btn');
+
+  var lines = [];
+  lines.push('protocol: ' + location.protocol);
+  lines.push('host: ' + location.hostname);
+  lines.push('path: ' + location.pathname);
+  lines.push('SD_CASES: ' + typeof window.SD_CASES);
+  if(typeof window.SD_CASES !== 'undefined'){
+    lines.push('SD_CASES.length: ' + window.SD_CASES.length);
+  }
+
+  status.textContent = '✅ JavaScript РАБОТАЕТ';
+  status.style.color = '#20d66b';
+  log.textContent = lines.join('\n');
+
+  btn.onclick = function(){
+    btn.style.background = '#20d66b';
+    btn.textContent = '✅ КНОПКА РАБОТАЕТ!';
+    log.textContent = lines.join('\n') + '\n\n✅ click сработал!';
+    alert('Кнопка работает!');
+  };
+})();
+
+window.addEventListener('error', function(e){
+  document.getElementById('status').textContent = '❌ Ошибка: ' + e.message;
+  document.getElementById('status').style.color = '#ff2e63';
+});
+</script>
+
+<!-- Теперь подключаем skins.js и смотрим, грузится ли он -->
+<script src="skins.js"></script>
+<script>
+(function(){
+  var log = document.getElementById('log');
+  var after = '';
+
+  if(typeof window.SD_CASES === 'undefined'){
+    after = '\n\n❌ skins.js НЕ ЗАГРУЗИЛСЯ';
+  } else {
+    after = '\n\n✅ skins.js ЗАГРУЖЕН, кейсов: ' + window.SD_CASES.length;
+  }
+  log.textContent += after;
+})();
+</script>
+
+</body>
+</html>
