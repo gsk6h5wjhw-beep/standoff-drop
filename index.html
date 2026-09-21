@@ -3563,5 +3563,50 @@ console.log('✅ Arrow fixed: revolving around wheel center');
 window._upgradeDebugOff = true;
 console.log('✅ Debug overlay отключён');
 </script>
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 Adding Fury case...');
+
+  var FURY_IMG = 'cases/fury.PNG';   // ← точно как у тебя на GitHub
+
+  function applyFury(){
+    if(typeof window.SD_CASES === 'undefined' || !window.SD_CASES.length) return false;
+
+    var c = null;
+    for(var i = 0; i < SD_CASES.length; i++){
+      if(SD_CASES[i].id === 'iphone-duo' || SD_CASES[i].name === 'iPhone Duo'){
+        c = SD_CASES[i];
+        break;
+      }
+    }
+    if(!c) return false;
+
+    c.id = 'fury';
+    c.name = 'Fury';
+    c.caseImg = FURY_IMG;
+    c.tag = 'NEW';
+    // Цена 199 остаётся
+
+    console.log('✅ Fury case updated');
+    try { if(typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if(typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+    return true;
+  }
+
+  if(!applyFury()){
+    document.addEventListener('DOMContentLoaded', function(){
+      if(!applyFury()){
+        var tries = 0;
+        var iv = setInterval(function(){
+          tries++;
+          if(applyFury() || tries > 30) clearInterval(iv);
+        }, 300);
+      }
+    });
+  }
+  console.log('✅ Fury patch загружен');
+})();
+</script>
 </body>
 </html>
