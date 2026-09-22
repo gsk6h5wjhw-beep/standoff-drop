@@ -4389,5 +4389,118 @@ console.log('✅ Debug overlay отключён');
   });
 })();
 </script>
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 HARD RESET: hero + widgets with correct paths');
+
+  var IMG = {
+    hero:    'hero.PNG',
+    widgets: 'widgets.PNG'
+  };
+
+  // 1. Сносим всё старое
+  function cleanup(){
+    document.querySelectorAll('.hero-img').forEach(function(el){ el.remove(); });
+    document.querySelectorAll('#widgetsBlock').forEach(function(el){ el.remove(); });
+    var h = document.querySelector('#screen-home .hero');
+    if(h) h._patched = false;
+  }
+
+  // 2. Hero
+  function applyHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero) return false;
+    if(hero.querySelector('.hero-img[data-ok="1"]')) return true;
+
+    cleanup();
+    hero._patched = true;
+
+    var img = document.createElement('img');
+    img.className = 'hero-img';
+    img.setAttribute('data-ok','1');
+    img.src = IMG.hero;
+    img.alt = '';
+    img.onerror = function(){ console.error('❌ Hero 404:', IMG.hero); img.remove(); };
+    img.onload  = function(){ console.log('✅ Hero loaded'); };
+    hero.insertBefore(img, hero.firstChild);
+
+    if(!hero.querySelector('.hero-tag-overlay')){
+      var tag = document.createElement('div');
+      tag.className = 'hero-tag-overlay';
+      tag.textContent = 'STANDOFF 2 • КЕЙСЫ';
+      hero.appendChild(tag);
+    }
+    if(!hero.querySelector('.hero-btn-overlay')){
+      var btn = document.createElement('button');
+      btn.className = 'hero-btn-overlay';
+      btn.textContent = 'ОТКРЫТЬ КЕЙС';
+      btn.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(btn);
+    }
+    return true;
+  }
+
+  // 3. Виджеты
+  function applyWidgets(){
+    var screenHome = document.getElementById('screen-home');
+    if(!screenHome) return false;
+    if(document.querySelector('#widgetsBlock[data-ok="1"]')) return true;
+    var hero = screenHome.querySelector('.hero');
+    if(!hero) return false;
+
+    var old = document.querySelector('#widgetsBlock');
+    if(old) old.remove();
+
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.setAttribute('data-ok','1');
+    block.innerHTML = '<img class="widgets-img" src="' + IMG.widgets + '" alt="">' +
+                      '<div class="widgets-overlay"></div>';
+    var overlay = block.querySelector('.widgets-overlay');
+    var wImg = block.querySelector('.widgets-img');
+    wImg.onerror = function(){ console.error('❌ Widgets 404:', IMG.widgets); block.remove(); };
+    wImg.onload  = function(){ console.log('✅ Widgets loaded'); };
+
+    ['upgrade','roulette','games','inventory','players','profile'].forEach(function(target){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', target);
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(target === 'players') SD.playersTab = 'transfer';
+          SD.go(target);
+        }
+      };
+      overlay.appendChild(b);
+    });
+
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+    console.log('✅ Widgets inserted');
+    return true;
+  }
+
+  function run(){
+    applyHero();
+    applyWidgets();
+  }
+
+  run();
+  document.addEventListener('DOMContentLoaded', run);
+  setTimeout(run, 300);
+  setTimeout(run, 1000);
+  setTimeout(run, 2500);
+  setTimeout(run, 5000);
+
+  // Постоянный наблюдатель — если что-то удалит наши элементы — вернём
+  setInterval(run, 1500);
+
+  console.log('✅ HARD RESET applied');
+})();
+</script>
 </body>
 </html>
