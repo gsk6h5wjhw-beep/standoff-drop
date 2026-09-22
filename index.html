@@ -4835,5 +4835,324 @@ console.log('✅ Debug overlay отключён');
   setInterval(run, 3000);
 })();
 </script>
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 SUPER PATCH: перебиваю все старые');
+
+  // ═══ 1. ГЛУШИМ ВСЕ СТАРЫЕ ТАЙМЕРЫ ═══
+  try {
+    var maxId = setInterval(function(){}, 999999);
+    for(var i = 0; i < maxId; i++){
+      try { clearInterval(i); } catch(e){}
+    }
+    console.log('✅ Все старые setInterval убиты');
+  } catch(e){}
+
+  // ═══ 2. ГЛУШИМ ВСЕ СТАРЫЕ MutationObserver ═══
+  try {
+    window.MutationObserver = function(){
+      return { observe: function(){}, disconnect: function(){}, takeRecords: function(){ return []; } };
+    };
+    console.log('✅ MutationObserver отключён');
+  } catch(e){}
+
+  // ═══ 3. СНОСИМ ВСЁ, ЧТО УСПЕЛИ ВСТАВИТЬ СТАРЫЕ ПАТЧИ ═══
+  document.querySelectorAll('.hero-img').forEach(function(el){ el.remove(); });
+  document.querySelectorAll('#widgetsBlock').forEach(function(el){ el.remove(); });
+  document.querySelectorAll('.hero-tag-overlay, .hero-btn-overlay').forEach(function(el){ el.remove(); });
+
+  // ═══ 4. ПРАВИЛЬНЫЕ ПУТИ ═══
+  var IMG = {
+    fury:     'cases/fury.PNG',
+    common:   'cases/734151B4-03BA-4831-929B-47FB355B6FEF.png',
+    uncommon: 'cases/070A5351-3469-45C4-8AB7-CB27B2164F3A.png',
+    rare:     'cases/D14BFE01-DFC6-4EAF-800A-99E3BAEB8CDA.png',
+    widgets:  'widgets.PNG',
+    hero:     'hero.jpg'
+  };
+
+  // ═══ 5. СТИЛИ — перебивают все старые ═══
+  var css = document.createElement('style');
+  css.textContent = `
+    #screen-home .hero > .hero-tag,
+    #screen-home .hero > .hero-title,
+    #screen-home .hero > .hero-btn { display: none !important; }
+    #screen-home .hero {
+      padding: 0 !important; background: none !important; border: none !important;
+      position: relative !important; display: block !important;
+      margin: 8px -9px 14px !important;
+      overflow: hidden !important; border-radius: 18px !important; line-height: 0 !important;
+    }
+    #screen-home .hero::before { display: none !important; }
+    #screen-home .hero .hero-img { width: 100% !important; height: auto !important; display: block !important; }
+    #screen-home .hero .hero-tag-overlay {
+      position: absolute !important; left: 4.2% !important; top: 22% !important;
+      width: 25% !important; height: 11% !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      font-size: clamp(7px, 1.5vw, 11px) !important; font-weight: 1000 !important;
+      letter-spacing: 1.2px !important; color: #fff !important; text-transform: uppercase !important;
+      pointer-events: none !important; text-shadow: 0 0 8px rgba(255,60,80,.8) !important;
+      white-space: nowrap !important; line-height: 1 !important;
+    }
+    #screen-home .hero .hero-btn-overlay {
+      position: absolute !important; left: 4.2% !important; top: 65% !important;
+      width: 25% !important; height: 14% !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      font-size: clamp(8px, 1.6vw, 12px) !important; font-weight: 1000 !important;
+      color: #fff !important; text-transform: uppercase !important; cursor: pointer !important;
+      background: transparent !important; border: none !important; padding: 0 !important;
+      text-shadow: 0 1px 3px rgba(0,0,0,.5) !important;
+      -webkit-tap-highlight-color: transparent !important; line-height: 1 !important;
+    }
+    #widgetsBlock {
+      position: relative !important; margin: 4px -9px 18px !important;
+      border-radius: 16px !important; overflow: hidden !important; line-height: 0 !important;
+    }
+    #widgetsBlock .widgets-img { width: 100% !important; height: auto !important; display: block !important; }
+    #widgetsBlock .widgets-overlay {
+      position: absolute !important; inset: 4% 3% 4% 3% !important;
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      grid-template-rows: repeat(2, 1fr) !important;
+      gap: 4% 3% !important;
+    }
+    #widgetsBlock .widgets-overlay button {
+      background: transparent !important; border: none !important; padding: 0 !important;
+      cursor: pointer !important; border-radius: 14px !important;
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    #screen-home .quick-grid { display: none !important; }
+    .upgrade-arrow-top {
+      top: -8px !important;
+      border-left: 12px solid transparent !important;
+      border-right: 12px solid transparent !important;
+      border-top: 20px solid #ffffff !important;
+      transform-origin: 12px 138px !important;
+      filter: drop-shadow(0 0 6px rgba(255,255,255,.9)) drop-shadow(0 2px 3px rgba(0,0,0,.9)) !important;
+    }
+    #upChanceArc { stroke-linecap: butt !important; }
+    #_upDebug, #_upgradeDebug { display: none !important; }
+  `;
+  document.head.appendChild(css);
+
+  // ═══ 6. КЕЙСЫ ═══
+  function patchCases(){
+    if(typeof window.SD_CASES === 'undefined' || !window.SD_CASES.length) return false;
+    SD_CASES.forEach(function(c){
+      if(c.id === 'iphone-duo'){ c.id = 'fury'; c.name = 'Fury'; c.caseImg = IMG.fury; c.tag = 'NEW'; }
+      else if(c.id === 'common'){ c.caseImg = IMG.common; }
+      else if(c.id === 'uncommon'){ c.caseImg = IMG.uncommon; }
+      else if(c.id === 'rare'){ c.caseImg = IMG.rare; }
+    });
+    try { if(typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if(typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+    return true;
+  }
+
+  // ═══ 7. HERO ═══
+  function applyHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero) return false;
+    hero.querySelectorAll('.hero-img').forEach(function(el){ el.remove(); });
+
+    var img = document.createElement('img');
+    img.className = 'hero-img';
+    img.src = IMG.hero;
+    img.alt = '';
+    img.onerror = function(){ console.error('❌ Hero 404:', IMG.hero); };
+    img.onload  = function(){ console.log('✅ Hero loaded'); };
+    hero.insertBefore(img, hero.firstChild);
+
+    if(!hero.querySelector('.hero-tag-overlay')){
+      var tag = document.createElement('div');
+      tag.className = 'hero-tag-overlay';
+      tag.textContent = 'STANDOFF 2 • КЕЙСЫ';
+      hero.appendChild(tag);
+    }
+    if(!hero.querySelector('.hero-btn-overlay')){
+      var btn = document.createElement('button');
+      btn.className = 'hero-btn-overlay';
+      btn.textContent = 'ОТКРЫТЬ КЕЙС';
+      btn.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(btn);
+    }
+    return true;
+  }
+
+  // ═══ 8. ВИДЖЕТЫ ═══
+  function applyWidgets(){
+    var s = document.getElementById('screen-home');
+    if(!s) return false;
+    if(document.getElementById('widgetsBlock')) return true;
+    var hero = s.querySelector('.hero');
+    if(!hero) return false;
+
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.innerHTML = '<img class="widgets-img" src="' + IMG.widgets + '" alt="">' +
+                      '<div class="widgets-overlay"></div>';
+    var ov = block.querySelector('.widgets-overlay');
+    var wImg = block.querySelector('.widgets-img');
+    wImg.onerror = function(){ console.error('❌ Widgets 404:', IMG.widgets); };
+    wImg.onload  = function(){ console.log('✅ Widgets loaded'); };
+
+    ['upgrade','roulette','games','inventory','players','profile'].forEach(function(t){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', t);
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(t === 'players') SD.playersTab = 'transfer';
+          SD.go(t);
+        }
+      };
+      ov.appendChild(b);
+    });
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+    return true;
+  }
+
+  // ═══ 9. АПГРЕЙД — дуга + логика ═══
+  window.drawArc = function(p){
+    var path = document.getElementById('upChanceArc');
+    if(!path) return;
+    var cx = 130, cy = 130, r = 118;
+    p = Math.max(0, Math.min(100, p));
+    if(p < 0.01){ path.setAttribute('d',''); return; }
+    var half = p * 1.8;
+    var sA = (90 + half) * Math.PI/180;
+    var eA = (90 - half) * Math.PI/180;
+    var x1 = cx + r*Math.cos(sA), y1 = cy + r*Math.sin(sA);
+    var x2 = cx + r*Math.cos(eA), y2 = cy + r*Math.sin(eA);
+    var la = p > 50 ? 1 : 0;
+    path.setAttribute('d', 'M '+x1+' '+y1+' A '+r+' '+r+' 0 '+la+' 0 '+x2+' '+y2);
+  };
+
+  window.SD.runUpgrade = function(){
+    if(!SD.upSource || !SD.upTarget){ SD.err('Ошибка','Сначала выберите предмет'); return; }
+    if(SD.upTarget.p <= SD.upSource.p){ SD.err('Ошибка','Цель должна быть дороже'); return; }
+    var d = computeChance();
+    if(d.addG > (SD.profile.balance || 0)){ SD.err('Ошибка','Недостаточно средств'); return; }
+    var btn = document.getElementById('upgradeBtn');
+    if(btn) btn.disabled = true;
+
+    var nb = (SD.profile.balance || 0) - d.addG;
+    var inv = toArr(SD.profile.inventory);
+    var si = inv.findIndex(function(s){ return s.id === SD.upSource.id; });
+    if(si > -1) inv.splice(si, 1);
+    SD.profile.balance = nb;
+    SD.profile.inventory = inv;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), { balance: nb, inventory: inv });
+    SD.updateBalanceUI(nb, true);
+
+    var prev = (SD.profile.stats && SD.profile.stats.upgrades) || 0;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid + '/stats'), { upgrades: prev + 1 });
+
+    var roll = Math.random() * 100;
+    var isWin = SD.devMode ? true : (roll < d.chance);
+
+    var half = d.chance * 1.8;
+    var fa;
+    if(isWin){
+      fa = 180 + (Math.random() * 2 - 1) * half * 0.85;
+    } else {
+      var m = 6;
+      fa = 180 + half + m + Math.random() * (360 - 2 * half - 2 * m);
+      if(fa >= 360) fa -= 360;
+    }
+
+    var arrow = document.getElementById('upArrow');
+    var spins = 3 + Math.floor(Math.random() * 3);
+    if(arrow){
+      arrow.style.transition = 'none';
+      arrow.style.transform = 'translateX(-50%) rotate(0deg)';
+      void arrow.offsetWidth;
+      arrow.style.transition = 'transform 6.5s cubic-bezier(.15,.75,.2,1)';
+      arrow.style.transform = 'translateX(-50%) rotate(' + (spins * 360 + fa) + 'deg)';
+    }
+
+    setTimeout(function(){
+      if(isWin){
+        var t = SD.upTarget;
+        var ni = toArr(SD.profile.inventory);
+        ni.push({ w:t.w, s:t.s, r:t.r, file:t.file, p:Math.round(t.p),
+          id:'inv-'+Date.now()+'-'+Math.random().toString(36).slice(2,7), received:false });
+        SD.profile.inventory = ni;
+        fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), { inventory: ni });
+        winSound();
+        SD.ok('Апгрейд выполнен!', t.w + ' | ' + t.s);
+        SD.upSource = t; SD.upTarget = null; SD.upAddPercent = 0;
+      } else {
+        SD.err('Апгрейд не удался', 'Скин сгорел');
+        SD.upSource = null; SD.upTarget = null; SD.upAddPercent = 0;
+      }
+      if(btn) btn.disabled = false;
+      renderUpgrade(); renderInventory();
+    }, 6700);
+  };
+
+  // ═══ 10. ПЕРЕПРИВЯЗКА КНОПОК ═══
+  function rebindAll(){
+    var ub = document.getElementById('upgradeBtn');
+    if(ub){
+      ub.onclick = null;
+      ub.onclick = function(e){ if(e) e.preventDefault(); window.SD.runUpgrade(); };
+    }
+    var gb = document.getElementById('googleLoginBtn');
+    if(gb && !gb._finalBound){
+      var fr = gb.cloneNode(true);
+      fr._finalBound = true;
+      fr.style.pointerEvents = 'auto';
+      fr.style.cursor = 'pointer';
+      gb.parentNode.replaceChild(fr, gb);
+      fr.addEventListener('click', function(e){
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        if(typeof fb === 'undefined' || !fb){ alert('Firebase ещё грузится, подожди 2 сек'); return; }
+        var p = new fb.authMod.GoogleAuthProvider();
+        p.setCustomParameters({ prompt: 'select_account' });
+        var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if(isIOS){
+          fb.authMod.signInWithRedirect(fb.auth, p).catch(function(err){
+            alert('Ошибка: ' + (err.code || err.message));
+          });
+        } else {
+          fb.authMod.signInWithPopup(fb.auth, p).catch(function(err){
+            if(err && err.code && (err.code.indexOf('popup') > -1 || err.code.indexOf('cancelled') > -1)){
+              fb.authMod.signInWithRedirect(fb.auth, p);
+            } else {
+              alert('Ошибка: ' + (err.code || err.message));
+            }
+          });
+        }
+      }, true);
+    }
+  }
+
+  // ═══ ЗАПУСК ═══
+  function run(){
+    patchCases();
+    applyHero();
+    applyWidgets();
+    rebindAll();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  // Несколько раз с задержкой — на случай, если старые патчи что-то перезапишут
+  setTimeout(run, 400);
+  setTimeout(run, 1000);
+  setTimeout(run, 2500);
+  setTimeout(run, 5000);
+  setTimeout(run, 8000);
+
+  console.log('✅ SUPER PATCH готов — все старые патчи перебиты');
+})();
+</script>
 </body>
 </html>
