@@ -4217,5 +4217,177 @@ console.log('✅ Debug overlay отключён');
   });
 })();
 </script>
+<style>
+#screen-home .hero > .hero-tag,
+#screen-home .hero > .hero-title,
+#screen-home .hero > .hero-btn { display: none !important; }
+#screen-home .hero {
+  padding: 0 !important; background: none !important; border: none !important;
+  position: relative; display: block; margin: 8px 0 14px;
+  overflow: hidden; border-radius: 20px; line-height: 0;
+}
+#screen-home .hero::before { display: none !important; }
+#screen-home .hero .hero-img {
+  width: 100%; height: auto; display: block;
+  user-select: none; -webkit-user-drag: none;
+}
+#screen-home .hero .hero-tag-overlay {
+  position: absolute; left: 4.2%; top: 22%; width: 25%; height: 11%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(7px, 1.5vw, 11px); font-weight: 1000; letter-spacing: 1.2px;
+  color: #fff; text-transform: uppercase; pointer-events: none;
+  text-shadow: 0 0 8px rgba(255,60,80,.8); white-space: nowrap; line-height: 1;
+}
+#screen-home .hero .hero-btn-overlay {
+  position: absolute; left: 4.2%; top: 65%; width: 25%; height: 14%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(8px, 1.6vw, 12px); font-weight: 1000;
+  color: #fff; text-transform: uppercase; cursor: pointer;
+  background: transparent; border: none; padding: 0;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5); -webkit-tap-highlight-color: transparent;
+  line-height: 1;
+}
+#screen-home .hero .hero-btn-overlay:active { transform: scale(.95); }
+#widgetsBlock {
+  position: relative; margin: 4px 0 18px; border-radius: 18px;
+  overflow: hidden; line-height: 0;
+}
+#widgetsBlock .widgets-img {
+  width: 100%; height: auto; display: block;
+  user-select: none; -webkit-user-drag: none;
+}
+#widgetsBlock .widgets-overlay {
+  position: absolute; inset: 4% 3% 4% 3%;
+  display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(2,1fr);
+  gap: 4% 3%;
+}
+#widgetsBlock .widgets-overlay button {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  border-radius: 14px; -webkit-tap-highlight-color: transparent;
+}
+#widgetsBlock .widgets-overlay button:active {
+  background: rgba(255,255,255,.10); transform: scale(.97);
+}
+#screen-home .quick-grid { display: none !important; }
+#_upDebug, #_upgradeDebug { display: none !important; }
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 PATCH: files in root');
+
+  var IMG = {
+    common:   'cases/734151B4-03BA-4831-929B-47FB355B6FEF.png',
+    uncommon: 'cases/070A5351-3469-45C4-8AB7-CB27B2164F3A.png',
+    rare:     'cases/D14BFE01-DFC6-4EAF-800A-99E3BAEB8CDA.png',
+    widgets:  'widgets.PNG',       // ← в корне
+    hero:     'hero.PNG'           // ← в корне
+  };
+
+  function updateCases(){
+    if(typeof window.SD_CASES === 'undefined' || !window.SD_CASES.length) return false;
+    var map = {
+      'common':   { name:'Common',   img:IMG.common },
+      'uncommon': { name:'Uncommon', img:IMG.uncommon },
+      'rare':     { name:'Rare',     img:IMG.rare }
+    };
+    SD_CASES.forEach(function(c){
+      if(map[c.id]){ c.name = map[c.id].name; c.caseImg = map[c.id].img; }
+    });
+    try { if(typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if(typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+    console.log('✅ Cases updated');
+    return true;
+  }
+
+  function applyHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero || hero._patched) return !!hero;
+    hero._patched = true;
+
+    var img = document.createElement('img');
+    img.className = 'hero-img';
+    img.src = IMG.hero;
+    img.alt = '';
+    img.onerror = function(){ console.error('❌ Hero FAILED:', IMG.hero); };
+    img.onload  = function(){ console.log('✅ Hero loaded'); };
+    hero.insertBefore(img, hero.firstChild);
+
+    var tag = document.createElement('div');
+    tag.className = 'hero-tag-overlay';
+    tag.textContent = 'STANDOFF 2 • КЕЙСЫ';
+    hero.appendChild(tag);
+
+    var btn = document.createElement('button');
+    btn.className = 'hero-btn-overlay';
+    btn.textContent = 'ОТКРЫТЬ КЕЙС';
+    btn.onclick = function(e){
+      e.preventDefault();
+      if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+    };
+    hero.appendChild(btn);
+    return true;
+  }
+
+  function applyWidgets(){
+    var screenHome = document.getElementById('screen-home');
+    if(!screenHome) return false;
+    if(document.getElementById('widgetsBlock')) return true;
+    var hero = screenHome.querySelector('.hero');
+    if(!hero) return false;
+
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.innerHTML = '<img class="widgets-img" src="' + IMG.widgets + '" alt="">' +
+                      '<div class="widgets-overlay"></div>';
+    var overlay = block.querySelector('.widgets-overlay');
+    var wImg = block.querySelector('.widgets-img');
+    wImg.onerror = function(){ console.error('❌ Widgets FAILED:', IMG.widgets); };
+    wImg.onload  = function(){ console.log('✅ Widgets loaded'); };
+
+    ['upgrade','roulette','games','inventory','players','profile'].forEach(function(target){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', target);
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(target === 'players') SD.playersTab = 'transfer';
+          SD.go(target);
+        }
+      };
+      overlay.appendChild(b);
+    });
+
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+    console.log('✅ Widgets inserted');
+    return true;
+  }
+
+  function runAll(){
+    var a = updateCases(), b = applyHero(), c = applyWidgets();
+    console.log('Run:', a, b, c);
+    return a && b && c;
+  }
+
+  if(!runAll()){
+    document.addEventListener('DOMContentLoaded', runAll);
+    setTimeout(runAll, 300);
+    setTimeout(runAll, 1000);
+    setTimeout(runAll, 2500);
+  }
+
+  var obs = new MutationObserver(function(){
+    if(!document.getElementById('widgetsBlock')) applyWidgets();
+    var h = document.querySelector('#screen-home .hero');
+    if(h && !h._patched) applyHero();
+  });
+  document.addEventListener('DOMContentLoaded', function(){
+    var s = document.getElementById('screen-home');
+    if(s) obs.observe(s, { childList: true, subtree: true });
+  });
+})();
+</script>
 </body>
 </html>
