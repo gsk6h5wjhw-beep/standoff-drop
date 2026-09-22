@@ -5154,5 +5154,328 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ SUPER PATCH готов — все старые патчи перебиты');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   WIDGETS → КАРУСЕЛЬ (новостной виджет, 3 слайда)
+   ═══════════════════════════════════════════════════════ */
+#widgetsBlock {
+  position: relative !important;
+  margin: 4px -14px 18px !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  line-height: 0 !important;
+  background: linear-gradient(160deg,#12131c 0%,#0a0b12 100%);
+  padding: 0 !important;
+}
+
+/* Дорожка со слайдами */
+#widgetsBlock .wz-track {
+  display: flex !important;
+  flex-direction: row !important;
+  width: 300% !important; /* 3 слайда */
+  transition: transform .45s cubic-bezier(.22,.61,.36,1);
+  will-change: transform;
+}
+#widgetsBlock .wz-slide {
+  width: 33.3333% !important;
+  flex: 0 0 33.3333% !important;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 24px 18px;
+  box-sizing: border-box;
+  text-align: center;
+  color: #fff;
+}
+#widgetsBlock .wz-slide img.wz-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  position: absolute;
+  inset: 0;
+  object-fit: cover;
+  z-index: 0;
+}
+#widgetsBlock .wz-slide .wz-overlay-grid {
+  position: absolute;
+  inset: 4% 3% 4% 3%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 4% 3%;
+  z-index: 2;
+}
+#widgetsBlock .wz-slide .wz-overlay-grid button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 14px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s ease, transform .1s ease;
+}
+#widgetsBlock .wz-slide .wz-overlay-grid button:active {
+  background: rgba(255,255,255,.10);
+  transform: scale(.97);
+}
+
+/* Текстовые слайды (2 и 3) */
+#widgetsBlock .wz-text-slide {
+  background:
+    radial-gradient(400px 220px at 50% 0%, rgba(182,92,255,.28), transparent 65%),
+    linear-gradient(160deg,#14151f 0%,#0a0b12 100%);
+}
+#widgetsBlock .wz-text-slide .wz-emoji {
+  font-size: 52px;
+  line-height: 1;
+  margin-bottom: 14px;
+  filter: drop-shadow(0 6px 22px rgba(182,92,255,.55));
+  animation: wzFloat 3s ease-in-out infinite;
+}
+@keyframes wzFloat {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-6px); }
+}
+#widgetsBlock .wz-text-slide .wz-title {
+  font-size: 22px;
+  font-weight: 1000;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  margin-bottom: 8px;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(182,92,255,.5);
+}
+#widgetsBlock .wz-text-slide .wz-sub {
+  font-size: 13px;
+  font-weight: 700;
+  color: #b9bcc8;
+  line-height: 1.4;
+  max-width: 260px;
+}
+
+/* Индикатор-точки */
+#widgetsBlock .wz-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  z-index: 5;
+  pointer-events: auto;
+}
+#widgetsBlock .wz-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.28);
+  transition: background .25s ease, width .25s ease;
+  cursor: pointer;
+}
+#widgetsBlock .wz-dots span.active {
+  background: #b65cff;
+  width: 22px;
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(182,92,255,.7);
+}
+
+/* Скрываем старый одиночный .widgets-img/.widgets-overlay */
+#widgetsBlock > .widgets-img,
+#widgetsBlock > .widgets-overlay { display: none !important; }
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🎠 Widgets CAROUSEL: 3 slides + swipe');
+
+  // ═══ Настройки ═══
+  var WIDGETS_IMG = 'widgets.PNG';
+  var AUTOPLAY_MS = 5500;   // авто-перелистывание
+  var SLIDE_COUNT = 3;
+  var SWIPE_THRESHOLD = 50; // пикселей для срабатывания свайпа
+
+  var currentSlide = 0;
+  var autoplayTimer = null;
+
+  // ═══ HTML карусели ═══
+  function buildCarouselHTML(){
+    return '' +
+      '<div class="wz-track" id="wzTrack">' +
+
+        // СЛАЙД 1 — картинка с 6 виджетами
+        '<div class="wz-slide wz-slide-1">' +
+          '<img class="wz-img" src="' + WIDGETS_IMG + '" alt="">' +
+          '<div class="wz-overlay-grid" id="wzGrid1"></div>' +
+        '</div>' +
+
+        // СЛАЙД 2 — "Да, скоро всё будет :)"
+        '<div class="wz-slide wz-text-slide">' +
+          '<div class="wz-emoji">👀</div>' +
+          '<div class="wz-title">Да, скоро всё будет 🙂</div>' +
+          '<div class="wz-sub">Мы уже готовим что-то интересное. Держись — скоро добавим новые игры и кейсы.</div>' +
+        '</div>' +
+
+        // СЛАЙД 3 — "Да что ты листаешь?"
+        '<div class="wz-slide wz-text-slide">' +
+          '<div class="wz-emoji">🤨</div>' +
+          '<div class="wz-title">Ну что ты листаешь?</div>' +
+          '<div class="wz-sub">Мы же сказали — скоро всё будет 😎<br>Пока что тут ничего нет, но ты не сдавайся!</div>' +
+        '</div>' +
+
+      '</div>' +
+      '<div class="wz-dots" id="wzDots"></div>';
+  }
+
+  // ═══ Установить активную точку ═══
+  function updateDots(){
+    var dots = document.querySelectorAll('#wzDots span');
+    dots.forEach(function(d, i){
+      d.classList.toggle('active', i === currentSlide);
+    });
+  }
+
+  // ═══ Показать слайд ═══
+  function goToSlide(index){
+    if(index < 0) index = 0;
+    if(index >= SLIDE_COUNT) index = SLIDE_COUNT - 1;
+    currentSlide = index;
+
+    var track = document.getElementById('wzTrack');
+    if(!track) return;
+    var pct = -(index * (100 / SLIDE_COUNT));
+    track.style.transform = 'translateX(' + pct + '%)';
+    updateDots();
+  }
+
+  // ═══ Автоплей ═══
+  function startAutoplay(){
+    stopAutoplay();
+    autoplayTimer = setInterval(function(){
+      var next = (currentSlide + 1) % SLIDE_COUNT;
+      goToSlide(next);
+    }, AUTOPLAY_MS);
+  }
+  function stopAutoplay(){
+    if(autoplayTimer){ clearInterval(autoplayTimer); autoplayTimer = null; }
+  }
+
+  // ═══ Свайпы ═══
+  function bindSwipe(el){
+    var startX = 0, startY = 0, moved = false, dragged = false;
+
+    el.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      moved = false; dragged = false;
+      stopAutoplay();
+    }, { passive: true });
+
+    el.addEventListener('touchmove', function(e){
+      if(e.touches.length !== 1) return;
+      var dx = e.touches[0].clientX - startX;
+      var dy = e.touches[0].clientY - startY;
+      if(Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)){
+        moved = true;
+      }
+    }, { passive: true });
+
+    el.addEventListener('touchend', function(e){
+      if(!moved){ startAutoplay(); return; }
+      var endX = e.changedTouches[0].clientX;
+      var dx = endX - startX;
+      if(dx < -SWIPE_THRESHOLD){
+        goToSlide(currentSlide + 1);
+      } else if(dx > SWIPE_THRESHOLD){
+        goToSlide(currentSlide - 1);
+      }
+      dragged = true;
+      setTimeout(startAutoplay, 8000);
+    }, { passive: true });
+  }
+
+  // ═══ Собрать карусель ═══
+  function buildWidgets(){
+    var screenHome = document.getElementById('screen-home');
+    if(!screenHome) return false;
+    if(document.getElementById('wzTrack')) return true;
+
+    // Найти или создать блок
+    var block = document.getElementById('widgetsBlock');
+    var hero = screenHome.querySelector('.hero');
+    if(!hero) return false;
+
+    if(!block){
+      block = document.createElement('div');
+      block.id = 'widgetsBlock';
+      hero.parentNode.insertBefore(block, hero.nextSibling);
+    }
+
+    // Убираем старое содержимое
+    block.innerHTML = buildCarouselHTML();
+
+    // Клики по сетке на слайде 1
+    var grid1 = block.querySelector('#wzGrid1');
+    var targets = ['upgrade','roulette','games','inventory','players','profile'];
+    if(grid1){
+      targets.forEach(function(t){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('aria-label', t);
+        b.onclick = function(e){
+          e.preventDefault();
+          if(typeof SD !== 'undefined' && SD.go){
+            if(t === 'players') SD.playersTab = 'transfer';
+            SD.go(t);
+          }
+        };
+        grid1.appendChild(b);
+      });
+    }
+
+    // Точки
+    var dots = block.querySelector('#wzDots');
+    if(dots){
+      dots.innerHTML = '';
+      for(var i = 0; i < SLIDE_COUNT; i++){
+        (function(idx){
+          var d = document.createElement('span');
+          d.onclick = function(){ goToSlide(idx); };
+          dots.appendChild(d);
+        })(i);
+      }
+    }
+
+    // Свайпы
+    bindSwipe(block);
+
+    // Старт
+    goToSlide(0);
+    startAutoplay();
+
+    console.log('✅ Карусель собрана, 3 слайда');
+    return true;
+  }
+
+  // ═══ Запуск ═══
+  function run(){
+    if(typeof window.SD_CASES === 'undefined') return;
+    buildWidgets();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+  setTimeout(run, 500);
+  setTimeout(run, 1500);
+  setTimeout(run, 3000);
+
+  console.log('✅ Carousel patch ready');
+})();
+</script>
 </body>
 </html>
