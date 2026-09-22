@@ -4560,5 +4560,64 @@ console.log('✅ Debug overlay отключён');
   document.addEventListener('DOMContentLoaded', reflowWidgets);
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   EDGE FIX: hero и виджеты почти до края экрана
+   --edge = сколько пикселей оставляем от края (5px ≈ 1 мм)
+   ═══════════════════════════════════════════════════════ */
+:root { --edge: 5px; }
+
+/* Hero — почти до краёв */
+#screen-home .hero {
+  margin-left: calc(var(--edge) - 14px) !important;
+  margin-right: calc(var(--edge) - 14px) !important;
+  border-radius: 18px !important;
+}
+
+/* Виджеты — тоже почти до краёв */
+#widgetsBlock {
+  margin-left: calc(var(--edge) - 14px) !important;
+  margin-right: calc(var(--edge) - 14px) !important;
+  border-radius: 16px !important;
+}
+#widgetsBlock .widgets-overlay {
+  inset: 5% 3.5% 5% 3.5%;
+  gap: 5% 3%;
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('✅ Edge fix: hero + widgets почти до края');
+
+  // На десктопе у #app padding 20px, поправим динамически
+  function adjust(){
+    var app = document.getElementById('app');
+    if(!app) return;
+    var pad = parseInt(getComputedStyle(app).paddingLeft, 10) || 14;
+    var edge = 5; // 5px от края
+    var shift = edge - pad;
+
+    var hero = document.querySelector('#screen-home .hero');
+    if(hero){
+      hero.style.setProperty('margin-left', shift + 'px', 'important');
+      hero.style.setProperty('margin-right', shift + 'px', 'important');
+    }
+    var w = document.getElementById('widgetsBlock');
+    if(w){
+      w.style.setProperty('margin-left', shift + 'px', 'important');
+      w.style.setProperty('margin-right', shift + 'px', 'important');
+    }
+    console.log('✅ applied, shift =', shift, 'px');
+  }
+  adjust();
+  document.addEventListener('DOMContentLoaded', adjust);
+  setTimeout(adjust, 300);
+  setTimeout(adjust, 1000);
+  setTimeout(adjust, 2500);
+  window.addEventListener('resize', adjust);
+})();
+</script>
 </body>
 </html>
