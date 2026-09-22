@@ -3608,5 +3608,257 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ Fury patch загружен');
 })();
 </script>
+<!-- ═══════════════════════════════════════════════════════
+     СТИЛИ: виджеты + hero (Fury не трогаем)
+     ═══════════════════════════════════════════════════════ -->
+<style>
+/* Hero: картинка + текст поверх */
+#screen-home .hero > .hero-tag,
+#screen-home .hero > .hero-title,
+#screen-home .hero > .hero-btn { display: none !important; }
+#screen-home .hero {
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+  position: relative;
+  display: block;
+  margin: 8px 0 14px;
+  overflow: hidden;
+  border-radius: 20px;
+  line-height: 0;
+}
+#screen-home .hero::before { display: none !important; }
+#screen-home .hero .hero-img {
+  position: relative;
+  width: 100%;
+  height: auto;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+#screen-home .hero .hero-tag-overlay {
+  position: absolute;
+  left: 4.2%;
+  top: 22%;
+  width: 25%;
+  height: 11%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(7px, 1.5vw, 11px);
+  font-weight: 1000;
+  letter-spacing: 1.2px;
+  color: #fff;
+  text-transform: uppercase;
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(255,60,80,.8);
+  white-space: nowrap;
+  line-height: 1;
+}
+#screen-home .hero .hero-btn-overlay {
+  position: absolute;
+  left: 4.2%;
+  top: 65%;
+  width: 25%;
+  height: 14%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(8px, 1.6vw, 12px);
+  font-weight: 1000;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1;
+}
+#screen-home .hero .hero-btn-overlay:active { transform: scale(.95); }
+
+/* Виджеты: одна картинка + 6 невидимых кнопок */
+#widgetsBlock {
+  position: relative;
+  margin: 4px 0 18px;
+  border-radius: 18px;
+  overflow: hidden;
+  line-height: 0;
+}
+#widgetsBlock .widgets-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+#widgetsBlock .widgets-overlay {
+  position: absolute;
+  inset: 4% 3% 4% 3%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 4% 3%;
+}
+#widgetsBlock .widgets-overlay button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 14px;
+  transition: background .12s ease, transform .1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+#widgetsBlock .widgets-overlay button:active {
+  background: rgba(255,255,255,.10);
+  transform: scale(.97);
+}
+
+/* Скрываем старые 6 кнопок quick-grid */
+#screen-home .quick-grid { display: none !important; }
+
+/* Скрываем debug-окно апгрейда */
+#_upDebug, #_upgradeDebug { display: none !important; }
+</style>
+
+<!-- ═══════════════════════════════════════════════════════
+     ЛОГИКА: кейсы (кроме Fury) + виджеты + hero
+     ═══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 MEGA PATCH: cases (без Fury) + widgets + hero');
+
+  // ═══ Пути к файлам на GitHub ═══
+  var IMG = {
+    common:   'cases/734151B4-03BA-4831-929B-47FB355B6FEF.png',
+    uncommon: 'cases/070A5351-3469-45C4-8AB7-CB27B2164F3A.png',
+    rare:     'cases/0CF6D70F-81C0-44D9-98BC-64F9974DC6AA.png',
+    widgets:  'interface/83AD76D3-B5E8-433A-862E-2D963C5B46E3.png',
+    hero:     'interface/4F700313-CAAA-47CD-87F8-E54B9B225790.png'
+  };
+
+  // ═══ 1. ОБНОВЛЯЕМ ТОЛЬКО COMMON / UNCOMMON / RARE ═══
+  // Fury (бывший iphone-duo) НЕ ТРОГАЕМ — он уже настроен отдельным патчем
+  function updateCases(){
+    if(typeof window.SD_CASES === 'undefined' || !window.SD_CASES.length) return false;
+
+    var map = {
+      'common':   { name:'Common',   img:IMG.common },
+      'uncommon': { name:'Uncommon', img:IMG.uncommon },
+      'rare':     { name:'Rare',     img:IMG.rare }
+    };
+
+    SD_CASES.forEach(function(c){
+      if(map[c.id]){
+        c.name = map[c.id].name;
+        c.caseImg = map[c.id].img;
+      }
+    });
+
+    console.log('✅ Cases updated (Fury untouched)');
+    try { if(typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if(typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+    return true;
+  }
+
+  // ═══ 2. HERO-БАННЕР ═══
+  function applyHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero || hero._patched) return !!hero;
+
+    hero._patched = true;
+
+    var img = document.createElement('img');
+    img.className = 'hero-img';
+    img.src = IMG.hero;
+    img.alt = '';
+    hero.insertBefore(img, hero.firstChild);
+
+    var tag = document.createElement('div');
+    tag.className = 'hero-tag-overlay';
+    tag.textContent = 'STANDOFF 2 • КЕЙСЫ';
+    hero.appendChild(tag);
+
+    var btn = document.createElement('button');
+    btn.className = 'hero-btn-overlay';
+    btn.textContent = 'ОТКРЫТЬ КЕЙС';
+    btn.onclick = function(e){
+      e.preventDefault();
+      if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+    };
+    hero.appendChild(btn);
+
+    console.log('✅ Hero patched');
+    return true;
+  }
+
+  // ═══ 3. ВИДЖЕТЫ ═══
+  function applyWidgets(){
+    var screenHome = document.getElementById('screen-home');
+    if(!screenHome) return false;
+    if(document.getElementById('widgetsBlock')) return true;
+
+    var hero = screenHome.querySelector('.hero');
+    if(!hero) return false;
+
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.innerHTML = '<img class="widgets-img" src="' + IMG.widgets + '" alt="">' +
+                      '<div class="widgets-overlay"></div>';
+    var overlay = block.querySelector('.widgets-overlay');
+
+    var targets = ['upgrade','roulette','games','inventory','players','profile'];
+    targets.forEach(function(target){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', target);
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(target === 'players') SD.playersTab = 'transfer';
+          SD.go(target);
+        }
+      };
+      overlay.appendChild(b);
+    });
+
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+    console.log('✅ Widgets block inserted');
+    return true;
+  }
+
+  // ═══ 4. ЗАПУСК ═══
+  function runAll(){
+    var a = updateCases();
+    var b = applyHero();
+    var c = applyWidgets();
+    return a && b && c;
+  }
+
+  if(!runAll()){
+    document.addEventListener('DOMContentLoaded', runAll);
+    setTimeout(runAll, 300);
+    setTimeout(runAll, 800);
+    setTimeout(runAll, 1500);
+    setTimeout(runAll, 3000);
+  }
+
+  // Следим за повторным рендером главной
+  var observer = new MutationObserver(function(){
+    if(!document.getElementById('widgetsBlock')) applyWidgets();
+    var hero = document.querySelector('#screen-home .hero');
+    if(hero && !hero._patched) applyHero();
+  });
+  document.addEventListener('DOMContentLoaded', function(){
+    var screenHome = document.getElementById('screen-home');
+    if(screenHome) observer.observe(screenHome, { childList: true, subtree: true });
+  });
+
+  console.log('✅ MEGA PATCH loaded');
+})();
+</script>
 </body>
 </html>
