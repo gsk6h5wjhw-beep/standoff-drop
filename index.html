@@ -4747,5 +4747,93 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ FIX applied');
 })();
 </script>
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 FINAL: hero.jpg + widgets.PNG');
+
+  // ═══ ТОЧНЫЕ ИМЕНА ИЗ GITHUB ═══
+  var IMG = {
+    hero:    'hero.jpg',       // ← .jpg маленькими
+    widgets: 'widgets.PNG'     // ← .PNG большими
+  };
+
+  // Убираем старые битые картинки
+  document.querySelectorAll('.hero-img').forEach(function(el){ el.remove(); });
+  var oldBlock = document.getElementById('widgetsBlock');
+  if(oldBlock) oldBlock.remove();
+
+  function applyHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero || hero.querySelector('.hero-img')) return;
+    hero._patched = true;
+
+    var img = document.createElement('img');
+    img.className = 'hero-img';
+    img.src = IMG.hero;
+    img.alt = '';
+    img.onerror = function(){ console.error('❌ Hero 404:', IMG.hero); };
+    img.onload  = function(){ console.log('✅ Hero loaded'); };
+    hero.insertBefore(img, hero.firstChild);
+
+    if(!hero.querySelector('.hero-tag-overlay')){
+      var tag = document.createElement('div');
+      tag.className = 'hero-tag-overlay';
+      tag.textContent = 'STANDOFF 2 • КЕЙСЫ';
+      hero.appendChild(tag);
+    }
+    if(!hero.querySelector('.hero-btn-overlay')){
+      var btn = document.createElement('button');
+      btn.className = 'hero-btn-overlay';
+      btn.textContent = 'ОТКРЫТЬ КЕЙС';
+      btn.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(btn);
+    }
+  }
+
+  function applyWidgets(){
+    var screenHome = document.getElementById('screen-home');
+    if(!screenHome || document.getElementById('widgetsBlock')) return;
+    var hero = screenHome.querySelector('.hero');
+    if(!hero) return;
+
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.innerHTML = '<img class="widgets-img" src="' + IMG.widgets + '" alt="">' +
+                      '<div class="widgets-overlay"></div>';
+    var overlay = block.querySelector('.widgets-overlay');
+    var wImg = block.querySelector('.widgets-img');
+    wImg.onerror = function(){ console.error('❌ Widgets 404:', IMG.widgets); };
+    wImg.onload  = function(){ console.log('✅ Widgets loaded'); };
+
+    ['upgrade','roulette','games','inventory','players','profile'].forEach(function(target){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', target);
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(target === 'players') SD.playersTab = 'transfer';
+          SD.go(target);
+        }
+      };
+      overlay.appendChild(b);
+    });
+
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+  }
+
+  function run(){ applyHero(); applyWidgets(); }
+  run();
+  document.addEventListener('DOMContentLoaded', run);
+  setTimeout(run, 500);
+  setTimeout(run, 1500);
+  setTimeout(run, 3000);
+  setInterval(run, 3000);
+})();
+</script>
 </body>
 </html>
