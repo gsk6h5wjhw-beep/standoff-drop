@@ -4619,5 +4619,133 @@ console.log('✅ Debug overlay отключён');
   window.addEventListener('resize', adjust);
 })();
 </script>
+<style>
+/* Hero — почти до краёв, но НЕ удаляем, если картинка не загрузилась */
+#screen-home .hero {
+  margin-left: -9px !important;
+  margin-right: -9px !important;
+  border-radius: 18px !important;
+}
+
+/* Виджеты — тоже почти до краёв */
+#widgetsBlock {
+  margin-left: -9px !important;
+  margin-right: -9px !important;
+  border-radius: 16px !important;
+}
+#widgetsBlock .widgets-overlay {
+  inset: 5% 3.5% 5% 3.5% !important;
+  gap: 5% 3% !important;
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🎯 FIX: hero back + widgets edge-to-edge');
+
+  var IMG = {
+    hero:    'hero.PNG',
+    widgets: 'widgets.PNG'
+  };
+
+  // ═══ HERO — вставляем снова, БЕЗ удаления при ошибке ═══
+  function applyHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero) return false;
+    if(hero.querySelector('.hero-img')) return true;
+
+    hero._patched = true;
+
+    var img = document.createElement('img');
+    img.className = 'hero-img';
+    img.src = IMG.hero;
+    img.alt = '';
+    img.onerror = function(){
+      console.error('❌ Hero 404:', IMG.hero);
+      // НЕ удаляем — пусть попробует ещё раз через 2 сек
+      setTimeout(function(){
+        img.src = IMG.hero + '?t=' + Date.now();
+      }, 2000);
+    };
+    img.onload = function(){ console.log('✅ Hero loaded'); };
+    hero.insertBefore(img, hero.firstChild);
+
+    if(!hero.querySelector('.hero-tag-overlay')){
+      var tag = document.createElement('div');
+      tag.className = 'hero-tag-overlay';
+      tag.textContent = 'STANDOFF 2 • КЕЙСЫ';
+      hero.appendChild(tag);
+    }
+    if(!hero.querySelector('.hero-btn-overlay')){
+      var btn = document.createElement('button');
+      btn.className = 'hero-btn-overlay';
+      btn.textContent = 'ОТКРЫТЬ КЕЙС';
+      btn.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(btn);
+    }
+    console.log('✅ Hero inserted');
+    return true;
+  }
+
+  // ═══ ВИДЖЕТЫ — если пропали, вставляем заново ═══
+  function applyWidgets(){
+    var screenHome = document.getElementById('screen-home');
+    if(!screenHome) return false;
+    if(document.getElementById('widgetsBlock')) return true;
+
+    var hero = screenHome.querySelector('.hero');
+    if(!hero) return false;
+
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.innerHTML = '<img class="widgets-img" src="' + IMG.widgets + '" alt="">' +
+                      '<div class="widgets-overlay"></div>';
+    var overlay = block.querySelector('.widgets-overlay');
+    var wImg = block.querySelector('.widgets-img');
+    wImg.onerror = function(){
+      console.error('❌ Widgets 404:', IMG.widgets);
+    };
+    wImg.onload = function(){ console.log('✅ Widgets loaded'); };
+
+    ['upgrade','roulette','games','inventory','players','profile'].forEach(function(target){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', target);
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(target === 'players') SD.playersTab = 'transfer';
+          SD.go(target);
+        }
+      };
+      overlay.appendChild(b);
+    });
+
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+    console.log('✅ Widgets inserted');
+    return true;
+  }
+
+  function run(){
+    applyHero();
+    applyWidgets();
+  }
+
+  run();
+  document.addEventListener('DOMContentLoaded', run);
+  setTimeout(run, 300);
+  setTimeout(run, 1000);
+  setTimeout(run, 2500);
+
+  // Постоянный наблюдатель — если hero или виджеты удалились, вернём
+  setInterval(run, 2000);
+
+  console.log('✅ FIX applied');
+})();
+</script>
 </body>
 </html>
