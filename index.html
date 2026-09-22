@@ -5790,5 +5790,168 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ HERO CAROUSEL patch ready');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   FIX: тэг внутрь плашки, кнопка кликабельна, виджеты статичные
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Тэг опускаем ВНУТРЬ серой плашки на красном баннере ── */
+#screen-home .hero .wz-slide-1 .hero-tag-overlay,
+#screen-home .hero .hero-tag-overlay {
+  top: 33% !important;
+  left: 5.5% !important;
+  width: 26% !important;
+  height: 11% !important;
+  font-size: clamp(10px, 1.9vw, 14px) !important;
+  letter-spacing: 1.4px !important;
+  pointer-events: none !important;
+}
+
+/* ── Кнопка ОТКРЫТЬ КЕЙС — кликабельная ── */
+#screen-home .hero .wz-slide-1 .hero-btn-overlay,
+#screen-home .hero .hero-btn-overlay {
+  top: 62% !important;
+  left: 5.5% !important;
+  width: 26% !important;
+  height: 14% !important;
+  font-size: clamp(10px, 2vw, 14px) !important;
+  letter-spacing: 0.8px !important;
+  pointer-events: auto !important;
+  z-index: 10 !important;
+  position: absolute !important;
+}
+
+/* ── ВИДЖЕТЫ — статичная картинка, никаких свайпов ── */
+#widgetsBlock {
+  position: relative !important;
+  margin: 4px -14px 18px !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  line-height: 0 !important;
+  background: none !important;
+}
+#widgetsBlock .wz-track,
+#widgetsBlock .wz-dots { display: none !important; }
+
+#widgetsBlock > .widgets-img {
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  position: static !important;
+}
+#widgetsBlock > .widgets-overlay {
+  display: grid !important;
+  position: absolute !important;
+  inset: 4% 3% 4% 3% !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  grid-template-rows: repeat(2, 1fr) !important;
+  gap: 4% 3% !important;
+}
+#widgetsBlock > .widgets-overlay button {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+  border-radius: 14px !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+#widgetsBlock > .widgets-overlay button:active {
+  background: rgba(255,255,255,.10) !important;
+  transform: scale(.97) !important;
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🔧 FIX: tag position + button clickable + static widgets');
+
+  var WIDGETS_IMG = 'widgets.PNG';
+
+  // ═══ Восстанавливаем СТАТИЧНЫЙ блок виджетов ═══
+  function rebuildStaticWidgets(){
+    var s = document.getElementById('screen-home');
+    if(!s) return;
+
+    // Удаляем старый блок (мог быть каруселью)
+    var old = document.getElementById('widgetsBlock');
+    if(old) old.remove();
+
+    var hero = s.querySelector('.hero');
+    if(!hero) return;
+
+    // Создаём заново с простой структурой
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.innerHTML =
+      '<img class="widgets-img" src="' + WIDGETS_IMG + '" alt="">' +
+      '<div class="widgets-overlay"></div>';
+
+    var overlay = block.querySelector('.widgets-overlay');
+    ['upgrade','roulette','games','inventory','players','profile'].forEach(function(t){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', t);
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(t === 'players') SD.playersTab = 'transfer';
+          SD.go(t);
+        }
+      };
+      overlay.appendChild(b);
+    });
+
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+    console.log('✅ Static widgets restored');
+  }
+
+  // ═══ Кнопка ОТКРЫТЬ КЕЙС — перенавешиваем обработчик ═══
+  function rebindHeroBtn(){
+    var btn = document.getElementById('heroOpenBtnWz');
+    if(!btn) return;
+    btn.style.pointerEvents = 'auto';
+    btn.style.zIndex = '10';
+    btn.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+    };
+    console.log('✅ Hero button rebound');
+  }
+
+  // ═══ Точки карусели — привязка заново (на всякий) ═══
+  function rebindDots(){
+    var dots = document.getElementById('heroDots');
+    if(!dots) return;
+    // Уже привязаны при сборке, ничего не делаем
+  }
+
+  function run(){
+    rebuildStaticWidgets();
+    rebindHeroBtn();
+    rebindDots();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+  setTimeout(run, 500);
+  setTimeout(run, 1500);
+  setTimeout(run, 3000);
+  setTimeout(run, 5000);
+
+  // Наблюдатель — если виджеты снова превратятся в карусель, вернём статику
+  var checkTimer = setInterval(function(){
+    var w = document.getElementById('widgetsBlock');
+    if(w && w.querySelector('.wz-track')){
+      console.log('🔧 Обнаружена карусель в виджетах — восстанавливаю статику');
+      rebuildStaticWidgets();
+    }
+  }, 2000);
+  setTimeout(function(){ clearInterval(checkTimer); }, 30000);
+
+  console.log('✅ FIX applied');
+})();
+</script>
 </body>
 </html>
