@@ -4502,5 +4502,63 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ HARD RESET applied');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   WIDGETS BIGGER: вылезаем за отступы → картинка крупнее
+   Если нужно ещё больше/меньше — меняй число в --wz (сейчас 32px)
+   ═══════════════════════════════════════════════════════ */
+:root { --wz: 32px; }  /* сколько пикселей «съедаем» с каждой стороны экрана */
+
+#widgetsBlock {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  margin: 8px calc(-1 * var(--wz)) 22px;
+  line-height: 0;
+}
+#widgetsBlock .widgets-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+#widgetsBlock .widgets-overlay {
+  position: absolute;
+  inset: 5% 3.5% 5% 3.5%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 5% 3%;
+}
+#widgetsBlock .widgets-overlay button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 16px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .12s ease, transform .1s ease;
+}
+#widgetsBlock .widgets-overlay button:active {
+  background: rgba(255,255,255,.10);
+  transform: scale(.97);
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  // Пересчитываем overlay — вставляем заново с новыми стилями
+  function reflowWidgets(){
+    var block = document.getElementById('widgetsBlock');
+    if(!block) return;
+    var overlay = block.querySelector('.widgets-overlay');
+    if(!overlay) return;
+    // Ничего не нужно — CSS сделает всё сам
+    console.log('✅ Widgets bigger (CSS var --wz)');
+  }
+  reflowWidgets();
+  document.addEventListener('DOMContentLoaded', reflowWidgets);
+})();
+</script>
 </body>
 </html>
