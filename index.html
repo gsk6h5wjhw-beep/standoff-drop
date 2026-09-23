@@ -5953,5 +5953,177 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ FIX applied');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   КНОПКА "ВОЙТИ КАК ГОСТЬ"
+   ═══════════════════════════════════════════════════════ */
+.btn-guest {
+  width: 100%;
+  min-height: 56px;
+  margin-top: 12px;
+  background: transparent;
+  color: #fff;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 900;
+  border: 1.5px solid rgba(255,255,255,.18);
+  transition: transform .12s ease, border-color .15s ease, background .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-guest:active {
+  transform: scale(.97);
+  background: rgba(255,255,255,.06);
+}
+.btn-guest:hover {
+  border-color: rgba(255,255,255,.35);
+}
+.btn-guest svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+.btn-guest:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.guest-note {
+  text-align: center;
+  color: #7b7f8d;
+  font-size: 11px;
+  margin-top: 10px;
+  line-height: 1.4;
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('👤 Guest login patch');
+
+  // ═══ Добавить кнопку "Войти как гость" на экран логина ═══
+  function addGuestButton(){
+    var loginScreen = document.getElementById('loginScreen');
+    if(!loginScreen || document.getElementById('guestLoginBtn')) return true;
+
+    var googleBtn = document.getElementById('googleLoginBtn');
+    if(!googleBtn) return false;
+
+    // Создаём кнопку
+    var btn = document.createElement('button');
+    btn.className = 'btn-guest';
+    btn.id = 'guestLoginBtn';
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>' +
+      '<span>Войти как гость</span>';
+
+    // Создаём подпись
+    var note = document.createElement('p');
+    note.className = 'guest-note';
+    note.textContent = 'Гостевой аккаунт — данные сохраняются только на этом устройстве';
+
+    // Вставляем после Google-кнопки
+    googleBtn.parentNode.insertBefore(btn, googleBtn.nextSibling);
+    googleBtn.parentNode.insertBefore(note, btn.nextSibling);
+
+    // Обработчик
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      doGuestLogin(btn, note);
+    }, true);
+
+    console.log('✅ Guest button added');
+    return true;
+  }
+
+  // ═══ Логика гостевого входа ═══
+  async function doGuestLogin(btn, note){
+    // Защита от двойного клика
+    if(btn.disabled) return;
+    var origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span style="opacity:.7">Подключение…</span>';
+
+    try {
+      // Ждём Firebase
+      var fbm = await waitFB();
+      if(!fbm || !fbm.auth){
+        alert('Firebase ещё загружается. Подожди пару секунд и попробуй снова.');
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        return;
+      }
+
+      console.log('🔐 Анонимный вход...');
+      var cred = await fbm.authMod.signInAnonymously(fbm.auth);
+      console.log('✅ Вошли как гость:', cred.user.uid);
+
+      // Сообщаем о том, что мы гость, чтобы в дальнейшем подсказать
+      // пользователю сохранить аккаунт (если он захочет)
+      try { localStorage.setItem('sd_isGuest', '1'); } catch(e){}
+
+      // Дальше работает существующий onAuthStateChanged —
+      // он сам откроет онбординг или главный экран.
+    } catch(err){
+      console.error('❌ Guest login error:', err);
+      btn.disabled = false;
+      btn.innerHTML = origHTML;
+
+      var code = (err && err.code) || '';
+
+      if(code.indexOf('operation-not-allowed') > -1){
+        alert('🔴 Анонимный вход выключен в Firebase Console.\n\n' +
+              'Зайди: Firebase Console → Authentication → Sign-in method → ' +
+              'Anonymous → Enable → Save.\n\nПосле этого попробуй снова.');
+      } else if(code.indexOf('network') > -1){
+        alert('Нет интернета. Проверь соединение.');
+      } else if(code.indexOf('unauthorized-domain') > -1){
+        alert('Домен не разрешён в Firebase Console. Добавь ' + location.hostname + ' в Authorized domains.');
+      } else {
+        alert('Ошибка входа: ' + (code || err.message || 'неизвестная'));
+      }
+    }
+  }
+
+  // ═══ Ждём Firebase ═══
+  function waitFB(){
+    return new Promise(function(resolve){
+      if(window.__firebaseReady && window.__fb) return resolve(window.__fb);
+      var t = 0;
+      var iv = setInterval(function(){
+        t += 200;
+        if(window.__firebaseReady && window.__fb){
+          clearInterval(iv);
+          resolve(window.__fb);
+        } else if(t > 12000){
+          clearInterval(iv);
+          resolve(null);
+        }
+      }, 200);
+    });
+  }
+
+  // ═══ Запуск ═══
+  function run(){
+    if(!addGuestButton()){
+      setTimeout(run, 300);
+      setTimeout(run, 1000);
+      setTimeout(run, 2500);
+    }
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  console.log('✅ Guest login ready');
+})();
+</script>
 </body>
 </html>
