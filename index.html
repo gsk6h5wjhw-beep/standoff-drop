@@ -4783,5 +4783,248 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   console.log('✅ Часть 5/5 готова');
 })();
 </script>
+<style id="_p6CSS">
+/* ═══════════════════════════════════════════════════════
+   ФИКС ЛОГО — убираем дублирование STANDOFF
+   ═══════════════════════════════════════════════════════ */
+
+/* Полностью сбрасываем ::before / ::after */
+#mainLogo::before,
+#mainLogo::after { display: none !important; content: none !important; }
+
+/* Сам логотип */
+#mainLogo {
+  background: none !important;
+  background-image: none !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
+  font-size: 22px !important;
+  font-weight: 1000 !important;
+  letter-spacing: .5px !important;
+  color: #eef0f4 !important;
+  text-indent: 0 !important;
+  overflow: visible !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 !important;
+  gap: 0 !important;
+}
+
+/* Восстанавливаем текст внутри */
+#mainLogo > * { display: inline !important; }
+#mainLogo .logo-drop {
+  display: inline !important;
+  color: var(--accent) !important;
+  text-shadow: 0 0 18px rgba(var(--accent-rgb),.45) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   СКРЫВАЕМ ДУБЛЬ HERO — если их два, оставляем #sdHero
+   ═══════════════════════════════════════════════════════ */
+#screen-home .hero { display: none !important; }
+#screen-home #sdHero { display: block !important; }
+
+/* ═══════════════════════════════════════════════════════
+   СКРЫВАЕМ ДУБЛЬ ВИДЖЕТОВ
+   ═══════════════════════════════════════════════════════ */
+#widgetsBlock,
+#wzTrack, #wzDots, #wzGrid1 { display: none !important; }
+#sdWidgets { display: block !important; }
+</style>
+
+<script id="_p6JS">
+(function(){
+  'use strict';
+  console.log('📦 Часть 6 — фикс лого + Google');
+
+  // ═══════════════════════════════════════════════════════
+  // 1. ФИКС ЛОГО — восстанавливаем оригинальный HTML
+  // ═══════════════════════════════════════════════════════
+  function fixLogo(){
+    var logo = document.getElementById('mainLogo');
+    if (!logo) return;
+
+    // Если внутри лого остались только тексты, но нет span.logo-drop — вернём его
+    if (!logo.querySelector('.logo-drop')){
+      logo.innerHTML = 'STANDOFF <span class="logo-drop">DROP</span>';
+    } else {
+      // Убедимся что первый textNode = "STANDOFF "
+      var html = logo.innerHTML;
+      if (html.indexOf('STANDOFF') === -1){
+        logo.innerHTML = 'STANDOFF <span class="logo-drop">DROP</span>';
+      }
+    }
+    console.log('✅ Лого исправлено');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 2. ФИКС GOOGLE LOGIN (жёсткий)
+  // ═══════════════════════════════════════════════════════
+  function hardFixGoogle(){
+    if (!window.SD) return;
+
+    window.SD.loginGoogle = async function(){
+      try {
+        var fb = window.__fb;
+        if (!fb || !fb.authMod || !fb.auth){
+          alert('Firebase ещё грузится, подожди 2 секунды');
+          return;
+        }
+
+        // Пытаемся сохранить persistence — критично для iPhone
+        try {
+          await fb.authMod.setPersistence(fb.auth, fb.authMod.browserLocalPersistence);
+        } catch(pe){ console.warn('persistence:', pe); }
+
+        var provider = new fb.authMod.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+
+        var ua = navigator.userAgent;
+        var isIOS = /iPhone|iPad|iPod/i.test(ua);
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+
+        // На мобильных — redirect (popup на iOS не работает)
+        if (isIOS || isMobile){
+          console.log('📱 → redirect');
+          try {
+            await fb.authMod.signInWithRedirect(fb.auth, provider);
+          } catch(err){
+            console.error('redirect err:', err);
+            alert('Ошибка Google-входа: ' + (err.code || err.message));
+          }
+          return;
+        }
+
+        // Desktop — popup
+        try {
+          await fb.authMod.signInWithPopup(fb.auth, provider);
+        } catch(popErr){
+          var c = (popErr && popErr.code) || '';
+          if (c.indexOf('popup') > -1 || c.indexOf('cancelled') > -1){
+            await fb.authMod.signInWithRedirect(fb.auth, provider);
+          } else {
+            throw popErr;
+          }
+        }
+      } catch(err){
+        console.error('google login:', err);
+        alert('Ошибка: ' + (err.code || err.message));
+      }
+    };
+    console.log('✅ Google login переписан');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 3. ОБРАБОТКА REDIRECT RESULT (несколько попыток)
+  // ═══════════════════════════════════════════════════════
+  function tryRedirectResult(){
+    var attempts = 0;
+    function attempt(){
+      attempts++;
+      var fb = window.__fb;
+      if (!fb || !fb.authMod || !fb.auth){
+        if (attempts < 20) setTimeout(attempt, 300);
+        return;
+      }
+      fb.authMod.getRedirectResult(fb.auth)
+        .then(function(res){
+          if (res && res.user){
+            console.log('✅ Redirect OK:', res.user.uid);
+            var login = document.getElementById('loginScreen');
+            if (login) login.classList.add('hidden');
+          } else {
+            console.log('ℹ️ Redirect result: пусто');
+          }
+        })
+        .catch(function(e){
+          if (e && e.code && e.code !== 'auth/no-auth-event'){
+            console.warn('redirect error:', e.code);
+          }
+        });
+    }
+    attempt();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 4. УБИРАЕМ ДУБЛЬ ВИДЖЕТОВ / HERO
+  // ═══════════════════════════════════════════════════════
+  function killDuplicates(){
+    // Все старые hero кроме #sdHero
+    document.querySelectorAll('#screen-home .hero').forEach(function(el){
+      if (el.id === 'sdHero') return;
+      el.style.cssText = 'display:none !important;height:0 !important;padding:0 !important;margin:0 !important';
+    });
+
+    // Все старые виджеты
+    ['widgetsBlock','wzTrack','wzDots','wzGrid1'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.style.cssText = 'display:none !important;height:0 !important';
+    });
+
+    // Старые hero-img / wz-slide одиночные
+    document.querySelectorAll('#screen-home .hero-img, #screen-home .wz-slide, #screen-home .wz-track').forEach(function(el){
+      el.style.display = 'none';
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5. ПЕРЕПРИВЯЗКА GOOGLE-КНОПКИ
+  // ═══════════════════════════════════════════════════════
+  function rebindGoogle(){
+    var btn = document.getElementById('googleLoginBtn');
+    if (!btn) return false;
+    if (btn._p6Bound) return true;
+    btn._p6Bound = true;
+
+    var fresh = btn.cloneNode(true);
+    fresh._p6Bound = true;
+    fresh.style.pointerEvents = 'auto';
+    fresh.style.cursor = 'pointer';
+    btn.parentNode.replaceChild(fresh, btn);
+
+    fresh.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (window.SD && SD.loginGoogle) SD.loginGoogle();
+    }, true);
+
+    console.log('✅ Google-кнопка перепривязана');
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 6. ЗАПУСК
+  // ═══════════════════════════════════════════════════════
+  function run(){
+    try { fixLogo(); } catch(e){}
+    try { hardFixGoogle(); } catch(e){}
+    try { killDuplicates(); } catch(e){}
+    try { rebindGoogle(); } catch(e){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  setTimeout(run, 300);
+  setTimeout(run, 1000);
+  setTimeout(run, 2000);
+  setTimeout(run, 4000);
+
+  // Первый запуск redirect
+  tryRedirectResult();
+
+  // Перепривязка каждые 2 сек
+  setInterval(function(){
+    try { rebindGoogle(); } catch(e){}
+    try { killDuplicates(); } catch(e){}
+  }, 2000);
+
+  console.log('✅ Часть 6 готова');
+})();
+</script>
 </body>
 </html>
