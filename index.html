@@ -7240,5 +7240,156 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ HERO FINAL ready');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   LOGO BIGGER + FIX ALL BUTTONS
+   ═══════════════════════════════════════════════════════ */
+
+/* Лого — в 3 раза больше */
+#mainLogo {
+  background: url('TTT.PNG') center/contain no-repeat !important;
+  width: 260px !important;
+  height: 72px !important;
+  min-width: 260px !important;
+  font-size: 0 !important;
+  text-indent: -9999px !important;
+  color: transparent !important;
+  overflow: visible !important;
+  cursor: pointer !important;
+  flex: 0 0 260px !important;
+}
+#mainLogo *,
+#mainLogo .logo-drop { display: none !important; }
+#mainLogo img { display: none !important; }
+
+/* Шапка — чуть выше, чтобы лого влезло */
+#header {
+  height: 84px !important;
+  align-items: center !important;
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🚑 EMERGENCY FIX: logo bigger + all buttons rebound');
+
+  // ═══ 1. ПЕРЕПРИВЯЗКА ВСЕХ КНОПОК ═══
+  function bindAll(){
+    // Нижнее меню
+    document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
+      item.onclick = function(){
+        var nav = item.dataset.nav;
+        if(!nav) return;
+        if(typeof SD !== 'undefined' && SD.go){
+          if(nav === 'home' || nav === 'cases' || nav === 'games' || nav === 'profile' || nav === 'upgrade'){
+            SD.go(nav);
+          }
+        }
+      };
+    });
+
+    // Быстрые кнопки на главной
+    document.querySelectorAll('.quick-btn[data-go]').forEach(function(btn){
+      btn.onclick = function(e){
+        e.preventDefault();
+        var target = btn.dataset.go;
+        if(typeof SD !== 'undefined' && SD.go){
+          if(target === 'players') SD.playersTab = 'transfer';
+          SD.go(target);
+        }
+      };
+    });
+
+    // Кнопка "Открыть кейс" на hero
+    var heroBtn = document.getElementById('heroOpenBtn');
+    if(heroBtn){
+      heroBtn.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+    }
+
+    // Кнопки "Назад" в экранах
+    document.querySelectorAll('[data-go]').forEach(function(el){
+      if(el.tagName !== 'BUTTON') return;
+      if(el.closest('.quick-btn')) return;
+      el.onclick = function(e){
+        e.preventDefault();
+        var target = el.dataset.go;
+        if(typeof SD !== 'undefined' && SD.go) SD.go(target);
+      };
+    });
+
+    // Кнопка "Плюс" в балансе
+    var plus = document.getElementById('headerPlus');
+    if(plus){
+      plus.onclick = function(e){
+        e.preventDefault();
+        var modal = document.getElementById('topupModal');
+        if(modal) modal.classList.add('show');
+      };
+    }
+
+    // Кнопка Google
+    var google = document.getElementById('googleLoginBtn');
+    if(google && !google._boundFinal){
+      google._boundFinal = true;
+      google.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.loginGoogle) SD.loginGoogle();
+      };
+    }
+
+    // Лого — 17 тапов dev + 1 тап home
+    var logo = document.getElementById('mainLogo');
+    if(logo && !logo._boundFinal){
+      logo._boundFinal = true;
+      var taps = 0, timer = null;
+      logo.onclick = function(){
+        taps++;
+        clearTimeout(timer);
+        timer = setTimeout(function(){ taps = 0; }, 1500);
+        if(taps >= 17){
+          taps = 0;
+          var m = document.getElementById('devCodeModal');
+          if(m) m.classList.add('show');
+        } else if(taps === 1){
+          if(typeof SD !== 'undefined' && SD.go) SD.go('home');
+        }
+      };
+    }
+
+    // Кнопка "ПРОКАЧАТЬ"
+    var upBtn = document.getElementById('upgradeBtn');
+    if(upBtn && !upBtn._boundFinal){
+      upBtn._boundFinal = true;
+      upBtn.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.runUpgrade) SD.runUpgrade();
+      };
+    }
+  }
+
+  // ═══ 2. ЗАПУСК ═══
+  bindAll();
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', bindAll);
+  }
+
+  // Повторяем несколько раз — потому что bindUI() внутри основного скрипта
+  // может перебить наши обработчики позже
+  setTimeout(bindAll, 300);
+  setTimeout(bindAll, 1000);
+  setTimeout(bindAll, 2500);
+  setTimeout(bindAll, 5000);
+
+  // Постоянная перепривязка раз в 2 секунды
+  setInterval(bindAll, 2000);
+
+  console.log('✅ EMERGENCY FIX ready');
+})();
+</script>
 </body>
 </html>
