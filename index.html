@@ -6386,5 +6386,113 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ UI PATCH v2 применён');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   FIX: ЛОГО крупнее + БАЛАНС как был
+   ═══════════════════════════════════════════════════════ */
+
+/* ── 1. ЛОГО → больше, картинка TT.PNG ── */
+#mainLogo {
+  background: url('TT.PNG') center/contain no-repeat !important;
+  width: 210px !important;
+  height: 60px !important;
+  font-size: 0 !important;
+  text-indent: -9999px !important;
+  color: transparent !important;
+  overflow: visible !important;
+  cursor: pointer !important;
+  flex: 0 0 auto !important;
+}
+#mainLogo *,
+#mainLogo .logo-drop { display: none !important; }
+
+/* ── 2. БАЛАНС — вернуть как было ── */
+.balance-pill {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 8px 6px 8px 14px !important;
+  border-radius: 99px !important;
+  position: static !important;
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+/* Показываем G + число */
+.balance-pill .b-gold {
+  display: inline !important;
+  color: var(--gold) !important;
+  font-size: 13px !important;
+  font-weight: 1000 !important;
+  opacity: .9 !important;
+}
+.balance-pill .b-num {
+  display: inline-block !important;
+  color: var(--text) !important;
+  font-variant-numeric: tabular-nums !important;
+  min-width: 34px !important;
+}
+
+/* ── 3. ПЛЮСИК — круглый, акцентный (как было) ── */
+.balance-pill .b-plus {
+  position: static !important;
+  right: auto !important;
+  top: auto !important;
+  transform: none !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 50% !important;
+  background: var(--accent) !important;
+  border: none !important;
+  box-shadow: 0 0 14px rgba(var(--accent-rgb),.3) !important;
+  color: #000 !important;
+  font-size: 18px !important;
+  font-weight: 1000 !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  margin: 0 0 0 2px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+  z-index: auto !important;
+}
+.balance-pill .b-plus::before { display: none !important; }
+.balance-pill .b-plus::after { display: none !important; }
+.balance-pill .b-plus:active { transform: scale(.9) !important; }
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🎨 FIX: big logo + balance restored');
+
+  // Восстановить текст в кнопке "+" (он был " + ")
+  function fixPlusText(){
+    var plus = document.querySelector('.balance-pill .b-plus');
+    if(!plus) return;
+    if(!plus.textContent || plus.textContent.trim() === ''){
+      plus.textContent = '+';
+    }
+  }
+
+  function run(){
+    fixPlusText();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+  setTimeout(run, 300);
+  setTimeout(run, 1000);
+  setTimeout(run, 2500);
+
+  console.log('✅ Fix applied');
+})();
+</script>
 </body>
 </html>
