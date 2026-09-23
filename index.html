@@ -8251,5 +8251,324 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ FINAL CLEANUP готов');
 })();
 </script>
+<script id="_fixHard">
+(function(){
+  'use strict';
+  console.log('💥 HARD FIX: сношу мусор + добавляю кнопку ВЫХОД');
+
+  // ═══════════════════════════════════════════════════════
+  // 1. УДАЛЯЕМ ВСЕ ОСТАТКИ СТАРЫХ ПАТЧЕЙ
+  // ═══════════════════════════════════════════════════════
+  function nuke(){
+    // Старые hero-карусели и их слайды
+    ['#heroTrackFinal','#heroTrackV4','#heroTrack',
+     '#heroDotsFinal','#heroDotsV4','#heroDots',
+     '#wzTrack','#wzDots','#wzGrid1','#widgetsBlock'].forEach(function(sel){
+      document.querySelectorAll(sel).forEach(function(el){
+        try { el.remove(); } catch(e){}
+      });
+    });
+
+    // Все элементы карусели (по классам)
+    document.querySelectorAll('.wz-track, .wz-slide, .wz-dots, .wz-hero-img, .wz-img, .wz-overlay-grid, .wz-text-slide, .wz-emoji, .wz-title, .wz-sub').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+
+    // Старые hero-img, оверлеи, hit-зоны
+    document.querySelectorAll('.hero-img, .hero-tag-overlay, .hero-btn-overlay, .hero-open-hit').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+
+    // Пустые .hero контейнеры — скрываем жёстко
+    document.querySelectorAll('#screen-home .hero').forEach(function(el){
+      el.style.cssText = 'display:none !important;height:0 !important;min-height:0 !important;padding:0 !important;margin:0 !important;overflow:hidden !important';
+    });
+
+    // Убираем старые кнопки Назад (дубли)
+    var seen = {};
+    document.querySelectorAll('.sd-back-btn, .case-back-btn, .sd-back-single').forEach(function(b){
+      var p = b.parentElement;
+      var id = p ? p.id : 'x';
+      if (seen[id]) { try { b.remove(); } catch(e){} }
+      else seen[id] = true;
+    });
+
+    // Убираем пустые контейнеры сверху (могли остаться от патчей)
+    var screen = document.getElementById('screen-home');
+    if (screen) {
+      Array.from(screen.children).forEach(function(child){
+        if (child.id === 'sdHero' || child.id === 'sdWidgets') return;
+        if (child.classList.contains('sectionhead')) return;
+        if (child.classList.contains('cases-grid')) return;
+        if (child.tagName === 'SECTION') return;
+        // Пустой контейнер высотой больше 100px без текста — удалить
+        if (!child.textContent.trim() && child.offsetHeight > 100) {
+          try { child.remove(); } catch(e){}
+        }
+      });
+    }
+
+    console.log('💥 Мусор удалён');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 2. СТРОИМ СВОЙ HERO + ВИДЖЕТЫ (с огромным z-index)
+  // ═══════════════════════════════════════════════════════
+  function build(){
+    var screen = document.getElementById('screen-home');
+    if (!screen) return;
+    var hero = screen.querySelector('.hero');
+    if (!hero) return;
+
+    // HERO
+    if (!document.getElementById('sdHero')) {
+      var h = document.createElement('div');
+      h.id = 'sdHero';
+      h.style.cssText = 'position:relative;margin:8px -14px 14px;padding:0;overflow:hidden;line-height:0;z-index:1';
+      h.innerHTML =
+        '<img src="heroo.JPEG" alt="" style="width:100%;height:auto;display:block;pointer-events:none">' +
+        '<button type="button" id="sdHeroHit" style="position:absolute;left:4%;bottom:22%;width:42%;height:16%;background:transparent;border:none;cursor:pointer;z-index:99;border-radius:12px;-webkit-tap-highlight-color:transparent"></button>';
+      hero.parentNode.insertBefore(h, hero.nextSibling);
+      document.getElementById('sdHeroHit').onclick = function(e){
+        e.preventDefault(); e.stopPropagation();
+        if (typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+    }
+
+    // WIDGETS
+    if (!document.getElementById('sdWidgets')) {
+      var w = document.createElement('div');
+      w.id = 'sdWidgets';
+      w.style.cssText = 'position:relative;margin:4px -14px 18px;overflow:hidden;line-height:0;z-index:1';
+      w.innerHTML =
+        '<img src="widgets.PNG" alt="" style="width:100%;height:auto;display:block;pointer-events:none">' +
+        '<div id="sdWO" style="position:absolute;inset:4% 3%;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4% 3%;z-index:99"></div>';
+      var anchor = document.getElementById('sdHero') || hero;
+      anchor.parentNode.insertBefore(w, anchor.nextSibling);
+
+      var ov = document.getElementById('sdWO');
+      ['upgrade','roulette','games','inventory','players','profile'].forEach(function(t){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.style.cssText = 'background:transparent;border:none;padding:0;cursor:pointer;border-radius:14px;-webkit-tap-highlight-color:transparent';
+        b.onclick = function(e){
+          e.preventDefault(); e.stopPropagation();
+          if (typeof SD !== 'undefined' && SD.go){
+            if (t === 'players') SD.playersTab = 'transfer';
+            SD.go(t);
+          }
+        };
+        ov.appendChild(b);
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 3. КНОПКА "ВЫЙТИ" В ШАПКЕ (для выхода с гостя)
+  // ═══════════════════════════════════════════════════════
+  function addLogout(){
+    var header = document.getElementById('header');
+    if (!header) return;
+    if (document.getElementById('sdLogoutBtn')) return;
+
+    var right = header.querySelector('.header-right');
+    if (!right) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'sdLogoutBtn';
+    btn.type = 'button';
+    btn.style.cssText = 'width:40px;height:40px;border-radius:50%;background:rgba(255,76,95,.15);border:1.5px solid rgba(255,76,95,.4);color:#ff4c5f;font-size:18px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;-webkit-tap-highlight-color:transparent';
+    btn.innerHTML = '⎋';
+    btn.title = 'Выйти';
+    btn.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if (!confirm('Выйти из аккаунта?')) return;
+      try {
+        var fb = window.__fb;
+        if (fb && fb.authMod && fb.auth) {
+          fb.authMod.signOut(fb.auth).then(function(){
+            try { localStorage.clear(); } catch(x){}
+            location.reload();
+          }).catch(function(){
+            try { localStorage.clear(); } catch(x){}
+            location.reload();
+          });
+        } else {
+          try { localStorage.clear(); } catch(x){}
+          location.reload();
+        }
+      } catch(err){
+        try { localStorage.clear(); } catch(x){}
+        location.reload();
+      }
+    };
+    right.appendChild(btn);
+    console.log('✅ Кнопка ВЫХОД добавлена');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 4. ПЕРЕПРИВЯЗКА ВСЕХ КНОПОК
+  // ═══════════════════════════════════════════════════════
+  function rebind(){
+    // Нижнее меню
+    document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
+      item.onclick = function(e){
+        e.preventDefault();
+        var nav = item.dataset.nav;
+        if (nav && typeof SD !== 'undefined' && SD.go){
+          if (['home','cases','games','profile','upgrade'].indexOf(nav) > -1) SD.go(nav);
+        }
+      };
+    });
+
+    // Все data-go
+    document.querySelectorAll('[data-go]').forEach(function(el){
+      if (el.tagName !== 'BUTTON') return;
+      el.onclick = function(e){
+        e.preventDefault();
+        var t = el.dataset.go;
+        if (typeof SD !== 'undefined' && SD.go){
+          if (t === 'players') SD.playersTab = 'transfer';
+          SD.go(t);
+        }
+      };
+    });
+
+    // Быстрые кнопки старого quick-grid
+    document.querySelectorAll('.quick-btn[data-go]').forEach(function(btn){
+      btn.onclick = function(e){
+        e.preventDefault();
+        var t = btn.dataset.go;
+        if (typeof SD !== 'undefined' && SD.go){
+          if (t === 'players') SD.playersTab = 'transfer';
+          SD.go(t);
+        }
+      };
+    });
+
+    // Плюсик баланса
+    var plus = document.getElementById('headerPlus');
+    if (plus) plus.onclick = function(e){
+      e.preventDefault(); e.stopPropagation();
+      var m = document.getElementById('topupModal');
+      if (m) m.classList.add('show');
+    };
+
+    // Апгрейд
+    var up = document.getElementById('upgradeBtn');
+    if (up) up.onclick = function(e){
+      e.preventDefault();
+      if (typeof SD !== 'undefined' && SD.runUpgrade) SD.runUpgrade();
+    };
+
+    // Кнопка выйти внутри профиля (если не работает)
+    var logoutProfile = document.getElementById('logoutBtn');
+    if (logoutProfile && !logoutProfile._fbBound){
+      logoutProfile._fbBound = true;
+      logoutProfile.onclick = function(e){
+        e.preventDefault();
+        if (!confirm('Выйти из аккаунта?')) return;
+        var fb = window.__fb;
+        if (fb && fb.authMod && fb.auth) {
+          fb.authMod.signOut(fb.auth).then(function(){
+            try { localStorage.clear(); } catch(x){}
+            location.reload();
+          });
+        }
+      };
+    }
+
+    // Google
+    var gb = document.getElementById('googleLoginBtn');
+    if (gb && !gb._fbBound){
+      gb._fbBound = true;
+      gb.onclick = function(e){
+        e.preventDefault();
+        if (typeof SD !== 'undefined' && SD.loginGoogle) SD.loginGoogle();
+      };
+    }
+
+    // Лого
+    var logo = document.getElementById('mainLogo');
+    if (logo && !logo._logoTaps){
+      logo._logoTaps = 0;
+      logo.onclick = function(){
+        logo._logoTaps++;
+        clearTimeout(logo._logoTimer);
+        logo._logoTimer = setTimeout(function(){ logo._logoTaps = 0; }, 1500);
+        if (logo._logoTaps >= 17){
+          logo._logoTaps = 0;
+          var m = document.getElementById('devCodeModal');
+          if (m) m.classList.add('show');
+        } else if (logo._logoTaps === 1){
+          if (typeof SD !== 'undefined' && SD.go) SD.go('home');
+        }
+      };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5. ЛОГО крупное
+  // ═══════════════════════════════════════════════════════
+  function fixLogo(){
+    var logo = document.getElementById('mainLogo');
+    if (!logo) return;
+    logo.style.cssText =
+      'background:url("TTT.PNG") center/contain no-repeat;' +
+      'width:260px;height:76px;min-width:260px;flex:0 0 260px;' +
+      'font-size:0;text-indent:-9999px;color:transparent;' +
+      'overflow:visible;cursor:pointer';
+    logo.querySelectorAll('*').forEach(function(el){ el.style.display = 'none'; });
+    var header = document.getElementById('header');
+    if (header) header.style.height = '88px';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 6. КЕЙСЫ
+  // ═══════════════════════════════════════════════════════
+  function patchCases(){
+    if (typeof window.SD_CASES === 'undefined' || !window.SD_CASES.length) return;
+    SD_CASES.forEach(function(c){
+      if (c.id === 'iphone-duo'){
+        c.id = 'fury'; c.name = 'Fury'; c.caseImg = 'cases/fury.PNG'; c.tag = 'NEW';
+      } else if (c.id === 'common'){
+        c.caseImg = 'cases/734151B4-03BA-4831-929B-47FB355B6FEF.png';
+      } else if (c.id === 'uncommon'){
+        c.caseImg = 'cases/070A5351-3469-45C4-8AB7-CB27B2164F3A.png';
+      } else if (c.id === 'rare'){
+        c.caseImg = 'cases/D14BFE01-DFC6-4EAF-800A-99E3BAEB8CDA.png';
+      }
+    });
+    try { if (typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if (typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 7. ЗАПУСК
+  // ═══════════════════════════════════════════════════════
+  function run(){
+    try { nuke(); } catch(e){}
+    try { fixLogo(); } catch(e){}
+    try { build(); } catch(e){}
+    try { addLogout(); } catch(e){}
+    try { patchCases(); } catch(e){}
+    try { rebind(); } catch(e){}
+  }
+
+  run();
+  setTimeout(run, 500);
+  setTimeout(run, 1500);
+  setTimeout(run, 3000);
+  setTimeout(run, 6000);
+
+  setInterval(function(){
+    try { addLogout(); } catch(e){}
+    try { rebind(); } catch(e){}
+  }, 1500);
+
+  console.log('✅ HARD FIX готов');
+})();
+</script>
 </body>
 </html>
