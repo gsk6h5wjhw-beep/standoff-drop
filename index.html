@@ -4517,5 +4517,271 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   box-shadow: 0 0 12px rgba(255,46,99,.7);
 }
 </style>
+<style id="_p5CSS">
+/* Кнопка "Войти как гость" */
+#sdGuestWrap {
+  margin-top: 12px;
+}
+#sdGuestBtn {
+  width: 100%;
+  min-height: 52px;
+  background: transparent;
+  color: #eef0f4;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 900;
+  border: 1.5px solid rgba(255,255,255,.2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, border-color .15s ease;
+}
+#sdGuestBtn:active {
+  transform: scale(.97);
+  background: rgba(255,255,255,.06);
+}
+#sdGuestBtn svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+#sdGuestBtn:disabled { opacity: .5; cursor: not-allowed; }
+#sdGuestNote {
+  text-align: center;
+  color: #7b7f8d;
+  font-size: 11px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+</style>
+
+<script id="_p5JS">
+(function(){
+  'use strict';
+  console.log('📦 Часть 5/5 — кнопка Гостя + Google Login');
+
+  // ═══════════════════════════════════════════════════════
+  // 1. КНОПКА "ВОЙТИ КАК ГОСТЬ"
+  // ═══════════════════════════════════════════════════════
+  function addGuestButton(){
+    var login = document.getElementById('loginScreen');
+    if (!login) return;
+    if (document.getElementById('sdGuestWrap')) return;
+
+    var google = document.getElementById('googleLoginBtn');
+    if (!google) return;
+
+    var wrap = document.createElement('div');
+    wrap.id = 'sdGuestWrap';
+    wrap.innerHTML =
+      '<button type="button" id="sdGuestBtn">' +
+        '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>' +
+        '<span>Войти как гость</span>' +
+      '</button>' +
+      '<div id="sdGuestNote">Гостевой аккаунт — данные сохраняются только на этом устройстве</div>';
+
+    google.parentNode.insertBefore(wrap, google.nextSibling);
+
+    document.getElementById('sdGuestBtn').addEventListener('click', doGuestLogin, true);
+    console.log('✅ Кнопка гостя добавлена');
+  }
+
+  async function doGuestLogin(e){
+    e.preventDefault();
+    e.stopPropagation();
+
+    var btn = document.getElementById('sdGuestBtn');
+    if (!btn || btn.disabled) return;
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span style="opacity:.7">Подключение…</span>';
+
+    try {
+      var fb = window.__fb;
+      if (!fb || !fb.authMod || !fb.auth){
+        alert('Firebase ещё грузится, подожди 2 секунды и попробуй снова');
+        btn.disabled = false;
+        btn.innerHTML = orig;
+        return;
+      }
+
+      console.log('🔐 Анонимный вход...');
+      await fb.authMod.signInAnonymously(fb.auth);
+      console.log('✅ Гость вошёл');
+
+      // После успеха onAuthStateChanged сам переключит экран.
+      // Ничего больше не делаем.
+    } catch(err){
+      console.error('guest login:', err);
+      btn.disabled = false;
+      btn.innerHTML = orig;
+      var code = (err && err.code) || '';
+      if (code.indexOf('operation-not-allowed') > -1){
+        alert('🔴 Анонимный вход выключен в Firebase Console.\n\nFirebase Console → Authentication → Sign-in method → Anonymous → Enable → Save');
+      } else {
+        alert('Ошибка входа: ' + (code || err.message || 'неизвестная'));
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 2. GOOGLE LOGIN — переписать на redirect для iPhone
+  //    Заменяем SD.loginGoogle
+  // ═══════════════════════════════════════════════════════
+  function fixGoogle(){
+    if (!window.SD) return;
+
+    window.SD.loginGoogle = async function(){
+      try {
+        var fb = window.__fb;
+        if (!fb || !fb.authMod || !fb.auth){
+          alert('Firebase ещё грузится, подожди 2 секунды');
+          return;
+        }
+
+        var provider = new fb.authMod.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+
+        var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        if (isIOS || isMobile){
+          // На мобильных — только redirect (popup не работает)
+          console.log('📱 → signInWithRedirect');
+          await fb.authMod.signInWithRedirect(fb.auth, provider);
+          return;
+        }
+
+        // Desktop — popup
+        try {
+          await fb.authMod.signInWithPopup(fb.auth, provider);
+        } catch(popErr){
+          var c = (popErr && popErr.code) || '';
+          if (c.indexOf('popup') > -1 || c.indexOf('cancelled') > -1){
+            console.log('↩️ redirect fallback');
+            await fb.authMod.signInWithRedirect(fb.auth, provider);
+          } else {
+            throw popErr;
+          }
+        }
+      } catch(err){
+        console.error('google login:', err);
+        var msg = (err && (err.code || err.message)) || 'Ошибка';
+        if (msg.indexOf('unauthorized-domain') > -1){
+          alert('🔴 Домен не разрешён в Firebase Console → Authentication → Settings → Authorized domains');
+        } else if (msg.indexOf('operation-not-allowed') > -1){
+          alert('🔴 Google-вход выключен в Firebase Console');
+        } else {
+          alert('Ошибка входа: ' + msg);
+        }
+      }
+    };
+    console.log('✅ SD.loginGoogle переписан');
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 3. ВОЗВРАТ С REDIRECT — обрабатываем результат
+  // ═══════════════════════════════════════════════════════
+  function handleRedirectResult(){
+    function tryGet(){
+      var fb = window.__fb;
+      if (!fb || !fb.authMod || !fb.auth){
+        setTimeout(tryGet, 300);
+        return;
+      }
+      fb.authMod.getRedirectResult(fb.auth)
+        .then(function(res){
+          if (res && res.user){
+            console.log('✅ Redirect вернул юзера:', res.user.email || res.user.uid);
+            // Принудительно скрываем login-экран
+            var login = document.getElementById('loginScreen');
+            if (login) login.classList.add('hidden');
+          }
+        })
+        .catch(function(e){
+          if (e && e.code && e.code !== 'auth/no-auth-event'){
+            console.warn('redirect result:', e);
+          }
+        });
+    }
+    tryGet();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 4. ПЕРЕПРИВЯЗКА GOOGLE-КНОПКИ (чтобы клик шёл в нашу логику)
+  // ═══════════════════════════════════════════════════════
+  function rebindGoogle(){
+    var btn = document.getElementById('googleLoginBtn');
+    if (!btn) return false;
+    if (btn._p5Bound) return true;
+    btn._p5Bound = true;
+
+    // Клонируем чтобы снять старые обработчики
+    var fresh = btn.cloneNode(true);
+    fresh._p5Bound = true;
+    fresh.style.pointerEvents = 'auto';
+    fresh.style.cursor = 'pointer';
+    btn.parentNode.replaceChild(fresh, btn);
+
+    fresh.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (window.SD && SD.loginGoogle) SD.loginGoogle();
+    }, true);
+
+    console.log('✅ Google-кнопка перепривязана');
+    return true;
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5. ПРИНУДИТЕЛЬНО СКРЫВАЕМ LOGIN если юзер уже вошёл
+  // ═══════════════════════════════════════════════════════
+  function forceAppIfLoggedIn(){
+    var fb = window.__fb;
+    if (!fb || !fb.auth) return;
+    if (fb.auth.currentUser){
+      var login = document.getElementById('loginScreen');
+      var onboard = document.getElementById('onboardScreen');
+      if (login) login.classList.add('hidden');
+      // onBoard показать если надо — решает основной код
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 6. ЗАПУСК
+  // ═══════════════════════════════════════════════════════
+  function run(){
+    try { addGuestButton(); } catch(e){}
+    try { fixGoogle(); } catch(e){}
+    try { rebindGoogle(); } catch(e){}
+    try { forceAppIfLoggedIn(); } catch(e){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  setTimeout(run, 300);
+  setTimeout(run, 1000);
+  setTimeout(run, 2000);
+  setTimeout(run, 4000);
+
+  // Обработка redirect
+  handleRedirectResult();
+
+  // Раз в 2 сек проверяем — если Google-кнопка потеряла обработчик, вернём
+  setInterval(function(){
+    try { rebindGoogle(); } catch(e){}
+    try { forceAppIfLoggedIn(); } catch(e){}
+  }, 2000);
+
+  console.log('✅ Часть 5/5 готова');
+})();
+</script>
 </body>
 </html>
