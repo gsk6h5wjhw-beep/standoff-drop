@@ -6494,5 +6494,164 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ Fix applied');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   FIX v3: TTT.PNG лого + heroo.JPEG в hero
+   ═══════════════════════════════════════════════════════ */
+
+/* ── 1. ЛОГО → TTT.PNG ── */
+#mainLogo {
+  background: url('TTT.PNG') center/contain no-repeat !important;
+  width: 210px !important;
+  height: 60px !important;
+  font-size: 0 !important;
+  text-indent: -9999px !important;
+  color: transparent !important;
+  overflow: visible !important;
+  cursor: pointer !important;
+  flex: 0 0 auto !important;
+}
+#mainLogo *,
+#mainLogo .logo-drop { display: none !important; }
+
+/* ── 2. HERO — картинка heroo.JPEG ── */
+#screen-home .hero {
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+  position: relative !important;
+  display: block !important;
+  margin: 8px -14px 14px !important;
+  overflow: hidden !important;
+  border-radius: 0 !important;
+  line-height: 0 !important;
+}
+#screen-home .hero::before { display: none !important; }
+
+/* Скрываем всё старое в hero, кроме нашей картинки */
+#screen-home .hero > .hero-tag,
+#screen-home .hero > .hero-title,
+#screen-home .hero > .hero-btn,
+#screen-home .hero > .hero-tag-overlay,
+#screen-home .hero > .hero-btn-overlay { display: none !important; }
+
+#screen-home .hero .hero-img {
+  position: relative !important;
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  z-index: 1 !important;
+}
+
+/* Кликабельная зона на кнопку в hero-картинке */
+#screen-home .hero .hero-open-hit {
+  position: absolute !important;
+  left: 4% !important;
+  bottom: 22% !important;
+  width: 42% !important;
+  height: 16% !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  z-index: 20 !important;
+  border-radius: 12px !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+#screen-home .hero .hero-open-hit:active {
+  background: rgba(255,255,255,.10) !important;
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🎨 FIX v3: TTT.PNG + heroo.JPEG');
+
+  var HERO_FILE = 'heroo.JPEG';
+
+  // ═══ Заменяем картинку в hero ═══
+  function fixHeroImg(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero) return false;
+
+    // Ищем существующий .hero-img
+    var img = hero.querySelector('.hero-img');
+
+    // Если картинки нет — создаём
+    if(!img){
+      img = document.createElement('img');
+      img.className = 'hero-img';
+      img.alt = '';
+      hero.insertBefore(img, hero.firstChild);
+    }
+
+    // Сбрасываем src принудительно
+    img.onerror = function(){
+      console.error('❌ Hero 404:', HERO_FILE);
+    };
+    img.onload = function(){
+      console.log('✅ Hero загружен:', HERO_FILE);
+    };
+
+    // Принудительно задаём правильный путь + cache-buster
+    var current = img.getAttribute('src') || '';
+    if(!current.includes('heroo')){
+      img.src = HERO_FILE + '?v=' + Date.now();
+    }
+
+    // Убираем старые оверлеи
+    hero.querySelectorAll('.hero-tag-overlay, .hero-btn-overlay').forEach(function(el){ el.remove(); });
+
+    // Кликабельная зона
+    if(!hero.querySelector('.hero-open-hit')){
+      var hit = document.createElement('button');
+      hit.className = 'hero-open-hit';
+      hit.type = 'button';
+      hit.setAttribute('aria-label', 'Открыть кейсы');
+      hit.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(hit);
+    }
+    return true;
+  }
+
+  // ═══ Восстанавливаем плюсик ═══
+  function fixPlusText(){
+    var plus = document.querySelector('.balance-pill .b-plus');
+    if(!plus) return;
+    if(!plus.textContent || plus.textContent.trim() === '') plus.textContent = '+';
+  }
+
+  // ═══ Запуск ═══
+  function run(){
+    fixHeroImg();
+    fixPlusText();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  setTimeout(run, 300);
+  setTimeout(run, 1000);
+  setTimeout(run, 2500);
+  setTimeout(run, 5000);
+
+  // Наблюдатель — если hero пересоздастся
+  function startObs(){
+    var s = document.getElementById('screen-home');
+    if(!s) return;
+    new MutationObserver(function(){
+      var h = document.querySelector('#screen-home .hero');
+      if(h && !h.querySelector('.hero-img')) fixHeroImg();
+    }).observe(s, { childList: true, subtree: true });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startObs);
+  else startObs();
+
+  console.log('✅ FIX v3 применён');
+})();
+</script>
 </body>
 </html>
