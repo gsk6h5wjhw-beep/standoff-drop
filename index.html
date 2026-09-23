@@ -7391,5 +7391,354 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ EMERGENCY FIX ready');
 })();
 </script>
+<style id="_killSwitchCSS">
+/* ═══════════════════════════════════════════════════════
+   STOP-KRAN: перебиваем все старые CSS-патчи
+   ═══════════════════════════════════════════════════════ */
+
+/* Лого — крупное */
+#mainLogo {
+  background: url('TTT.PNG') center/contain no-repeat !important;
+  width: 260px !important;
+  height: 76px !important;
+  min-width: 260px !important;
+  flex: 0 0 260px !important;
+  font-size: 0 !important;
+  text-indent: -9999px !important;
+  color: transparent !important;
+  overflow: visible !important;
+}
+#mainLogo *, #mainLogo img { display: none !important; }
+#header { height: 88px !important; }
+
+/* Баланс — обычная пилюля, круглый плюсик */
+.balance-pill {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 8px 6px 8px 14px !important;
+  border-radius: 99px !important;
+  position: static !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.balance-pill .b-gold,
+.balance-pill .b-num { display: inline !important; }
+.balance-pill .b-plus {
+  position: static !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 50% !important;
+  background: var(--accent) !important;
+  color: #000 !important;
+  font-size: 18px !important;
+  font-weight: 1000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 0 0 2px !important;
+  box-shadow: 0 0 14px rgba(var(--accent-rgb),.3) !important;
+  transform: none !important;
+}
+.balance-pill .b-plus::before,
+.balance-pill .b-plus::after { display: none !important; }
+
+/* Убираем дубль "Назад" на экранах где он уже есть в HTML */
+#screen-settings .sectionhead .sd-back-btn,
+#screen-bonus .sectionhead .sd-back-btn,
+#screen-topup .sectionhead .sd-back-btn { display: none !important; }
+</style>
+
+<script id="_killSwitchJS">
+(function(){
+  'use strict';
+  console.log('🛑 STOP-KRAN: убиваю все старые патчи');
+
+  // ═══════════════════════════════════════════════════════
+  // 1. ОСТАНАВЛИВАЕМ ВСЕ СТАРЫЕ setInterval
+  // ═══════════════════════════════════════════════════════
+  try {
+    var maxId = setInterval(function(){}, 999999);
+    for(var i = 0; i < maxId; i++){
+      try { clearInterval(i); } catch(e){}
+    }
+    console.log('✅ Все старые setInterval убиты');
+  } catch(e){}
+
+  // ═══════════════════════════════════════════════════════
+  // 2. ОТКЛЮЧАЕМ ВСЕ MutationObserver — они больше не сработают
+  // ═══════════════════════════════════════════════════════
+  try {
+    var RealMO = window.MutationObserver;
+    window.MutationObserver = function(cb){
+      // Возвращаем пустышку — никого не слушает
+      return { observe: function(){}, disconnect: function(){}, takeRecords: function(){ return []; } };
+    };
+    console.log('✅ MutationObserver отключены');
+  } catch(e){}
+
+  // ═══════════════════════════════════════════════════════
+  // 3. СНОСИМ ВСЁ, ЧТО ВСТАВИЛИ СТАРЫЕ ПАТЧИ (битые обломки)
+  // ═══════════════════════════════════════════════════════
+  function cleanupJunk(){
+    // Битые картинки в hero
+    document.querySelectorAll('.hero-img, #heroTrackV4, #heroTrack, #heroTrackFinal, #heroDotsV4, #heroDots, #heroDotsFinal, .hero-open-hit, .hero-tag-overlay, .hero-btn-overlay').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+    // Битые блоки виджетов
+    document.querySelectorAll('#widgetsBlock').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+    // Дубли кнопок "Назад"
+    document.querySelectorAll('.sd-back-btn, .case-back-btn').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+  }
+  cleanupJunk();
+
+  // ═══════════════════════════════════════════════════════
+  // 4. ДУГА АПГРЕЙДА — только радиус 118
+  // ═══════════════════════════════════════════════════════
+  window.drawArc = function(p){
+    var path = document.getElementById('upChanceArc');
+    if(!path) return;
+    p = Math.max(0, Math.min(92, Number(p) || 0));
+    if(p < 0.01){ path.setAttribute('d',''); return; }
+    var cx = 130, cy = 130, r = 118;
+    var half = p * 1.8;
+    var sA = (90 + half) * Math.PI / 180;
+    var eA = (90 - half) * Math.PI / 180;
+    var x1 = cx + r * Math.cos(sA), y1 = cy + r * Math.sin(sA);
+    var x2 = cx + r * Math.cos(eA), y2 = cy + r * Math.sin(eA);
+    var la = p > 50 ? 1 : 0;
+    path.setAttribute('d', 'M '+x1+' '+y1+' A '+r+' '+r+' 0 '+la+' 0 '+x2+' '+y2);
+    path.setAttribute('stroke-linecap', 'butt');
+  };
+
+  // ═══════════════════════════════════════════════════════
+  // 5. КЕЙСЫ — переименование Fury + новые картинки
+  // ═══════════════════════════════════════════════════════
+  function patchCases(){
+    if(typeof window.SD_CASES === 'undefined' || !window.SD_CASES.length) return;
+    SD_CASES.forEach(function(c){
+      if(c.id === 'iphone-duo'){
+        c.id = 'fury'; c.name = 'Fury'; c.caseImg = 'cases/fury.PNG'; c.tag = 'NEW';
+      } else if(c.id === 'common'){
+        c.caseImg = 'cases/734151B4-03BA-4831-929B-47FB355B6FEF.png';
+      } else if(c.id === 'uncommon'){
+        c.caseImg = 'cases/070A5351-3469-45C4-8AB7-CB27B2164F3A.png';
+      } else if(c.id === 'rare'){
+        c.caseImg = 'cases/D14BFE01-DFC6-4EAF-800A-99E3BAEB8CDA.png';
+      }
+    });
+    try { if(typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if(typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 6. HERO — картинка heroo.JPEG с кликабельной зоной
+  // ═══════════════════════════════════════════════════════
+  function patchHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero) return;
+
+    // Стили
+    hero.style.cssText = 'padding:0;background:none;border:none;position:relative;display:block;margin:8px -14px 14px;overflow:hidden;border-radius:0;line-height:0';
+
+    // Скрываем старые элементы
+    hero.querySelectorAll('.hero-tag, .hero-title, .hero-btn, .hero-tag-overlay, .hero-btn-overlay').forEach(function(el){
+      el.style.display = 'none';
+    });
+
+    // Вставляем картинку
+    var img = hero.querySelector('.hero-img');
+    if(!img){
+      img = document.createElement('img');
+      img.className = 'hero-img';
+      img.alt = '';
+      hero.insertBefore(img, hero.firstChild);
+    }
+    img.src = 'heroo.JPEG';
+    img.style.cssText = 'width:100%;height:auto;display:block';
+    img.onerror = function(){ console.error('❌ heroo.JPEG 404'); };
+
+    // Кликабельная зона
+    if(!hero.querySelector('.hero-open-hit')){
+      var hit = document.createElement('button');
+      hit.className = 'hero-open-hit';
+      hit.type = 'button';
+      hit.style.cssText = 'position:absolute;left:4%;bottom:22%;width:42%;height:16%;background:transparent;border:none;cursor:pointer;z-index:20;border-radius:12px';
+      hit.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(hit);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 7. ВИДЖЕТЫ — статичная картинка с 6 кликами
+  // ═══════════════════════════════════════════════════════
+  function patchWidgets(){
+    var s = document.getElementById('screen-home');
+    if(!s) return;
+    var old = document.getElementById('widgetsBlock');
+    if(old) old.remove();
+
+    var hero = s.querySelector('.hero');
+    if(!hero) return;
+
+    var block = document.createElement('div');
+    block.id = 'widgetsBlock';
+    block.style.cssText = 'position:relative;margin:4px -14px 18px;overflow:hidden;line-height:0';
+    block.innerHTML =
+      '<img src="widgets.PNG" style="width:100%;height:auto;display:block" alt="">' +
+      '<div class="wd-overlay" style="position:absolute;inset:4% 3%;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4% 3%"></div>';
+    var ov = block.querySelector('.wd-overlay');
+
+    var targets = ['upgrade','roulette','games','inventory','players','profile'];
+    targets.forEach(function(t){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.style.cssText = 'background:transparent;border:none;padding:0;cursor:pointer;border-radius:14px';
+      b.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go){
+          if(t === 'players') SD.playersTab = 'transfer';
+          SD.go(t);
+        }
+      };
+      ov.appendChild(b);
+    });
+
+    hero.parentNode.insertBefore(block, hero.nextSibling);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 8. ВСЕ КНОПКИ — перепривязка (bindUI мог перебить)
+  // ═══════════════════════════════════════════════════════
+  function rebindAll(){
+    // Нижнее меню
+    document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
+      item.onclick = function(){
+        var nav = item.dataset.nav;
+        if(nav && typeof SD !== 'undefined' && SD.go){
+          if(['home','cases','games','profile','upgrade'].indexOf(nav) > -1) SD.go(nav);
+        }
+      };
+    });
+
+    // Быстрые кнопки
+    document.querySelectorAll('.quick-btn[data-go]').forEach(function(btn){
+      btn.onclick = function(e){
+        e.preventDefault();
+        var t = btn.dataset.go;
+        if(typeof SD !== 'undefined' && SD.go){
+          if(t === 'players') SD.playersTab = 'transfer';
+          SD.go(t);
+        }
+      };
+    });
+
+    // Кнопки data-go
+    document.querySelectorAll('[data-go]').forEach(function(el){
+      if(el.tagName !== 'BUTTON') return;
+      if(el.closest('.quick-btn')) return;
+      el.onclick = function(e){
+        e.preventDefault();
+        var t = el.dataset.go;
+        if(typeof SD !== 'undefined' && SD.go) SD.go(t);
+      };
+    });
+
+    // Кнопка hero
+    var hb = document.getElementById('heroOpenBtn');
+    if(hb) hb.onclick = function(e){
+      e.preventDefault();
+      if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+    };
+
+    // Плюсик баланса
+    var plus = document.getElementById('headerPlus');
+    if(plus) plus.onclick = function(e){
+      e.preventDefault();
+      var m = document.getElementById('topupModal');
+      if(m) m.classList.add('show');
+    };
+
+    // Google
+    var gb = document.getElementById('googleLoginBtn');
+    if(gb && !gb._killBound){
+      gb._killBound = true;
+      gb.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.loginGoogle) SD.loginGoogle();
+      };
+    }
+
+    // Лого — 17 тапов
+    var logo = document.getElementById('mainLogo');
+    if(logo && !logo._killBound){
+      logo._killBound = true;
+      var taps = 0, timer = null;
+      logo.onclick = function(){
+        taps++;
+        clearTimeout(timer);
+        timer = setTimeout(function(){ taps = 0; }, 1500);
+        if(taps >= 17){
+          taps = 0;
+          var m = document.getElementById('devCodeModal');
+          if(m) m.classList.add('show');
+        } else if(taps === 1){
+          if(typeof SD !== 'undefined' && SD.go) SD.go('home');
+        }
+      };
+    }
+
+    // Апгрейд
+    var up = document.getElementById('upgradeBtn');
+    if(up && !up._killBound){
+      up._killBound = true;
+      up.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.runUpgrade) SD.runUpgrade();
+      };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 9. ЗАПУСК
+  // ═══════════════════════════════════════════════════════
+  function run(){
+    patchCases();
+    patchHero();
+    patchWidgets();
+    rebindAll();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(run, 100);
+      setTimeout(run, 800);
+      setTimeout(run, 2000);
+    });
+  } else {
+    setTimeout(run, 100);
+    setTimeout(run, 800);
+    setTimeout(run, 2000);
+  }
+
+  // Один раз через 4 секунды для надёжности
+  setTimeout(run, 4000);
+
+  // Наш единственный setInterval — каждые 2 секунды следим за кнопками
+  setInterval(rebindAll, 2000);
+
+  console.log('✅ STOP-KRAN готов');
+})();
+</script>
 </body>
 </html>
