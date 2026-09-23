@@ -7740,5 +7740,258 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ STOP-KRAN готов');
 })();
 </script>
+<script id="_repairFinal">
+(function(){
+  'use strict';
+  console.log('🔧 REPAIR: восстановление после стоп-крана');
+
+  // ═══════════════════════════════════════════════════════
+  // 1. Восстанавливаем MutationObserver (был заглушён)
+  // ═══════════════════════════════════════════════════════
+  try {
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden';
+    document.documentElement.appendChild(iframe);
+    var RealMO = iframe.contentWindow.MutationObserver;
+    document.documentElement.removeChild(iframe);
+    if (RealMO) {
+      window.MutationObserver = RealMO;
+      console.log('✅ MutationObserver восстановлен');
+    }
+  } catch(e){}
+
+  // ═══════════════════════════════════════════════════════
+  // 2. Убираем битый CSS от стоп-крана
+  // ═══════════════════════════════════════════════════════
+  try {
+    var badCSS = document.getElementById('_killSwitchCSS');
+    if (badCSS) badCSS.remove();
+  } catch(e){}
+
+  // ═══════════════════════════════════════════════════════
+  // 3. Firebase keepalive — поднимаем соединение заново
+  // ═══════════════════════════════════════════════════════
+  function reviveFirebase(){
+    try {
+      var fb = window.__fb;
+      if (!fb || !fb.auth) return false;
+      if (fb.auth.currentUser) {
+        // Форсируем обновление токена — это пересоздаст соединение
+        fb.auth.currentUser.getIdToken(true).then(function(){
+          console.log('✅ Firebase токен обновлён');
+        }).catch(function(e){
+          console.warn('token refresh:', e);
+        });
+      }
+      return true;
+    } catch(e){ return false; }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 4. Строим hero + виджеты (с уникальными id — никто не перебьёт)
+  // ═══════════════════════════════════════════════════════
+  function buildUI(){
+    var screen = document.getElementById('screen-home');
+    if (!screen) return;
+
+    var hero = screen.querySelector('.hero');
+    if (!hero) return;
+
+    // ─── Hero: картинка ───
+    if (!hero.querySelector('.hero-img')) {
+      // Скрываем старые текстовые блоки
+      hero.querySelectorAll('.hero-tag, .hero-title, .hero-btn, .hero-tag-overlay, .hero-btn-overlay').forEach(function(el){
+        el.style.display = 'none';
+      });
+      hero.style.cssText = 'padding:0;background:none;border:none;position:relative;display:block;margin:8px -14px 14px;overflow:hidden;border-radius:0;line-height:0';
+
+      var img = document.createElement('img');
+      img.className = 'hero-img';
+      img.src = 'heroo.JPEG';
+      img.style.cssText = 'width:100%;height:auto;display:block';
+      img.onerror = function(){ console.error('❌ heroo.JPEG 404'); };
+      hero.insertBefore(img, hero.firstChild);
+
+      var hit = document.createElement('button');
+      hit.className = 'hero-open-hit';
+      hit.type = 'button';
+      hit.style.cssText = 'position:absolute;left:4%;bottom:22%;width:42%;height:16%;background:transparent;border:none;cursor:pointer;z-index:20;border-radius:12px';
+      hit.onclick = function(e){
+        e.preventDefault();
+        if (typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(hit);
+    }
+
+    // ─── Виджеты ───
+    if (!document.getElementById('sdWidgets')) {
+      var w = document.createElement('div');
+      w.id = 'sdWidgets';
+      w.style.cssText = 'position:relative;margin:4px -14px 18px;overflow:hidden;line-height:0';
+      w.innerHTML = '<img src="widgets.PNG" style="width:100%;height:auto;display:block" alt="">' +
+                    '<div style="position:absolute;inset:4% 3%;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4% 3%"></div>';
+      var ov = w.querySelector('div');
+      ['upgrade','roulette','games','inventory','players','profile'].forEach(function(t){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.style.cssText = 'background:transparent;border:none;padding:0;cursor:pointer;border-radius:14px';
+        b.onclick = function(e){
+          e.preventDefault();
+          if (typeof SD !== 'undefined' && SD.go){
+            if (t === 'players') SD.playersTab = 'transfer';
+            SD.go(t);
+          }
+        };
+        ov.appendChild(b);
+      });
+      hero.parentNode.insertBefore(w, hero.nextSibling);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 5. Перепривязка ВСЕХ кнопок (Firebase bindUI их перебивает)
+  // ═══════════════════════════════════════════════════════
+  function rebind(){
+    // Нижнее меню
+    document.querySelectorAll('#bottomNav .nav-item').forEach(function(item){
+      item.onclick = function(){
+        var nav = item.dataset.nav;
+        if (nav && typeof SD !== 'undefined' && SD.go){
+          if (['home','cases','games','profile','upgrade'].indexOf(nav) > -1) SD.go(nav);
+        }
+      };
+    });
+
+    // Быстрые кнопки на главной
+    document.querySelectorAll('.quick-btn[data-go]').forEach(function(btn){
+      btn.onclick = function(e){
+        e.preventDefault();
+        var t = btn.dataset.go;
+        if (typeof SD !== 'undefined' && SD.go){
+          if (t === 'players') SD.playersTab = 'transfer';
+          SD.go(t);
+        }
+      };
+    });
+
+    // Любые [data-go]
+    document.querySelectorAll('[data-go]').forEach(function(el){
+      if (el.tagName !== 'BUTTON') return;
+      if (el.closest('.quick-btn')) return;
+      el.onclick = function(e){
+        e.preventDefault();
+        if (typeof SD !== 'undefined' && SD.go) SD.go(el.dataset.go);
+      };
+    });
+
+    // Кнопка hero
+    var hb = document.getElementById('heroOpenBtn');
+    if (hb) hb.onclick = function(e){
+      e.preventDefault();
+      if (typeof SD !== 'undefined' && SD.go) SD.go('cases');
+    };
+
+    // Плюсик баланса
+    var plus = document.getElementById('headerPlus');
+    if (plus) plus.onclick = function(e){
+      e.preventDefault();
+      var m = document.getElementById('topupModal');
+      if (m) m.classList.add('show');
+    };
+
+    // Google — только если fb готов
+    var gb = document.getElementById('googleLoginBtn');
+    if (gb && !gb._repairBound){
+      gb._repairBound = true;
+      gb.onclick = function(e){
+        e.preventDefault();
+        if (typeof SD !== 'undefined' && SD.loginGoogle) SD.loginGoogle();
+      };
+    }
+
+    // Апгрейд
+    var up = document.getElementById('upgradeBtn');
+    if (up) up.onclick = function(e){
+      e.preventDefault();
+      if (typeof SD !== 'undefined' && SD.runUpgrade) SD.runUpgrade();
+    };
+
+    // Лого — 17 тапов
+    var logo = document.getElementById('mainLogo');
+    if (logo && !logo._repairBound){
+      logo._repairBound = true;
+      var taps = 0, timer = null;
+      logo.onclick = function(){
+        taps++;
+        clearTimeout(timer);
+        timer = setTimeout(function(){ taps = 0; }, 1500);
+        if (taps >= 17){
+          taps = 0;
+          var m = document.getElementById('devCodeModal');
+          if (m) m.classList.add('show');
+        } else if (taps === 1){
+          if (typeof SD !== 'undefined' && SD.go) SD.go('home');
+        }
+      };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 6. КЕЙСЫ — Fury + картинки
+  // ═══════════════════════════════════════════════════════
+  function patchCases(){
+    if (typeof window.SD_CASES === 'undefined' || !window.SD_CASES.length) return;
+    SD_CASES.forEach(function(c){
+      if (c.id === 'iphone-duo'){
+        c.id = 'fury'; c.name = 'Fury'; c.caseImg = 'cases/fury.PNG'; c.tag = 'NEW';
+      } else if (c.id === 'common'){
+        c.caseImg = 'cases/734151B4-03BA-4831-929B-47FB355B6FEF.png';
+      } else if (c.id === 'uncommon'){
+        c.caseImg = 'cases/070A5351-3469-45C4-8AB7-CB27B2164F3A.png';
+      } else if (c.id === 'rare'){
+        c.caseImg = 'cases/D14BFE01-DFC6-4EAF-800A-99E3BAEB8CDA.png';
+      }
+    });
+    try { if (typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if (typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 7. ЛОГО — крупное
+  // ═══════════════════════════════════════════════════════
+  function fixLogo(){
+    var logo = document.getElementById('mainLogo');
+    if (!logo) return;
+    logo.style.cssText = 'background:url("TTT.PNG") center/contain no-repeat;width:260px;height:76px;min-width:260px;flex:0 0 260px;font-size:0;text-indent:-9999px;color:transparent;overflow:visible;cursor:pointer';
+    logo.querySelectorAll('*').forEach(function(el){ el.style.display = 'none'; });
+    var header = document.getElementById('header');
+    if (header) header.style.height = '88px';
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 8. ЗАПУСК
+  // ═══════════════════════════════════════════════════════
+  function run(){
+    try { reviveFirebase(); } catch(e){}
+    try { fixLogo(); } catch(e){}
+    try { buildUI(); } catch(e){}
+    try { patchCases(); } catch(e){}
+    try { rebind(); } catch(e){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  setTimeout(run, 500);
+  setTimeout(run, 1500);
+  setTimeout(run, 3000);
+  setTimeout(run, 6000);
+
+  // Перепривязка раз в 2 сек — если Firebase bindUI перебьёт, вернём
+  setInterval(rebind, 2000);
+
+  console.log('✅ REPAIR готов');
+})();
+</script>
 </body>
 </html>
