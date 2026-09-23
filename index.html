@@ -6125,5 +6125,266 @@ console.log('✅ Debug overlay отключён');
   console.log('✅ Guest login ready');
 })();
 </script>
+<style>
+/* ═══════════════════════════════════════════════════════
+   UI PATCH v2 — ЛОГО + БАЛАНС + ПЛЮСИК + HERO + НАЗАД
+   ═══════════════════════════════════════════════════════ */
+
+/* ── 1. ЛОГО → картинка TT.PNG ── */
+#mainLogo {
+  background: url('TT.PNG') center/contain no-repeat !important;
+  width: 140px !important;
+  height: 44px !important;
+  font-size: 0 !important;
+  text-indent: -9999px !important;
+  color: transparent !important;
+  overflow: hidden !important;
+  cursor: pointer !important;
+}
+#mainLogo *,
+#mainLogo .logo-drop { display: none !important; }
+
+/* ── 2. БАЛАНС → картинка BALANS.jpg ── */
+.balance-pill {
+  background: url('BALANS.jpg') center/contain no-repeat !important;
+  border: none !important;
+  box-shadow: none !important;
+  width: 170px !important;
+  height: 46px !important;
+  padding: 0 !important;
+  position: relative !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+.balance-pill .b-gold,
+.balance-pill .b-num { display: none !important; }
+
+/* ── 3. ПЛЮСИК внутри круга (акцентный цвет) ── */
+.balance-pill .b-plus {
+  position: absolute !important;
+  right: -1px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  z-index: 5 !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0 !important;
+  color: transparent !important;
+  overflow: visible !important;
+}
+.balance-pill .b-plus::before {
+  content: "" !important;
+  display: block !important;
+  width: 22px !important;
+  height: 22px !important;
+  background:
+    linear-gradient(var(--accent), var(--accent)) center/100% 3px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center/3px 100% no-repeat;
+  filter: drop-shadow(0 0 6px var(--accent)) !important;
+  transition: filter .2s ease !important;
+  border-radius: 2px !important;
+  pointer-events: none !important;
+}
+.balance-pill .b-plus::after { display: none !important; }
+.balance-pill .b-plus:active::before {
+  transform: scale(.85) !important;
+  filter: drop-shadow(0 0 12px var(--accent)) !important;
+}
+
+/* ── 4. HERO — убираем текст-оверлеи (они есть на картинке) ── */
+#screen-home .hero .hero-tag-overlay,
+#screen-home .hero .hero-btn-overlay { display: none !important; }
+
+/* Невидимая кликабельная зона на кнопку hero-картинки */
+#screen-home .hero .hero-open-hit {
+  position: absolute !important;
+  left: 4% !important;
+  bottom: 24% !important;
+  width: 42% !important;
+  height: 15% !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  z-index: 20 !important;
+  border-radius: 12px !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+#screen-home .hero .hero-open-hit:active {
+  background: rgba(255,255,255,.08) !important;
+}
+
+/* ── 5. Кнопка "Назад" на экранах ── */
+.case-back-btn {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 10px 14px !important;
+  min-height: 40px !important;
+  border-radius: 11px !important;
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-2) !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+  margin-bottom: 10px !important;
+  -webkit-tap-highlight-color: transparent !important;
+  width: fit-content !important;
+}
+.case-back-btn:active { transform: scale(.97) !important; }
+.case-back-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+  stroke: currentColor !important;
+  fill: none !important;
+  stroke-width: 2.5 !important;
+}
+</style>
+
+<script>
+(function(){
+  'use strict';
+  console.log('🎨 UI PATCH v2 загружен');
+
+  // ═══ 1. HERO — картинка heroo.JPEG + кликабельная зона ═══
+  function fixHero(){
+    var hero = document.querySelector('#screen-home .hero');
+    if(!hero) return false;
+
+    var img = hero.querySelector('.hero-img');
+    if(img){
+      if(!img.src.includes('heroo')){
+        img.src = 'heroo.JPEG';
+        img.onerror = function(){ console.error('❌ heroo.JPEG 404'); };
+      }
+    } else {
+      var ni = document.createElement('img');
+      ni.className = 'hero-img';
+      ni.src = 'heroo.JPEG';
+      ni.alt = '';
+      ni.onerror = function(){ console.error('❌ heroo.JPEG 404'); };
+      hero.insertBefore(ni, hero.firstChild);
+    }
+
+    // Убираем текстовые оверлеи
+    hero.querySelectorAll('.hero-tag-overlay, .hero-btn-overlay').forEach(function(el){ el.remove(); });
+
+    // Кликабельная зона на красную кнопку
+    if(!hero.querySelector('.hero-open-hit')){
+      var hit = document.createElement('button');
+      hit.className = 'hero-open-hit';
+      hit.type = 'button';
+      hit.setAttribute('aria-label', 'Открыть кейсы');
+      hit.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go('cases');
+      };
+      hero.appendChild(hit);
+    }
+    return true;
+  }
+
+  // ═══ 2. Плюсик в круге баланса ═══
+  function fixPlus(){
+    var pill = document.querySelector('.balance-pill');
+    if(!pill) return false;
+    var plus = pill.querySelector('.b-plus');
+    if(!plus) return false;
+
+    plus.textContent = '';
+
+    plus.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+
+      var modal = document.getElementById('topupModal');
+      if(modal){
+        modal.classList.add('show');
+        var inp = document.getElementById('topupModalAmount');
+        if(inp) inp.value = '';
+      } else {
+        if(typeof SD !== 'undefined' && SD.go) SD.go('topup');
+      }
+    };
+    return true;
+  }
+
+  // ═══ 3. Кнопки "Назад" на экранах ═══
+  function addBackButtons(){
+    var screens = [
+      { id: 'screen-cases',     target: 'home' },
+      { id: 'screen-upgrade',   target: 'home' },
+      { id: 'screen-roulette',  target: 'games' },
+      { id: 'screen-inventory', target: 'profile' },
+      { id: 'screen-settings',  target: 'profile' },
+      { id: 'screen-bonus',     target: 'profile' },
+      { id: 'screen-topup',     target: 'profile' }
+    ];
+
+    screens.forEach(function(s){
+      var el = document.getElementById(s.id);
+      if(!el) return;
+      if(el.querySelector('.case-back-btn')) return;
+
+      var btn = document.createElement('button');
+      btn.className = 'case-back-btn';
+      btn.type = 'button';
+      btn.innerHTML =
+        '<svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>' +
+        '<span>Назад</span>';
+      btn.onclick = function(e){
+        e.preventDefault();
+        if(typeof SD !== 'undefined' && SD.go) SD.go(s.target);
+      };
+
+      var first = el.firstElementChild;
+      if(first) el.insertBefore(btn, first);
+      else el.appendChild(btn);
+    });
+    return true;
+  }
+
+  // ═══ ЗАПУСК ═══
+  function run(){
+    fixHero();
+    fixPlus();
+    addBackButtons();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  setTimeout(run, 300);
+  setTimeout(run, 1000);
+  setTimeout(run, 2500);
+  setTimeout(run, 5000);
+
+  // Наблюдатель за home — если hero перерисуется
+  function startObs(){
+    var s = document.getElementById('screen-home');
+    if(!s) return;
+    new MutationObserver(function(){
+      var h = document.querySelector('#screen-home .hero');
+      if(h && !h.querySelector('.hero-open-hit')) fixHero();
+      addBackButtons();
+    }).observe(s, { childList: true, subtree: true });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startObs);
+  else startObs();
+
+  console.log('✅ UI PATCH v2 применён');
+})();
+</script>
 </body>
 </html>
