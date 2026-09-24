@@ -3801,5 +3801,490 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCKS 1FIX + 2 + 3 PATCH ============ -->
+<!-- ============ SD BIG PATCH: LOGO + NO-LOGOUT + BALANCE + BLOCK 4 + BLOCK 5 ============ -->
+<script id="sd-big-patch">
+(function(){
+'use strict';
+
+function injectStyles(){
+  if(document.getElementById('sd-big-patch-style')) return;
+  var css = `
+    /* ---- LOGO TEXT ---- */
+    #header #mainLogo{
+      background:none !important; background-image:none !important;
+      font-size:22px !important; line-height:1.1 !important;
+      color:#eef0f4 !important; text-indent:0 !important;
+      width:auto !important; min-width:0 !important; max-width:none !important;
+      height:auto !important; flex:0 0 auto !important;
+      display:inline-flex !important; align-items:center !important; gap:6px !important;
+      font-weight:1000 !important; letter-spacing:.5px !important;
+      overflow:visible !important; white-space:nowrap !important;
+    }
+    #mainLogo > *{ display:inline !important; }
+    #mainLogo .logo-drop{ color:var(--accent,#ff2e63) !important;
+      text-shadow:0 0 18px rgba(var(--accent-rgb,255,46,99),.3) !important; }
+
+    /* ---- HEADER LOGOUT HIDE ---- */
+    #header #sdLogout{ display:none !important; visibility:hidden !important;
+      width:0 !important; height:0 !important; padding:0 !important; margin:0 !important;
+      border:0 !important; pointer-events:none !important; }
+
+    /* ---- BALANCE PILL WIDER ---- */
+    #header .balance-pill{ width:auto !important; flex:0 0 auto !important;
+      padding:5px 6px 5px 12px !important; gap:5px !important; }
+    #header .balance-pill .b-num{ overflow:visible !important; text-overflow:clip !important;
+      white-space:nowrap !important; min-width:44px !important; font-size:13px !important;
+      letter-spacing:-.01em !important; }
+
+    /* ---- BLOCK 4: iOS grab handle ---- */
+    .modal-sheet .sheet-handle{
+      width:44px !important; height:5px !important;
+      background:#6e7080 !important; opacity:.9 !important;
+      margin:8px auto 16px !important;
+      cursor:grab; touch-action:none; transition:opacity .2s ease;
+    }
+    .modal-sheet .sheet-handle:active{ cursor:grabbing; opacity:1; }
+    .modal-sheet.sd-dragging{ transition:none !important; }
+
+    /* ---- BLOCK 4: back button ---- */
+    #caseModal .sheet-head-back{
+      position:absolute; top:14px; left:14px; z-index:6;
+      display:flex; align-items:center; justify-content:center;
+      width:38px; height:38px; border-radius:50%;
+      background:var(--surface-2); border:1px solid var(--border);
+      color:var(--text-2); font-size:20px; font-weight:900; line-height:1;
+      padding:0; cursor:pointer; touch-action:manipulation;
+      -webkit-tap-highlight-color:transparent;
+    }
+    #caseModal .sheet-head-back:active{ transform:scale(.92); }
+
+    /* ---- BLOCK 4: 3D ---- */
+    #caseModal .modal-sheet{ perspective:1400px; transform-style:preserve-3d; }
+    #caseModal .case-head{
+      transform-origin:50% 40%;
+      transition:transform 1.15s cubic-bezier(.2,.85,.3,1),
+                 opacity 1.15s ease, filter 1.15s ease;
+      will-change:transform, opacity, filter;
+    }
+    #caseModal .spin-area{
+      perspective:1200px; transform-style:preserve-3d;
+      transition:transform 1.15s cubic-bezier(.2,.85,.3,1),
+                 opacity 1.15s ease;
+      will-change:transform, opacity;
+    }
+    #caseModal.sd-case-away .case-head{
+      transform:translate3d(0,-8px,-180px) scale(.6);
+      opacity:.28; filter:blur(3px);
+    }
+    #caseModal.sd-spin-fwd .spin-area{
+      transform:translate3d(0,0,60px) scale(1.04);
+    }
+    #caseModal.sd-spin-fwd .spin-window{
+      box-shadow:0 20px 60px rgba(var(--accent-rgb,255,46,99),.28),
+                 0 0 0 1px rgba(255,255,255,.06) inset;
+    }
+
+    /* ---- BLOCK 5: multi-spin ---- */
+    .spin-window.sd-multi{
+      height:auto !important; padding:10px 6px !important;
+      background:transparent !important; border:none !important;
+      display:block !important; overflow:visible !important; box-shadow:none !important;
+    }
+    .spin-window.sd-multi::before,
+    .spin-window.sd-multi::after{ display:none !important; }
+    .spin-window.sd-multi .spin-track{ display:none !important; }
+
+    #sdMultiSpin{ display:grid; gap:10px 6px; padding:2px 0; grid-auto-rows:auto; }
+
+    .sd-ms-col{
+      position:relative; height:130px; border-radius:12px;
+      background:linear-gradient(180deg,#14151f 0%,#0d0e15 100%);
+      border:1px solid rgba(255,255,255,.08);
+      overflow:hidden; box-sizing:border-box;
+      transition:border-color .25s ease, box-shadow .25s ease;
+    }
+    .sd-ms-col::before{
+      content:""; position:absolute; top:0; left:0; right:0; height:18px;
+      background:linear-gradient(180deg,rgba(8,8,13,.92),rgba(8,8,13,0));
+      z-index:3; pointer-events:none;
+    }
+    .sd-ms-col::after{
+      content:""; position:absolute; bottom:0; left:0; right:0; height:18px;
+      background:linear-gradient(0deg,rgba(8,8,13,.92),rgba(8,8,13,0));
+      z-index:3; pointer-events:none;
+    }
+    .sd-ms-col.sd-stopped{
+      border-color:var(--accent,#ff2e63);
+      box-shadow:0 0 16px rgba(var(--accent-rgb,255,46,99),.5);
+    }
+    .sd-ms-strip{
+      position:absolute; top:0; left:0; right:0;
+      display:flex; flex-direction:column; will-change:transform;
+    }
+    .sd-ms-item{
+      height:130px; width:100%;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding:6px 3px; box-sizing:border-box; flex:0 0 130px; overflow:hidden;
+    }
+    .sd-ms-item img{
+      max-width:100%; max-height:80px; object-fit:contain;
+      margin-bottom:4px; display:block;
+      pointer-events:none; user-select:none; -webkit-user-drag:none;
+    }
+    .sd-ms-item b{
+      font-size:9px; font-weight:800; color:#b9bcc8;
+      text-align:center; line-height:1.15; max-height:22px; overflow:hidden;
+      padding:0 2px;
+    }
+
+    @media(max-width:430px){
+      #header #mainLogo{font-size:17px !important; gap:4px !important;}
+      #header .balance-pill{padding:4px 5px 4px 10px !important; gap:4px !important;}
+      #header .balance-pill .b-num{font-size:12px !important; min-width:40px !important;}
+      .sd-ms-col{height:106px;}
+      .sd-ms-item{height:106px; flex-basis:106px; padding:5px 2px;}
+      .sd-ms-item img{max-height:62px; margin-bottom:3px;}
+      .sd-ms-item b{font-size:8px; max-height:18px;}
+    }
+    @media(max-width:360px){
+      #header #mainLogo{font-size:15px !important;}
+      #header .balance-pill .b-num{font-size:11px !important;}
+      .sd-ms-col{height:96px;}
+      .sd-ms-item{height:96px; flex-basis:96px;}
+      .sd-ms-item img{max-height:54px;}
+    }
+  `;
+  var st = document.createElement('style');
+  st.id = 'sd-big-patch-style';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+/* ---------- LOGO ---------- */
+function restoreLogoText(){
+  var logo = document.getElementById('mainLogo');
+  if(!logo) return;
+  logo.style.background = '';
+  logo.style.backgroundImage = '';
+  logo.style.fontSize = '';
+  logo.style.color = '';
+  logo.style.textIndent = '';
+  logo.style.lineHeight = '';
+  logo.style.width = '';
+  logo.style.minWidth = '';
+  logo.style.maxWidth = '';
+  logo.style.height = '';
+  logo.style.flex = '';
+  var kids = logo.querySelectorAll('*');
+  for(var i=0;i<kids.length;i++) kids[i].style.display = '';
+  if(!logo.querySelector('.logo-drop')){
+    logo.innerHTML = 'STANDOFF <span class="logo-drop">DROP</span>';
+  }
+}
+
+/* ---------- HEADER LOGOUT REMOVE ---------- */
+function removeHeaderLogout(){
+  var el = document.getElementById('sdLogout');
+  if(el && el.parentNode) el.parentNode.removeChild(el);
+}
+
+/* ---------- SUPPORT IN PROFILE ---------- */
+function addSupportItem(){
+  var menu = document.querySelector('#screen-profile .profile-menu');
+  if(!menu) return;
+  if(menu.querySelector('#sdSupportBtn')) return;
+  var a = document.createElement('a');
+  a.id = 'sdSupportBtn';
+  a.className = 'pm-item';
+  a.href = 'https://t.me/dev_so_drop';
+  a.target = '_blank'; a.rel = 'noopener noreferrer';
+  a.innerHTML = '<div class="pm-icon">💬</div><div class="pm-text">Поддержка</div><div class="pm-arrow">›</div>';
+  var lg = menu.querySelector('#logoutBtn');
+  if(lg && lg.parentNode) lg.parentNode.insertBefore(a, lg);
+  else menu.appendChild(a);
+}
+
+/* ---------- CASE PRICES ---------- */
+function patchCasePrices(){
+  if(!window.SD_CASES) return;
+  for(var i=0;i<window.SD_CASES.length;i++){
+    var c = window.SD_CASES[i];
+    if(c.id === 'common') c.price = 19;
+    else if(c.id === 'uncommon') c.price = 39;
+    else if(c.id === 'rare') c.price = 59;
+  }
+}
+
+/* ---------- BLOCK 4: iOS handle + drag + back ---------- */
+function installCaseModal3D(){
+  var modal = document.getElementById('caseModal');
+  if(!modal || modal.__sdB4) return;
+  modal.__sdB4 = true;
+
+  var sheet = modal.querySelector('.modal-sheet');
+  var handle = modal.querySelector('.sheet-handle');
+  if(!sheet) return;
+
+  /* Back button */
+  if(!sheet.querySelector('.sheet-head-back')){
+    var back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'sheet-head-back';
+    back.setAttribute('aria-label','Назад');
+    back.textContent = '←';
+    back.onclick = function(){ closeModal('caseModal'); };
+    sheet.insertBefore(back, sheet.firstChild);
+  }
+
+  /* drag-to-close */
+  if(handle){
+    var startY = 0, curY = 0, dragging = false;
+
+    function resetSheet(){
+      sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s ease';
+      sheet.style.transform = '';
+      sheet.style.opacity = '';
+      setTimeout(function(){ sheet.style.transition = ''; }, 300);
+    }
+    function closeByDrag(){
+      sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s ease';
+      sheet.style.transform = 'translateY(100%)';
+      sheet.style.opacity = '0';
+      setTimeout(function(){
+        closeModal('caseModal');
+        sheet.style.transform = ''; sheet.style.opacity = ''; sheet.style.transition = '';
+      }, 250);
+    }
+
+    handle.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;
+      startY = e.touches[0].clientY; curY = startY; dragging = true;
+      sheet.classList.add('sd-dragging');
+      sheet.style.transition = 'none';
+    }, {passive:true});
+
+    handle.addEventListener('touchmove', function(e){
+      if(!dragging) return;
+      curY = e.touches[0].clientY;
+      var dy = Math.max(0, curY - startY);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+      sheet.style.opacity = String(Math.max(.4, 1 - dy/500));
+    }, {passive:true});
+
+    handle.addEventListener('touchend', function(){
+      if(!dragging) return; dragging = false;
+      sheet.classList.remove('sd-dragging');
+      (curY - startY > 110) ? closeByDrag() : resetSheet();
+    });
+
+    handle.addEventListener('mousedown', function(e){
+      startY = e.clientY; curY = startY; dragging = true;
+      sheet.classList.add('sd-dragging');
+      sheet.style.transition = 'none';
+      function mm(ev){
+        if(!dragging) return;
+        curY = ev.clientY;
+        var dy = Math.max(0, curY - startY);
+        sheet.style.transform = 'translateY(' + dy + 'px)';
+        sheet.style.opacity = String(Math.max(.4, 1 - dy/500));
+      }
+      function mu(){
+        document.removeEventListener('mousemove', mm);
+        document.removeEventListener('mouseup', mu);
+        if(!dragging) return; dragging = false;
+        sheet.classList.remove('sd-dragging');
+        (curY - startY > 110) ? closeByDrag() : resetSheet();
+      }
+      document.addEventListener('mousemove', mm);
+      document.addEventListener('mouseup', mu);
+      e.preventDefault();
+    });
+  }
+
+  /* reset 3D on close */
+  var mo = new MutationObserver(function(){
+    if(!modal.classList.contains('show')){
+      modal.classList.remove('sd-case-away','sd-spin-fwd');
+    }
+  });
+  mo.observe(modal, { attributes:true, attributeFilter:['class'] });
+
+  /* when spinArea.show -> case-away + spin-fwd */
+  var spinArea = modal.querySelector('#spinArea');
+  if(spinArea && !spinArea.__sdB4Hook){
+    spinArea.__sdB4Hook = true;
+    var mo2 = new MutationObserver(function(){
+      if(spinArea.classList.contains('show')){
+        modal.classList.add('sd-case-away');
+        setTimeout(function(){ modal.classList.add('sd-spin-fwd'); }, 260);
+      } else {
+        modal.classList.remove('sd-case-away','sd-spin-fwd');
+      }
+    });
+    mo2.observe(spinArea, { attributes:true, attributeFilter:['class'] });
+  }
+}
+
+/* ---------- BLOCK 5: 10 vertical mini-roulettes ---------- */
+function installMultiSpin(){
+  if(window.__sdMultiSpinInstalled) return;
+
+  function ensureMulti(){
+    var area = document.getElementById('spinArea');
+    if(!area) return null;
+    var win = area.querySelector('.spin-window');
+    if(!win) return null;
+    var multi = document.getElementById('sdMultiSpin');
+    if(!multi){
+      multi = document.createElement('div');
+      multi.id = 'sdMultiSpin';
+      win.appendChild(multi);
+    }
+    return { area: area, win: win, multi: multi };
+  }
+
+  function pickRandom(c){
+    if(!c || !c.items || !c.items.length) return { w:'?', s:'?', r:0, file:'', p:0 };
+    var it = c.items[Math.floor(Math.random()*c.items.length)];
+    return { w:it[0], s:it[1], r:it[2], file:it[3], p:it[4] };
+  }
+
+  function itemHTML(sk){
+    var cdn = window.SD_CDN || '';
+    return '<div class="sd-ms-item">' +
+      '<img src="assets/skins/' + sk.file + '" ' +
+      'onerror="this.onerror=null;this.src=\'' + cdn + sk.file + '\'" alt="">' +
+      '<b>' + sk.w + ' | ' + sk.s + '</b>' +
+      '</div>';
+  }
+
+  /* Override global spinMultiple */
+  window.spinMultiple = function(c, wins, onFinish){
+    var e = ensureMulti();
+    if(!e || !wins || !wins.length){
+      if(typeof onFinish === 'function') onFinish();
+      return;
+    }
+
+    /* показать spinArea (оригинал делает это сам, но т.к. мы override — делаем тут) */
+    e.area.classList.add('show');
+
+    e.win.classList.add('sd-multi');
+    e.multi.innerHTML = '';
+
+    var n = wins.length;
+    var colsN = Math.min(5, n);
+    e.multi.style.gridTemplateColumns = 'repeat(' + colsN + ', minmax(0,1fr))';
+
+    var isMobile = window.innerWidth <= 430;
+    var ITEM_H = isMobile ? 106 : 130;
+    var WINNER_IDX = 16;
+    var TAIL = 3;
+    var DUR_BASE = 2200;
+    var DUR_STEP = 400;   /* остановка 1→2→3… с шагом 400мс */
+
+    var cols = [];
+    for(var i=0;i<n;i++){
+      var win = wins[i] || { w:'?', s:'?', r:0, file:'', p:0 };
+      var col = document.createElement('div');
+      col.className = 'sd-ms-col';
+      var strip = document.createElement('div');
+      strip.className = 'sd-ms-strip';
+
+      var html = '';
+      for(var j=0;j<WINNER_IDX;j++) html += itemHTML(pickRandom(c));
+      html += itemHTML(win);
+      for(var t=0;t<TAIL;t++) html += itemHTML(pickRandom(c));
+      strip.innerHTML = html;
+
+      col.appendChild(strip);
+      e.multi.appendChild(col);
+      cols.push({ col: col, strip: strip, dur: DUR_BASE + i * DUR_STEP });
+    }
+
+    var finalY = -(WINNER_IDX * ITEM_H);
+    for(var k=0;k<cols.length;k++){
+      cols[k].strip.style.transform = 'translate3d(0,0,0)';
+    }
+
+    var tickTimer = null;
+    if(typeof tickSound === 'function'){
+      tickTimer = setInterval(function(){ try{ tickSound(); }catch(e){} }, 90);
+    }
+
+    var stopped = 0;
+    for(var idx=0; idx<cols.length; idx++){
+      (function(cobj, delay){
+        setTimeout(function(){
+          var strip = cobj.strip;
+          var start = performance.now();
+          var dur = cobj.dur;
+          function frame(now){
+            var t = Math.min(1, (now - start) / dur);
+            var eased = 1 - Math.pow(1 - t, 4);
+            var y = finalY * eased;
+            strip.style.transform = 'translate3d(0,' + y + 'px,0)';
+            if(t < 1) requestAnimationFrame(frame);
+            else {
+              cobj.col.classList.add('sd-stopped');
+              stopped++;
+              if(stopped === cols.length){
+                if(tickTimer) clearInterval(tickTimer);
+                try{ if(typeof winSound === 'function') winSound(); }catch(e){}
+                if(typeof onFinish === 'function') onFinish();
+              }
+            }
+          }
+          requestAnimationFrame(frame);
+        }, delay);
+      })(cols[idx], idx * DUR_STEP);
+    }
+  };
+
+  /* Также override spinSingle, чтобы убрать .sd-multi при одиночном спине */
+  var origSingle = window.spinSingle;
+  window.spinSingle = function(c, win, onFinish){
+    var winEl = document.querySelector('#spinArea .spin-window');
+    if(winEl) winEl.classList.remove('sd-multi');
+    if(typeof origSingle === 'function') return origSingle(c, win, onFinish);
+  };
+
+  window.__sdMultiSpinInstalled = true;
+}
+
+/* ---------- BOOT ---------- */
+function runAll(){
+  injectStyles();
+  restoreLogoText();
+  removeHeaderLogout();
+  addSupportItem();
+  patchCasePrices();
+  installCaseModal3D();
+}
+
+runAll();
+
+var tries = 0;
+var iv = setInterval(function(){
+  tries++;
+  runAll();
+  installMultiSpin();
+  if(tries > 20) clearInterval(iv);
+}, 300);
+
+/* гарантированно переопределить spin-функции после оригинала */
+setTimeout(installMultiSpin, 400);
+setTimeout(installMultiSpin, 1200);
+
+/* повторно — на случай если финальный патч успел вернуть фон лого */
+setTimeout(restoreLogoText, 800);
+setTimeout(restoreLogoText, 2000);
+setTimeout(removeHeaderLogout, 900);
+setTimeout(removeHeaderLogout, 2100);
+
+console.log('✅ [SD] Big patch applied (fix + Block 4 + Block 5)');
+})();
+</script>
+<!-- ============ /SD BIG PATCH ============ -->
 </body>
 </html>
