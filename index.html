@@ -3950,5 +3950,273 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 4 ============ -->
+<!-- ============ SD BLOCK 4 FIX: kill will-change + no blur + safe drag ============ -->
+<style id="sd-block4-fix-style">
+  /* --- 1. Убираем will-change — ломает клики в мобильных --- */
+  #caseModal .modal-sheet{
+    will-change: auto !important;
+    perspective: none !important;
+    transform-style: flat !important;
+    transform: none !important;
+    opacity: 1 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* --- 2. Заменяем blur на плотный тёмный фон (нет призрачных слоёв) --- */
+  #caseModal.modal-back{
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(0, 0, 0, .85) !important;
+  }
+
+  /* --- 3. Отключаем 3D-анимацию, чтобы не ломала hit-testing --- */
+  #caseModal .case-head{
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transition: none !important;
+    will-change: auto !important;
+  }
+  #caseModal .spin-area{
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+  }
+
+  /* --- 4. Все элементы в модалке кликабельны --- */
+  #caseModal .modal-sheet,
+  #caseModal .modal-sheet *{
+    pointer-events: auto;
+  }
+  #caseModal .spin-result,
+  #caseModal .spin-result *,
+  #caseModal .sr-actions,
+  #caseModal .sr-actions button{
+    pointer-events: auto !important;
+  }
+  #caseModal .spin-window::before,
+  #caseModal .spin-window::after{
+    pointer-events: none !important;
+  }
+
+  /* --- 5. Кнопка назад — всегда сверху --- */
+  #caseModal .sheet-head-back{
+    pointer-events: auto !important;
+    z-index: 100 !important;
+  }
+
+  /* --- 6. iOS-ручка остаётся --- */
+  #caseModal .sheet-handle{
+    cursor: grab;
+    touch-action: none;
+  }
+  #caseModal .sheet-handle:active{
+    cursor: grabbing;
+  }
+</style>
+
+<script id="sd-block4-fix-script">
+(function(){
+'use strict';
+
+  /* ==================================================
+     Безопасное закрытие caseModal
+     Гарантированно сбрасывает inline-стили шторки.
+     ================================================== */
+  function safeCloseCaseModal(){
+    var modal = document.getElementById('caseModal');
+    if(!modal) return;
+
+    modal.classList.remove('show', 'sd-case-away', 'sd-spin-fwd');
+
+    var sheet = modal.querySelector('.modal-sheet');
+    if(sheet){
+      sheet.style.transform = '';
+      sheet.style.opacity = '';
+      sheet.style.transition = '';
+      sheet.style.willChange = '';
+    }
+  }
+  window.sdSafeCloseCaseModal = safeCloseCaseModal;
+
+  /* ==================================================
+     Кнопка «←»
+     ================================================== */
+  function ensureBackButton(){
+    var modal = document.getElementById('caseModal');
+    if(!modal) return;
+    var sheet = modal.querySelector('.modal-sheet');
+    if(!sheet) return;
+
+    var back = sheet.querySelector('.sheet-head-back');
+    if(!back){
+      back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'sheet-head-back';
+      back.setAttribute('aria-label','Назад');
+      back.textContent = '←';
+      sheet.insertBefore(back, sheet.firstChild);
+    }
+    back.onclick = function(e){
+      if(e){ e.preventDefault(); e.stopPropagation(); }
+      safeCloseCaseModal();
+    };
+  }
+
+  /* ==================================================
+     Drag-to-close через iOS-ручку
+     Снимаем старые обработчики через клон.
+     ================================================== */
+  function installDrag(){
+    var modal = document.getElementById('caseModal');
+    if(!modal) return;
+
+    var sheet = modal.querySelector('.modal-sheet');
+    var handle = modal.querySelector('.sheet-handle');
+    if(!sheet || !handle) return;
+
+    /* Если мы уже ставили — не дублируем */
+    if(handle.__sdB4FixInstalled) return;
+    handle.__sdB4FixInstalled = true;
+
+    var startY = 0, curY = 0, dragging = false;
+
+    function begin(y){
+      startY = y; curY = y; dragging = true;
+      sheet.style.transition = 'none';
+    }
+    function move(y){
+      if(!dragging) return;
+      curY = y;
+      var dy = Math.max(0, curY - startY);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+      sheet.style.opacity = String(Math.max(.5, 1 - dy / 600));
+    }
+    function resetTransform(){
+      sheet.style.transition = 'transform .22s ease, opacity .22s ease';
+      sheet.style.transform = '';
+      sheet.style.opacity = '';
+      setTimeout(function(){ sheet.style.transition = ''; }, 240);
+    }
+    function end(){
+      if(!dragging) return;
+      dragging = false;
+      if(curY - startY > 110){
+        sheet.style.transition = 'transform .25s ease, opacity .25s ease';
+        sheet.style.transform = 'translateY(100%)';
+        sheet.style.opacity = '0';
+        setTimeout(function(){ safeCloseCaseModal(); }, 260);
+      } else {
+        resetTransform();
+      }
+    }
+
+    /* Touch */
+    handle.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;
+      begin(e.touches[0].clientY);
+    }, { passive: true });
+    handle.addEventListener('touchmove', function(e){
+      if(e.touches.length !== 1) return;
+      move(e.touches[0].clientY);
+    }, { passive: true });
+    handle.addEventListener('touchend', end);
+    handle.addEventListener('touchcancel', end);
+
+    /* Mouse */
+    handle.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      begin(e.clientY);
+      function mm(ev){ move(ev.clientY); }
+      function mu(){
+        document.removeEventListener('mousemove', mm);
+        document.removeEventListener('mouseup', mu);
+        end();
+      }
+      document.addEventListener('mousemove', mm);
+      document.addEventListener('mouseup', mu);
+    });
+  }
+
+  /* ==================================================
+     Watcher: любое закрытие caseModal → сброс стилей
+     ================================================== */
+  function watchClose(){
+    var modal = document.getElementById('caseModal');
+    if(!modal || modal.__sdB4FixWatcher) return;
+    modal.__sdB4FixWatcher = true;
+
+    new MutationObserver(function(){
+      if(!modal.classList.contains('show')){
+        /* Закрыли — сбрасываем inline-стили шторки */
+        var sheet = modal.querySelector('.modal-sheet');
+        if(sheet){
+          sheet.style.transform = '';
+          sheet.style.opacity = '';
+          sheet.style.transition = '';
+        }
+        modal.classList.remove('sd-case-away', 'sd-spin-fwd');
+      }
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* ==================================================
+     Делегирование кнопки назад (страховка)
+     ================================================== */
+  function installGlobalBackClick(){
+    if(window.__sdB4FixBackClick) return;
+    window.__sdB4FixBackClick = true;
+
+    document.addEventListener('click', function(e){
+      var t = e.target;
+      if(!t || !t.closest) return;
+      if(t.closest('#caseModal .sheet-head-back')){
+        e.preventDefault();
+        e.stopPropagation();
+        safeCloseCaseModal();
+      }
+    }, false);
+  }
+
+  /* ==================================================
+     Делегирование кнопок результата — СТРАХОВКА
+     Ничего не ломает, только гарантирует, что клик дойдёт.
+     ================================================== */
+  function installResultDelegation(){
+    if(window.__sdB4FixResultClick) return;
+    window.__sdB4FixResultClick = true;
+
+    document.addEventListener('click', function(e){
+      var t = e.target;
+      if(!t || !t.closest) return;
+
+      var btn = t.closest('#caseModal .sr-inv, #caseModal .sr-again, #caseModal .sr-sell');
+      if(!btn) return;
+
+      /* Ничего не делаем сами — просто убеждаемся, что не перехватывают */
+      /* (эта функция — заглушка для будущих проблем) */
+    }, false);
+  }
+
+  /* ==================================================
+     Boot
+     ================================================== */
+  function runAll(){
+    try{ ensureBackButton(); }catch(e){}
+    try{ installDrag(); }catch(e){}
+    try{ watchClose(); }catch(e){}
+    try{ installGlobalBackClick(); }catch(e){}
+    try{ installResultDelegation(); }catch(e){}
+  }
+
+  runAll();
+  var iv = setInterval(runAll, 400);
+  setTimeout(function(){ clearInterval(iv); }, 6000);
+
+  console.log('✅ [SD] Block 4 FIX applied');
+})();
+</script>
+<!-- ============ /SD BLOCK 4 FIX ============ -->
 </body>
 </html>
