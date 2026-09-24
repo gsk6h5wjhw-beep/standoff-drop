@@ -4646,5 +4646,146 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 6 ============ -->
+<!-- ============ SD BLOCK 7: StatTrak 15% ============ -->
+<script id="sd-block7-stattrak">
+(function(){
+'use strict';
+
+  var SD = window.SD;
+  if(!SD) return;
+
+  /* ============ 1. Обёртка pickSkin ============ */
+  /* Оригинальный pickSkin возвращает { w, s, r, file, p }.
+     Мы разыгрываем 15% StatTrak у оружия. */
+  function installStatTrak(){
+    if(window.__sdStatTrakInstalled) return;
+    if(typeof window.pickSkin !== 'function') return;
+    window.__sdStatTrakInstalled = true;
+
+    var orig = window.pickSkin;
+
+    window.pickSkin = function(caseObj){
+      var base = orig(caseObj);
+      if(!base) return base;
+
+      /* Ищем флаг canSt в исходной базе кейса:
+         items[i] = [weapon, skin, rarity, file, price, stattrak?]
+         index 5 === 1 → оружие, может стать StatTrak. */
+      var canSt = false;
+      if(caseObj && caseObj.items && caseObj.items.length){
+        for(var i = 0; i < caseObj.items.length; i++){
+          var it = caseObj.items[i];
+          if(it[0] === base.w && it[1] === base.s){
+            canSt = (it[5] === 1);
+            break;
+          }
+        }
+      }
+
+      /* 15% шанс, только для оружия */
+      if(canSt && Math.random() < 0.15){
+        var stPrice = Number(base.p) * 1.5;
+        /* Внутри храним до 3 знаков (0.375), на экране покажем 2 (0.38) */
+        var prec = (typeof window.__sdPrec === 'function')
+          ? window.__sdPrec
+          : function(v){ return Math.round(v * 1000) / 1000; };
+
+        return {
+          w: base.w,
+          s: base.s,
+          r: base.r,
+          file: base.file,
+          p: prec(stPrice),
+          st: true
+        };
+      }
+
+      /* Обычный скин — гарантируем наличие st: false */
+      return {
+        w: base.w, s: base.s, r: base.r, file: base.file,
+        p: base.p,
+        st: false
+      };
+    };
+  }
+
+  /* ============ 2. Передача сохраняет StatTrak ============ */
+  /* В оригинальной acceptTransfer флаг st теряется при получении.
+     Переопределяем — теперь он сохраняется. */
+  function installAcceptTransfer(){
+    window.acceptTransfer = async function(tr){
+      try{
+        var toArray = function(v){
+          if(!v) return [];
+          if(Array.isArray(v)) return v.filter(Boolean);
+          if(typeof v === 'object') return Object.keys(v).sort(function(a,b){ return Number(a)-Number(b); })
+            .map(function(k){ return v[k]; }).filter(Boolean);
+          return [];
+        };
+        var prec = (typeof window.__sdPrec === 'function')
+          ? window.__sdPrec
+          : function(v){ return Math.round(v * 1000) / 1000; };
+
+        var inv = toArray(SD.profile.inventory);
+        var recv = tr.skins.map(function(s){
+          return {
+            w: s.w, s: s.s, r: s.r, file: s.file,
+            p: prec(s.p),
+            st: !!s.st,
+            id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+            received: true
+          };
+        });
+        var newInv = inv.concat(recv);
+        var transfers = toArray(SD.profile.incomingTransfers).filter(function(x){
+          return x.transferId !== tr.transferId;
+        });
+
+        var f = window.__fb;
+        if(!f || !f.dbMod) throw new Error('Firebase not ready');
+
+        await f.dbMod.update(f.dbMod.ref(f.db, 'users/' + SD.uid), {
+          inventory: newInv,
+          incomingTransfers: transfers
+        });
+
+        SD.profile.inventory = newInv;
+        SD.profile.incomingTransfers = transfers;
+
+        var stCount = recv.filter(function(x){ return x.st; }).length;
+        var msg = tr.skins.length + ' скинов';
+        if(stCount > 0) msg += ' (' + stCount + ' StatTrak™)';
+        SD.ok('Передано', msg);
+
+        if(typeof renderIncomingTransfers === 'function') renderIncomingTransfers();
+        if(typeof renderInventory === 'function') renderInventory();
+      }catch(e){
+        console.error('[B7] acceptTransfer', e);
+        SD.err('Ошибка','Не удалось принять');
+      }
+    };
+  }
+
+  /* ============ 3. Совместимость со старым форматом pickSkin ============ */
+  /* На случай если в других местах кода используется pickSkin
+     и ожидает { w, s, r, file, p } — мы уже возвращаем всё это
+     плюс st. Старые вызовы не сломаются. */
+
+  /* ============ 4. Boot ============ */
+  installStatTrak();
+  installAcceptTransfer();
+
+  /* Ретраи на первые 3 секунды — пока SD/pickSkin окончательно собраны */
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    installStatTrak();
+    if(tries > 12) clearInterval(iv);
+  }, 250);
+
+  console.log('✅ [SD] Block 7 applied (StatTrak 15% for weapons only, ×1.5 price)');
+})();
+</script>
+<!-- ============ /SD BLOCK 7 ============ -->
 </body>
 </html>
