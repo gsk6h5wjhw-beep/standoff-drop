@@ -3602,5 +3602,98 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 1 ============ -->
+<!-- ============ SD BLOCK 2+3: SUPPORT IN PROFILE + CASE PRICES ============ -->
+<script id="sd-block2-3-script">
+(function(){
+  'use strict';
+
+  /* ==================================================
+     BLOCK 2 — Поддержка в профиле
+     ================================================== */
+  function addSupportItem(){
+    var menu = document.querySelector('#screen-profile .profile-menu');
+    if(!menu) return false;
+    if(menu.querySelector('#sdSupportBtn')) return true;
+
+    var a = document.createElement('a');
+    a.id = 'sdSupportBtn';
+    a.className = 'pm-item';
+    a.href = 'https://t.me/dev_so_drop';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.innerHTML =
+      '<div class="pm-icon">💬</div>' +
+      '<div class="pm-text">Поддержка</div>' +
+      '<div class="pm-arrow">›</div>';
+
+    var logout = menu.querySelector('#logoutBtn');
+    if(logout && logout.parentNode){
+      logout.parentNode.insertBefore(a, logout);
+    } else {
+      menu.appendChild(a);
+    }
+    return true;
+  }
+
+  /* ==================================================
+     BLOCK 3 — Цены кейсов
+     ================================================== */
+  function patchCasePrices(){
+    if(!window.SD_CASES || !window.SD_CASES.length) return false;
+    for(var i = 0; i < window.SD_CASES.length; i++){
+      var c = window.SD_CASES[i];
+      if(c.id === 'common')          c.price = 19;
+      else if(c.id === 'uncommon')   c.price = 39;
+      else if(c.id === 'rare')       c.price = 59;
+      /* Fury (бывший iphone-duo) — цена остаётся как есть */
+    }
+    return true;
+  }
+
+  /* Перерисовать сетки, если активен соответствующий экран */
+  function refreshCards(){
+    try{
+      var sd = window.SD;
+      if(!sd || !sd.profile) return;
+
+      if(sd.currentScreen === 'home'){
+        if(typeof renderHome === 'function') renderHome();
+      }
+      if(sd.currentScreen === 'cases'){
+        if(typeof renderAllCases === 'function') renderAllCases();
+      }
+    }catch(e){}
+  }
+
+  /* ==================================================
+     Запуск
+     ================================================== */
+  function runAll(){
+    addSupportItem();
+    patchCasePrices();
+  }
+
+  runAll();
+
+  /* Ретраи — пока профиль рисуется и пока SD_CASES окончательно собран */
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    runAll();
+    if(tries > 20) clearInterval(iv);
+  }, 250);
+
+  /* Перерисовать карточки после сборки */
+  setTimeout(refreshCards, 600);
+  setTimeout(refreshCards, 1500);
+  setTimeout(refreshCards, 3000);
+
+  /* Когда вернёшься из других экранов — цены уже применены */
+  setTimeout(refreshCards, 5000);
+
+  console.log('✅ [SD] Block 2+3 applied (Support + prices 19/39/59)');
+})();
+</script>
+<!-- ============ /SD BLOCK 2+3 ============ -->
 </body>
 </html>
