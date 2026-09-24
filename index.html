@@ -4218,5 +4218,195 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 4 FIX ============ -->
+<!-- ============ SD BLOCK 4 HARD-FIX: тотальный перехват кнопок ============ -->
+<script id="sd-b4-hardfix">
+(function(){
+'use strict';
+
+  function modal(){ return document.getElementById('caseModal'); }
+  function sheet(){ var m = modal(); return m ? m.querySelector('.modal-sheet') : null; }
+  function SD(){ return window.SD; }
+
+  /* =============================================================
+     1. ЯВНЫЕ ОБРАБОТЧИКИ ДЛЯ ВСЕХ КНОПОК МОДАЛКИ
+        Ставим на capture, чтобы никакие другие обработчики
+        не перехватили клик.
+     ============================================================= */
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t || !t.closest) return;
+
+    /* --- Кнопка "Открыть кейс" --- */
+    var openBtn = t.closest('#caseOpenBtn');
+    if(openBtn && openBtn.closest('#caseModal')){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      var s = SD();
+      if(s && typeof s.doOpenCase === 'function'){
+        s.doOpenCase();
+      }
+      return;
+    }
+
+    /* --- Кнопка "←" --- */
+    var backBtn = t.closest('#caseModal .sheet-head-back');
+    if(backBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      var m = modal();
+      if(m){
+        m.classList.remove('show','sd-case-away','sd-spin-fwd');
+        var sh = sheet();
+        if(sh){
+          sh.style.transform = '';
+          sh.style.opacity = '';
+          sh.style.transition = '';
+        }
+      }
+      return;
+    }
+
+    /* --- Кнопка "В инвентарь" --- */
+    var invBtn = t.closest('#caseModal .sr-inv');
+    if(invBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      var m2 = modal();
+      if(m2) m2.classList.remove('show','sd-case-away','sd-spin-fwd');
+      var s2 = SD();
+      if(s2 && typeof s2.go === 'function') s2.go('inventory');
+      return;
+    }
+
+    /* --- Кнопка "Открыть ещё" --- */
+    var againBtn = t.closest('#caseModal .sr-again');
+    if(againBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      /* 1. Скрыть результат и рулетку */
+      var result = document.getElementById('spinResult');
+      if(result){
+        result.classList.remove('show');
+        result.innerHTML = '';
+      }
+      var spinArea = document.getElementById('spinArea');
+      if(spinArea) spinArea.classList.remove('show');
+
+      /* 2. Показать и активировать кнопку открытия */
+      var btn = document.getElementById('caseOpenBtn');
+      if(btn){
+        btn.style.display = '';
+        btn.disabled = false;
+      }
+      /* 3. Обновить текст "ОТКРЫТЬ ЗА X G" */
+      try{
+        if(typeof updateOpenButton === 'function') updateOpenButton();
+      }catch(err){ console.warn('[SD hardfix] updateOpenButton', err); }
+      return;
+    }
+
+    /* --- Кнопка "Продать" (одиночный) --- */
+    var sellBtn = t.closest('#caseModal .sr-sell');
+    if(sellBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      /* Найдём скин в SD.profile и продадим его через существующую sellSkin */
+      var sd = SD();
+      if(!sd || !sd.profile) return;
+
+      /* Продаём ПОСЛЕДНИЙ добавленный скин (он в конце inventory) */
+      /* Но если ранее был показан результат одиночного спина — берём его */
+      var spinResult = document.getElementById('spinResult');
+      var win = null;
+      try{
+        /* Прочитаем w/s из имени в .sr-name */
+        var nameEl = spinResult && spinResult.querySelector('.sr-name');
+        if(nameEl){
+          var parts = nameEl.textContent.split(' | ');
+          if(parts.length === 2){
+            win = { w: parts[0].trim(), s: parts[1].trim() };
+          }
+        }
+      }catch(err){}
+
+      if(win && typeof window.sellSkin === 'function'){
+        /* Находим в inventory реальный объект */
+        var arr = Array.isArray(sd.profile.inventory) ? sd.profile.inventory :
+                  (typeof sd.profile.inventory === 'object' && sd.profile.inventory ?
+                    Object.keys(sd.profile.inventory).map(function(k){ return sd.profile.inventory[k]; }).filter(Boolean) : []);
+        var found = null;
+        for(var i = arr.length - 1; i >= 0; i--){
+          if(arr[i] && arr[i].w === win.w && arr[i].s === win.s){ found = arr[i]; break; }
+        }
+        if(found) window.sellSkin(found);
+      }
+
+      var m3 = modal();
+      if(m3) m3.classList.remove('show','sd-case-away','sd-spin-fwd');
+      return;
+    }
+  }, true);  /* capture: true — перехватываем раньше всех */
+
+  /* =============================================================
+     2. АВТО-ВОССТАНОВЛЕНИЕ КНОПКИ "ОТКРЫТЬ"
+        Если она disabled, но баланс хватает — включаем.
+        Работает каждые 400 мс, пока модалка открыта.
+     ============================================================= */
+  setInterval(function(){
+    var m = modal();
+    if(!m || !m.classList.contains('show')) return;
+
+    var btn = document.getElementById('caseOpenBtn');
+    if(!btn || btn.style.display === 'none') return;
+
+    var sd = SD();
+    if(!sd || !sd.profile || !sd.currentCase) return;
+
+    var total = sd.currentCase.price * (sd.caseCount || 1);
+    var bal = Number(sd.profile.balance) || 0;
+
+    if(bal >= total && btn.disabled){
+      btn.disabled = false;
+      console.log('[SD hardfix] force-enabled caseOpenBtn (bal=' + bal + ', need=' + total + ')');
+    }
+    if(bal < total && !btn.disabled){
+      btn.disabled = true;
+    }
+  }, 400);
+
+  /* =============================================================
+     3. Диагностика при открытии результата
+     ============================================================= */
+  var m = modal();
+  if(m){
+    new MutationObserver(function(){
+      var sr = document.getElementById('spinResult');
+      if(sr && sr.classList.contains('show')){
+        var again = sr.querySelector('.sr-again');
+        var inv = sr.querySelector('.sr-inv');
+        var sell = sr.querySelector('.sr-sell');
+        console.log('[SD hardfix] result shown', {
+          'sr-again found': !!again,
+          'sr-inv found': !!inv,
+          'sr-sell found': !!sell,
+          'sr-again pointer-events': again ? getComputedStyle(again).pointerEvents : null,
+          'spinResult pointer-events': getComputedStyle(sr).pointerEvents,
+          'modal-sheet pointer-events': getComputedStyle(m.querySelector('.modal-sheet')).pointerEvents
+        });
+      }
+    }).observe(m, { attributes: true, attributeFilter: ['class'], subtree: true });
+  }
+
+  console.log('✅ [SD] Block 4 HARD-FIX applied');
+})();
+</script>
+<!-- ============ /SD BLOCK 4 HARD-FIX ============ -->
 </body>
 </html>
