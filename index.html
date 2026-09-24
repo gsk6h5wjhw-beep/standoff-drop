@@ -3696,5 +3696,231 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 </script>
 <!-- ============ /SD BLOCK 2+3 ============ -->
 
+<!-- ============ SD BLOCK 4 (clean): iOS handle + drag + back + soft anim ============ -->
+<style id="sd-block4-clean-style">
+  /* --- iOS-ручка визуально --- */
+  #caseModal .sheet-handle{
+    width: 48px !important;
+    height: 5px !important;
+    background: #6e7080 !important;
+    opacity: .9 !important;
+    margin: 8px auto 16px !important;
+    border-radius: 99px !important;
+    pointer-events: none !important;
+  }
+
+  /* --- Drag-зона: верхние 60px шторки --- */
+  #caseModal .sd-handle-zone{
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 60px;
+    z-index: 90;
+    cursor: grab;
+    touch-action: none;
+    background: transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #caseModal .sd-handle-zone:active{ cursor: grabbing; }
+
+  /* --- Кнопка «←» --- */
+  #caseModal .sheet-head-back{
+    position: absolute !important;
+    top: 14px !important;
+    left: 14px !important;
+    z-index: 95 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: var(--surface-2, #1a1b27) !important;
+    border: 1px solid var(--border, rgba(255,255,255,.07)) !important;
+    color: var(--text-2, #b9bcc8) !important;
+    font-size: 20px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+  }
+  #caseModal .sheet-head-back:active{ transform: scale(.92); }
+
+  /* --- Мягкая анимация шапки при старте спина --- */
+  #caseModal .case-head{
+    transition: transform .55s ease, opacity .55s ease;
+  }
+  #caseModal.sd-case-away .case-head{
+    transform: scale(.75);
+    opacity: .4;
+  }
+</style>
+
+<script id="sd-block4-clean-script">
+(function(){
+'use strict';
+
+  var modal = document.getElementById('caseModal');
+  if(!modal) return;
+  var sheet = modal.querySelector('.modal-sheet');
+  if(!sheet) return;
+
+  /* ============================================
+     1. Закрытие + сброс inline-стилей
+     ============================================ */
+  function closeCase(){
+    modal.classList.remove('show','sd-case-away');
+    sheet.style.transform = '';
+    sheet.style.opacity = '';
+    sheet.style.transition = '';
+  }
+
+  /* ============================================
+     2. Кнопка «←»
+     ============================================ */
+  function ensureBack(){
+    var back = sheet.querySelector('.sheet-head-back');
+    if(!back){
+      back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'sheet-head-back';
+      back.setAttribute('aria-label','Назад');
+      back.textContent = '←';
+      sheet.insertBefore(back, sheet.firstChild);
+    }
+    back.onclick = function(e){
+      if(e){ e.preventDefault(); e.stopPropagation(); }
+      closeCase();
+    };
+  }
+
+  /* ============================================
+     3. Drag-зона сверху шторки
+     ============================================ */
+  function ensureDragZone(){
+    var zone = sheet.querySelector('.sd-handle-zone');
+    if(!zone){
+      zone = document.createElement('div');
+      zone.className = 'sd-handle-zone';
+      sheet.insertBefore(zone, sheet.firstChild);
+    }
+    return zone;
+  }
+
+  function installDrag(){
+    var zone = ensureDragZone();
+    if(zone.__sdInstalled) return;
+    zone.__sdInstalled = true;
+
+    var startY = 0, curY = 0, dragging = false;
+
+    function begin(y){
+      startY = y; curY = y; dragging = true;
+      sheet.style.transition = 'none';
+    }
+    function move(y){
+      if(!dragging) return;
+      curY = y;
+      var dy = Math.max(0, curY - startY);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+      sheet.style.opacity = String(Math.max(.5, 1 - dy / 500));
+    }
+    function end(){
+      if(!dragging) return;
+      dragging = false;
+      if(curY - startY > 100){
+        sheet.style.transition = 'transform .24s ease, opacity .24s ease';
+        sheet.style.transform = 'translateY(100%)';
+        sheet.style.opacity = '0';
+        setTimeout(closeCase, 240);
+      } else {
+        sheet.style.transition = 'transform .2s ease, opacity .2s ease';
+        sheet.style.transform = '';
+        sheet.style.opacity = '';
+        setTimeout(function(){ sheet.style.transition = ''; }, 220);
+      }
+    }
+
+    /* Touch */
+    zone.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;
+      begin(e.touches[0].clientY);
+    }, {passive:true});
+    zone.addEventListener('touchmove', function(e){
+      if(e.touches.length !== 1) return;
+      move(e.touches[0].clientY);
+    }, {passive:true});
+    zone.addEventListener('touchend', end);
+    zone.addEventListener('touchcancel', end);
+
+    /* Mouse */
+    zone.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      begin(e.clientY);
+      function mm(ev){ move(ev.clientY); }
+      function mu(){
+        document.removeEventListener('mousemove', mm);
+        document.removeEventListener('mouseup', mu);
+        end();
+      }
+      document.addEventListener('mousemove', mm);
+      document.addEventListener('mouseup', mu);
+    });
+  }
+
+  /* ============================================
+     4. Лёгкая анимация при старте спина
+        Один observer, без subtree
+     ============================================ */
+  function installAnim(){
+    var spin = modal.querySelector('#spinArea');
+    if(!spin || spin.__sdAnimInstalled) return;
+    spin.__sdAnimInstalled = true;
+    new MutationObserver(function(){
+      if(spin.classList.contains('show')) modal.classList.add('sd-case-away');
+      else modal.classList.remove('sd-case-away');
+    }).observe(spin, {attributes:true, attributeFilter:['class']});
+  }
+
+  /* ============================================
+     5. Watcher закрытия — сброс стилей
+        Один observer, без subtree
+     ============================================ */
+  function installCloseWatcher(){
+    if(modal.__sdCloseWatched) return;
+    modal.__sdCloseWatched = true;
+    new MutationObserver(function(){
+      if(!modal.classList.contains('show')){
+        sheet.style.transform = '';
+        sheet.style.opacity = '';
+        sheet.style.transition = '';
+        modal.classList.remove('sd-case-away');
+      }
+    }).observe(modal, {attributes:true, attributeFilter:['class']});
+  }
+
+  /* ============================================
+     Boot
+     ============================================ */
+  function runAll(){
+    try{ ensureBack(); }catch(e){}
+    try{ installDrag(); }catch(e){}
+    try{ installAnim(); }catch(e){}
+    try{ installCloseWatcher(); }catch(e){}
+  }
+
+  runAll();
+  /* Короткие ретраи — на случай, если DOM ещё собирался */
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    ensureBack();
+    if(tries > 8) clearInterval(iv);
+  }, 400);
+
+  console.log('✅ [SD] Block 4 (clean) applied');
+})();
+</script>
+<!-- ============ /SD BLOCK 4 (clean) ============ -->
 </body>
 </html>
