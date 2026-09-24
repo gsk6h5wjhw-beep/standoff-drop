@@ -5619,5 +5619,215 @@ console.log('✅ [SD] Kill-switch + Blocks 6/7 (StatTrak 15%, prices 2 decimals)
 })();
 </script>
 <!-- ============ /SD KILL-SWITCH ============ -->
+<!-- ============ SD RESCUE — фикс "сайт не грузится" ============ -->
+<style id="sd-rescue-style">
+  /* ===== ГАРАНТИРУЕМ ЧТО BODY/APP ВИДНЫ ===== */
+  html, body{
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+  }
+  #app, #header, #bottomNav, #loginScreen, #onboardScreen{
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  .screen{ visibility: visible !important; }
+
+  /* ===== УБИВАЕМ ВСЕ ПРОБЛЕМНЫЕ ПРАВИЛА ИЗ ПАТЧЕЙ 4/5 ===== */
+  #caseModal .modal-sheet{
+    perspective: none !important;
+    transform: none !important;
+    transform-style: flat !important;
+    pointer-events: auto !important;
+    will-change: auto !important;
+  }
+  #caseModal .modal-sheet *{
+    pointer-events: auto !important;
+    transform-style: flat !important;
+  }
+  #caseModal .case-head{
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    will-change: auto !important;
+    transition: transform .6s ease, opacity .6s ease !important;
+  }
+  #caseModal.sd-case-away .case-head{
+    transform: scale(.66) !important;
+    opacity: .35 !important;
+  }
+  #caseModal .spin-area{
+    transform: none !important;
+    perspective: none !important;
+    transform-style: flat !important;
+  }
+  #caseModal.sd-spin-fwd .spin-area{
+    transform: none !important;
+  }
+
+  /* Прячем drag-зону, если она есть */
+  #caseModal .sd-drag-zone{
+    display: none !important;
+    height: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* Кнопка "←" — чистая, всегда доступна */
+  #caseModal .sheet-head-back{
+    position: absolute !important;
+    top: 12px !important;
+    left: 12px !important;
+    z-index: 100 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: #1a1b27 !important;
+    border: 1px solid rgba(255,255,255,.1) !important;
+    color: #b9bcc8 !important;
+    font-size: 20px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  #caseModal .sheet-head-back:active{ transform: scale(.92); }
+
+  /* Multi-spin (10 вертикальных) — базовые стили на случай, если kill-switch их убрал */
+  #sdMultiSpin{ display: none; }
+  .spin-window.sd-multi{
+    height: auto !important;
+    padding: 8px 6px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  .spin-window.sd-multi::before,
+  .spin-window.sd-multi::after{ display: none !important; }
+  .spin-window.sd-multi .spin-track{ display: none !important; }
+  .spin-window.sd-multi #sdMultiSpin{
+    display: grid !important;
+    gap: 8px 6px;
+  }
+</style>
+
+<script id="sd-rescue">
+(function(){
+'use strict';
+
+  console.log('%c[SD RESCUE] start','color:#0ff;font-weight:bold');
+
+  /* ---------- 1. Общий try/catch ---------- */
+  function safe(label, fn){
+    try{ fn(); }
+    catch(err){ console.warn('[SD RESCUE]', label, 'failed:', err); }
+  }
+
+  /* ---------- 2. Убеждаемся, что DOM виден ---------- */
+  safe('show-body', function(){
+    document.documentElement.style.setProperty('visibility','visible','important');
+    document.body.style.setProperty('visibility','visible','important');
+    document.body.style.setProperty('opacity','1','important');
+    document.body.style.setProperty('display','block','important');
+  });
+
+  /* ---------- 3. Чистим мусор из патчей ---------- */
+  function cleanJunk(){
+    /* Drag-zone — удаляем полностью */
+    document.querySelectorAll('.sd-drag-zone').forEach(function(el){
+      if(el.parentNode) el.parentNode.removeChild(el);
+    });
+
+    var modal = document.getElementById('caseModal');
+    if(!modal) return;
+
+    /* Снимаем флаги 3D */
+    modal.classList.remove('sd-case-away','sd-spin-fwd');
+
+    var sheet = modal.querySelector('.modal-sheet');
+    if(!sheet) return;
+
+    /* Сброс inline-стилей, которые могли остаться от drag */
+    sheet.style.transform = '';
+    sheet.style.opacity = '';
+    sheet.style.transition = '';
+    sheet.classList.remove('sd-dragging');
+
+    /* ---------- 4. Рабочая кнопка «←» ---------- */
+    var back = sheet.querySelector('.sheet-head-back');
+    if(!back){
+      back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'sheet-head-back';
+      back.setAttribute('aria-label','Назад');
+      sheet.insertBefore(back, sheet.firstChild);
+    }
+    back.textContent = '←';
+
+    /* Снимаем возможные старые обработчики и ставим наш */
+    back.onclick = function(e){
+      if(e){ e.preventDefault(); e.stopPropagation(); }
+      var m = document.getElementById('caseModal');
+      if(m) m.classList.remove('show');
+    };
+  }
+
+  /* ---------- 5. Простая 2D-анимация: уменьшаем шапку при старте спина ---------- */
+  function installHeadFade(){
+    var modal = document.getElementById('caseModal');
+    if(!modal || modal.__sdRescueHeadFade) return;
+    modal.__sdRescueHeadFade = true;
+    var spinArea = modal.querySelector('#spinArea');
+    if(!spinArea) return;
+    new MutationObserver(function(){
+      if(spinArea.classList.contains('show')){
+        modal.classList.add('sd-case-away');
+      } else {
+        modal.classList.remove('sd-case-away');
+      }
+    }).observe(spinArea, {attributes:true, attributeFilter:['class']});
+  }
+
+  /* ---------- 6. Проверяем ключевые объекты ---------- */
+  function diagnostics(){
+    var report = {
+      'window.SD':           !!window.SD,
+      'window.__fb':         !!window.__fb,
+      'window.__firebaseReady': !!window.__firebaseReady,
+      'window.SD_CASES':     Array.isArray(window.SD_CASES) ? window.SD_CASES.length + ' кейсов' : 'нет',
+      '#loginScreen':        !!document.getElementById('loginScreen'),
+      '#caseModal':          !!document.getElementById('caseModal'),
+      '#bottomNav':          !!document.getElementById('bottomNav'),
+      'SD.profile':          window.SD && window.SD.profile ? 'есть' : 'нет',
+      'SD.go':               window.SD && typeof window.SD.go === 'function'
+    };
+    console.log('%c[SD RESCUE] diagnostics','color:#0f0;font-weight:bold', report);
+  }
+
+  /* ---------- 7. Boot ---------- */
+  cleanJunk();
+  installHeadFade();
+
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    cleanJunk();
+    installHeadFade();
+    if(tries > 20) clearInterval(iv);
+  }, 300);
+
+  setTimeout(function(){ safe('clean-late', cleanJunk); }, 800);
+  setTimeout(function(){ safe('clean-late2', cleanJunk); }, 2000);
+  setTimeout(diagnostics, 1500);
+
+  console.log('%c[SD RESCUE] ready','color:#0f0;font-weight:bold');
+})();
+</script>
+<!-- ============ /SD RESCUE ============ -->
 </body>
 </html>
