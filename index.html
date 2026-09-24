@@ -4157,5 +4157,494 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD FIX ============ -->
+<!-- ============ SD BLOCK 6: ТОЧНЫЕ ЦЕНЫ (без округления) ============ -->
+<script id="sd-block6-prices">
+(function(){
+'use strict';
+
+  var SD = window.SD;
+  if(!SD) return;
+
+  /* ============ HELPERS ============ */
+  function prec(v){
+    var n = Number(v);
+    if(!isFinite(n)) return 0;
+    return Math.round(n * 1000) / 1000;
+  }
+  function fmtPrice(v){
+    var n = Number(v);
+    if(!isFinite(n)) n = 0;
+    var r = Math.round(n * 100) / 100;
+    var s = String(r);
+    var parts = s.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return parts.join('.');
+  }
+  window.__sdPrec = prec;
+  window.__sdFmt  = fmtPrice;
+
+  function fbReady(){
+    var f = window.__fb;
+    if(!f || !f.dbMod) throw new Error('Firebase not ready');
+    return f;
+  }
+  function toArray(v){
+    if(!v) return [];
+    if(Array.isArray(v)) return v.filter(Boolean);
+    if(typeof v === 'object'){
+      return Object.keys(v).sort(function(a,b){ return Number(a)-Number(b); })
+        .map(function(k){ return v[k]; }).filter(Boolean);
+    }
+    return [];
+  }
+
+  /* ============ 1. БАЛАНС ============ */
+  SD.updateBalanceUI = function(nb){
+    if(!SD.profile) return;
+    SD.profile.balance = prec(nb);
+    var txt = fmtPrice(SD.profile.balance);
+    var hb = document.getElementById('headerBalance'); if(hb) hb.textContent = txt;
+    var pb = document.getElementById('profileBalance'); if(pb) pb.textContent = txt;
+  };
+
+  /* ============ 2. ШАПКА ============ */
+  window.refreshHeaderUI = function(){
+    if(!SD.profile) return;
+    var hb = document.getElementById('headerBalance');
+    if(hb) hb.textContent = fmtPrice(SD.profile.balance || 0);
+    var av = document.getElementById('headerAvatar');
+    if(av){
+      var a = SD.profile.avatar;
+      if(typeof a === 'number') av.src = SD.avatars[Math.max(0, Math.min(4, a|0))];
+      else if(a) av.src = a;
+      else av.src = SD.avatars[0];
+    }
+  };
+
+  /* ============ 3. ПРОФИЛЬ ============ */
+  window.renderProfile = function(){
+    if(!SD.profile) return;
+    var p = SD.profile;
+    var av = document.getElementById('profileAvatar');
+    if(av){
+      var a = p.avatar;
+      if(typeof a === 'number') av.src = SD.avatars[Math.max(0, Math.min(4, a|0))];
+      else if(a) av.src = a;
+      else av.src = SD.avatars[0];
+    }
+    var el;
+    el = document.getElementById('profileName');        if(el) el.textContent = p.name || 'Игрок';
+    el = document.getElementById('profilePlayerId');    if(el) el.textContent = p.playerId || SD.playerId || '000000000';
+    el = document.getElementById('profileBalance');     if(el) el.textContent = fmtPrice(p.balance || 0);
+    el = document.getElementById('statCases');          if(el) el.textContent = (p.stats && p.stats.cases) || 0;
+    el = document.getElementById('statUpgrades');       if(el) el.textContent = (p.stats && p.stats.upgrades) || 0;
+    el = document.getElementById('statFriends');        if(el) el.textContent = toArray(p.friends).length;
+    if(typeof window.refreshHeaderUI === 'function') window.refreshHeaderUI();
+  };
+
+  /* ============ 4. СОДЕРЖИМОЕ КЕЙСА ============ */
+  var _origOpenCaseModal = SD.openCaseModal;
+  SD.openCaseModal = function(c){
+    if(typeof _origOpenCaseModal === 'function') _origOpenCaseModal(c);
+    var cont = document.getElementById('caseContents');
+    if(!cont || !c || !c.items) return;
+    var nodes = cont.querySelectorAll('.contents-item .ci-price');
+    for(var i = 0; i < c.items.length && i < nodes.length; i++){
+      nodes[i].textContent = fmtPrice(c.items[i][4]) + ' G';
+    }
+  };
+
+  /* ============ 5. DO OPEN CASE ============ */
+  SD.doOpenCase = async function(){
+    var c = SD.currentCase;
+    if(!c || !SD.profile || SD._opening) return;
+    var total = c.price * SD.caseCount;
+    if(SD.profile.balance < total){ SD.err('Ошибка','Недостаточно баланса'); return; }
+    SD._opening = true;
+    var openBtn = document.getElementById('caseOpenBtn');
+    if(openBtn) openBtn.disabled = true;
+
+    try{
+      var f = fbReady();
+      var balRef = f.dbMod.ref(f.db, 'users/' + SD.uid + '/balance');
+      var tx = await f.dbMod.runTransaction(balRef, function(cur){
+        var b = Number(cur || 0);
+        return b >= total ? b - total : undefined;
+      });
+      if(!tx.committed){ SD.err('Ошибка','Недостаточно баланса'); return; }
+      var nb = Number(tx.snapshot.val() || 0);
+      SD.updateBalanceUI(nb, true);
+
+      var statsRef = f.dbMod.ref(f.db, 'users/' + SD.uid + '/stats/cases');
+      await f.dbMod.runTransaction(statsRef, function(cur){ return Number(cur || 0) + SD.caseCount; });
+
+      if(openBtn) openBtn.style.display = 'none';
+
+      var wins = [];
+      for(var i = 0; i < SD.caseCount; i++) wins.push(window.pickSkin(c));
+
+      var inv = toArray(SD.profile.inventory);
+      wins.forEach(function(w){
+        if(!w) return;
+        inv.push({
+          w: w.w, s: w.s, r: w.r, file: w.file,
+          p: prec(w.p),
+          st: !!w.st,
+          id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+          received: false
+        });
+      });
+      SD.profile.inventory = inv;
+      await f.dbMod.update(f.dbMod.ref(f.db, 'users/' + SD.uid), { inventory: inv });
+
+      if(SD.caseCount === 1){
+        window.spinSingle(c, wins[0], function(){ window.showSingleResult(wins[0], c); });
+      } else {
+        window.spinMultiple(c, wins, function(){ window.showMultiResult(wins, c); });
+      }
+    }catch(e){
+      console.error('[B6] doOpenCase', e);
+      SD.err('Ошибка', (e && e.message) || 'Не удалось открыть');
+      if(openBtn){ openBtn.disabled = false; openBtn.style.display = ''; }
+    }finally{
+      SD._opening = false;
+    }
+  };
+
+  /* ============ 6. ПРОДАЖА ============ */
+  window.sellSkin = async function(skin){
+    if(!SD.profile) return;
+    var inv = toArray(SD.profile.inventory);
+    var idx = -1;
+    for(var i = 0; i < inv.length; i++){
+      if(inv[i].w === skin.w && inv[i].s === skin.s && (!!inv[i].st) === (!!skin.st)){ idx = i; break; }
+    }
+    if(idx === -1){
+      for(var j = 0; j < inv.length; j++){
+        if(inv[j].w === skin.w && inv[j].s === skin.s){ idx = j; break; }
+      }
+    }
+    if(idx === -1) return;
+    var item = inv[idx];
+    inv.splice(idx, 1);
+    var base = Number(item.p) || 0;
+    var price = prec(item.received ? base * 0.8 : base);
+    var nb = prec((SD.profile.balance || 0) + price);
+    SD.profile.inventory = inv;
+    SD.profile.balance = nb;
+    try{
+      var f = fbReady();
+      await f.dbMod.update(f.dbMod.ref(f.db, 'users/' + SD.uid), { inventory: inv, balance: nb });
+      SD.updateBalanceUI(nb, true);
+      SD.ok('Скин продан', item.w + ' | ' + item.s + (item.st ? ' • ST™' : '') + ' • +' + fmtPrice(price) + ' G');
+    }catch(e){
+      console.error('[B6] sellSkin', e);
+      SD.err('Ошибка','Не удалось продать');
+    }
+  };
+
+  /* ============ 7. ИНВЕНТАРЬ ============ */
+  window.renderInventory = function(){
+    var grid = document.getElementById('inventoryGrid');
+    var cnt  = document.getElementById('invCountLabel');
+    if(!grid || !SD.profile) return;
+    var inv = toArray(SD.profile.inventory);
+    var list = inv;
+    if(SD.invFilter === 'cheap') list = inv.filter(function(s){ return Number(s.p) <= 100; });
+    if(SD.invFilter === 'mid')   list = inv.filter(function(s){ return Number(s.p) > 100 && Number(s.p) <= 1000; });
+    if(SD.invFilter === 'high')  list = inv.filter(function(s){ return Number(s.p) > 1000; });
+    if(cnt) cnt.textContent = list.length + ' шт.';
+    if(!list.length){
+      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div><div>Инвентарь пуст</div><div class="muted mt-8">Открой первый кейс</div></div>';
+      return;
+    }
+    grid.innerHTML = list.map(function(s){
+      var realIdx = inv.indexOf(s);
+      var price = s.received ? prec(Number(s.p) * 0.8) : prec(Number(s.p));
+      return '<div class="inv-card" style="--rc:' + rarityColor(s.r) + '" data-idx="' + realIdx + '">' +
+        skinImgTag(s, 'width:100%;height:90px;object-fit:contain;margin-bottom:6px') +
+        '<div class="ic-rar">' + rarityName(s.r) + (s.st ? ' <span class="sd-st-badge" style="font-size:8px;padding:0 4px">ST™</span>' : '') + '</div>' +
+        '<div class="ic-name">' + s.w + ' | ' + s.s + '</div>' +
+        '<div class="ic-price">' + fmtPrice(price) + ' G</div>' +
+      '</div>';
+    }).join('');
+    grid.querySelectorAll('.inv-card').forEach(function(card){
+      card.onclick = function(){
+        var i = +card.dataset.idx;
+        if(inv[i]) window.openSkinCard(inv[i]);
+      };
+    });
+  };
+
+  /* ============ 8. КАРТОЧКА СКИНА ============ */
+  window.openSkinCard = function(skin){
+    var price = skin.received ? prec(Number(skin.p) * 0.8) : prec(Number(skin.p));
+    var body = document.getElementById('skinCardBody');
+    if(!body) return;
+    body.innerHTML =
+      '<div style="text-align:center;padding:14px 0">' +
+        skinImgTag(skin, 'width:220px;height:160px;object-fit:contain;margin:0 auto 8px;display:block') +
+        '<div style="font-size:12px;font-weight:1000;letter-spacing:1px;color:' + rarityColor(skin.r) + ';text-transform:uppercase;margin-bottom:6px">' +
+          rarityName(skin.r) + (skin.st ? ' <span class="sd-st-badge">ST™</span>' : '') +
+        '</div>' +
+        '<div style="font-size:20px;font-weight:900;margin-bottom:4px">' + skin.w + ' | ' + skin.s + '</div>' +
+        '<div style="font-size:22px;font-weight:1000;color:var(--gold);margin-bottom:18px">' + fmtPrice(price) + ' G</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+          '<button class="btn btn-gold" id="scSellBtn">💰 Продать</button>' +
+          '<button class="btn btn-primary" id="scUpgradeBtn">⚡ В апгрейд</button>' +
+        '</div>' +
+        '<button class="btn btn-ghost btn-block" id="scCloseBtn">← Назад</button>' +
+      '</div>';
+    document.getElementById('scSellBtn').onclick = function(){
+      window.sellSkin(skin);
+      if(typeof closeModal === 'function') closeModal('skinCardModal');
+    };
+    document.getElementById('scUpgradeBtn').onclick = function(){
+      SD.upSource = skin;
+      if(typeof closeModal === 'function') closeModal('skinCardModal');
+      if(typeof SD.go === 'function') SD.go('upgrade');
+      if(typeof renderUpgrade === 'function') renderUpgrade();
+    };
+    document.getElementById('scCloseBtn').onclick = function(){
+      if(typeof closeModal === 'function') closeModal('skinCardModal');
+    };
+    if(typeof openModal === 'function') openModal('skinCardModal');
+  };
+
+  /* ============ 9. РЕЗУЛЬТАТЫ ============ */
+  window.showSingleResult = function(win, c){
+    if(!win) return;
+    var box = document.getElementById('spinResult');
+    if(!box) return;
+    box.classList.add('show');
+    box.innerHTML =
+      '<div class="sr-label">ВЫПАЛО</div>' +
+      skinImgTag(win, 'width:150px;height:110px;object-fit:contain;margin:0 auto 8px;display:block') +
+      '<div class="sr-rar" style="color:' + rarityColor(win.r) + '">' + rarityName(win.r) + (win.st ? ' <span class="sd-st-badge">ST™</span>' : '') + '</div>' +
+      '<div class="sr-name">' + win.w + ' | ' + win.s + '</div>' +
+      '<div class="sr-price">' + fmtPrice(win.p) + ' G</div>' +
+      '<div class="sr-actions">' +
+        '<button class="sr-inv">В инвентарь</button>' +
+        '<button class="sr-again">Открыть ещё<br><span style="font-size:11px;opacity:.85">' + (c.price * SD.caseCount) + ' G</span></button>' +
+        '<button class="sr-sell">Продать<br><span style="font-size:11px">' + fmtPrice(win.p) + ' G</span></button>' +
+      '</div>';
+    SD.info('Добавлено в инвентарь', win.w + ' | ' + win.s + (win.st ? ' • StatTrak™' : ''));
+    box.querySelector('.sr-inv').onclick = function(){
+      if(typeof closeModal === 'function') closeModal('caseModal');
+      SD.go('inventory');
+    };
+    box.querySelector('.sr-again').onclick = function(){
+      box.classList.remove('show');
+      var area = document.getElementById('spinArea'); if(area) area.classList.remove('show');
+      var we = document.querySelector('#spinArea .spin-window'); if(we) we.classList.remove('sd-multi');
+      var ms = document.getElementById('sdMultiSpin'); if(ms) ms.innerHTML = '';
+      var ob = document.getElementById('caseOpenBtn'); if(ob){ ob.style.display = ''; ob.disabled = false; }
+      if(typeof updateOpenButton === 'function') updateOpenButton();
+    };
+    box.querySelector('.sr-sell').onclick = function(){
+      window.sellSkin(win);
+      if(typeof closeModal === 'function') closeModal('caseModal');
+    };
+  };
+
+  window.showMultiResult = function(wins){
+    var box = document.getElementById('spinResult');
+    if(!box) return;
+    box.classList.add('show');
+    var total = 0;
+    wins.forEach(function(w){ if(w) total += Number(w.p) || 0; });
+    total = prec(total);
+    var cells = wins.map(function(w){
+      if(!w) return '';
+      return '<div style="padding:6px;background:var(--surface-2);border-radius:8px;text-align:center">' +
+        skinImgTag(w, 'width:100%;height:50px;object-fit:contain') +
+        '<div style="font-size:9px;margin-top:2px;color:' + rarityColor(w.r) + '">' +
+          rarityName(w.r) + (w.st ? ' • ST™' : '') +
+        '</div>' +
+        '<div style="font-size:9px;color:var(--gold);font-weight:900">' + fmtPrice(w.p) + ' G</div>' +
+      '</div>';
+    }).join('');
+    box.innerHTML =
+      '<div class="sr-label">' + wins.length + ' КЕЙСОВ</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0">' + cells + '</div>' +
+      '<div class="sr-price">+' + fmtPrice(total) + ' G</div>' +
+      '<div class="sr-actions">' +
+        '<button class="sr-inv">В инвентарь</button>' +
+        '<button class="sr-again">Открыть ещё</button>' +
+        '<button class="sr-sell">Продать всё</button>' +
+      '</div>';
+    SD.info('Добавлено в инвентарь', wins.length + ' скинов');
+    box.querySelector('.sr-inv').onclick = function(){
+      if(typeof closeModal === 'function') closeModal('caseModal');
+      SD.go('inventory');
+    };
+    box.querySelector('.sr-again').onclick = function(){
+      box.classList.remove('show');
+      var area = document.getElementById('spinArea'); if(area) area.classList.remove('show');
+      var we = document.querySelector('#spinArea .spin-window'); if(we) we.classList.remove('sd-multi');
+      var ms = document.getElementById('sdMultiSpin'); if(ms) ms.innerHTML = '';
+      var ob = document.getElementById('caseOpenBtn'); if(ob){ ob.style.display = ''; ob.disabled = false; }
+      if(typeof updateOpenButton === 'function') updateOpenButton();
+    };
+    box.querySelector('.sr-sell').onclick = function(){
+      wins.forEach(function(w){ if(w) window.sellSkin(w); });
+      if(typeof closeModal === 'function') closeModal('caseModal');
+    };
+  };
+
+  /* ============ 10. АПГРЕЙД ============ */
+  SD.runUpgrade = function(){
+    if(!SD.upSource || !SD.upTarget){ SD.err('Ошибка','Сначала выберите предмет'); return; }
+    if(Number(SD.upTarget.p) <= Number(SD.upSource.p)){ SD.err('Ошибка','Цель должна быть дороже'); return; }
+    var d = computeChance();
+    if(d.addG > (SD.profile.balance || 0)){ SD.err('Ошибка','Недостаточно средств'); return; }
+    var btn = document.getElementById('upgradeBtn');
+    if(btn) btn.disabled = true;
+    var nb = prec(SD.profile.balance - d.addG);
+    var inv = toArray(SD.profile.inventory);
+    var srcIdx = inv.findIndex(function(s){ return s.id === SD.upSource.id; });
+    if(srcIdx > -1) inv.splice(srcIdx, 1);
+    var srcST = !!(SD.upSource && SD.upSource.st);
+    SD.profile.balance = nb;
+    SD.profile.inventory = inv;
+    try{
+      var f = fbReady();
+      f.dbMod.update(f.dbMod.ref(f.db, 'users/' + SD.uid), { balance: nb, inventory: inv });
+      SD.updateBalanceUI(nb, true);
+      var prev = (SD.profile.stats && SD.profile.stats.upgrades) || 0;
+      f.dbMod.update(f.dbMod.ref(f.db, 'users/' + SD.uid + '/stats'), { upgrades: prev + 1 });
+    }catch(e){ console.error('[B6] runUpgrade fb', e); }
+
+    var win = SD.devMode ? true : (Math.random() * 100 < d.chance);
+    var arrow = document.getElementById('upArrow');
+    var finalAngle;
+    if(win){
+      var half = Math.min(45, (d.chance * 3.6) / 2);
+      finalAngle = 180 + (Math.random() * 2 - 1) * half;
+    } else {
+      var exclude = Math.min(60, (d.chance * 3.6) / 2 + 10);
+      var a;
+      do { a = Math.random() * 360; } while(Math.abs(((a - 180 + 540) % 360) - 180) < exclude);
+      finalAngle = a;
+    }
+    var totalRot = 3 + Math.random() * 2;
+    if(arrow){
+      arrow.style.transition = 'none';
+      arrow.style.transform = 'translateX(-50%) rotate(0deg)';
+      void arrow.offsetWidth;
+      arrow.style.transition = 'transform 6.5s cubic-bezier(.15,.75,.2,1)';
+      arrow.style.transform = 'translateX(-50%) rotate(' + (360 * totalRot + finalAngle) + 'deg)';
+    }
+    setTimeout(function(){
+      if(win){
+        var target = SD.upTarget;
+        var newInv = toArray(SD.profile.inventory);
+        newInv.push({
+          w: target.w, s: target.s, r: target.r, file: target.file,
+          p: prec(target.p),
+          st: srcST,
+          id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+          received: false
+        });
+        SD.profile.inventory = newInv;
+        try{
+          var f2 = fbReady();
+          f2.dbMod.update(f2.dbMod.ref(f2.db, 'users/' + SD.uid), { inventory: newInv });
+        }catch(e){}
+        if(typeof winSound === 'function') winSound();
+        SD.ok('Апгрейд выполнен!', target.w + ' | ' + target.s + (srcST ? ' • StatTrak™' : ''));
+        SD.upSource = Object.assign({}, target, { st: srcST });
+        SD.upTarget = null;
+        SD.upAddPercent = 0;
+      } else {
+        SD.err('Апгрейд не удался', 'Скин сгорел');
+        SD.upSource = null; SD.upTarget = null; SD.upAddPercent = 0;
+      }
+      if(btn) btn.disabled = false;
+      if(arrow){
+        arrow.style.transition = 'none';
+        arrow.style.transform = 'translateX(-50%) rotate(0deg)';
+      }
+      if(typeof renderUpgrade === 'function') renderUpgrade();
+      if(typeof renderInventory === 'function') renderInventory();
+    }, 6700);
+  };
+
+  /* ============ 11. ВЫБОР ИСТОЧНИКА ============ */
+  window.openPickSource = function(){
+    var grid = document.getElementById('pickSourceGrid');
+    if(!grid) return;
+    var inv = toArray(SD.profile.inventory);
+    if(!inv.length){
+      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div>Пусто</div>';
+    } else {
+      grid.innerHTML = inv.map(function(s){
+        var price = s.received ? prec(Number(s.p) * 0.8) : prec(Number(s.p));
+        return '<div class="inv-card" style="--rc:' + rarityColor(s.r) + '" data-idx="' + inv.indexOf(s) + '">' +
+          skinImgTag(s, 'width:100%;height:90px;object-fit:contain;margin-bottom:6px') +
+          '<div class="ic-rar">' + rarityName(s.r) + '</div>' +
+          '<div class="ic-name">' + s.w + ' | ' + s.s + '</div>' +
+          '<div class="ic-price">' + fmtPrice(price) + ' G</div>' +
+        '</div>';
+      }).join('');
+      grid.querySelectorAll('.inv-card').forEach(function(c){
+        c.onclick = function(){
+          SD.upSource = inv[+c.dataset.idx];
+          if(typeof closeModal === 'function') closeModal('pickSourceModal');
+          SD.upAddPercent = 0;
+          if(typeof renderUpgrade === 'function') renderUpgrade();
+        };
+      });
+    }
+    var s = document.getElementById('pickSourceSearch'); if(s) s.value = '';
+    if(typeof openModal === 'function') openModal('pickSourceModal');
+  };
+
+  /* ============ 12. ВЫБОР ЦЕЛИ ============ */
+  window.filterTargets = function(){
+    var grid = document.getElementById('pickTargetGrid');
+    if(!grid) return;
+    var search = document.getElementById('pickTargetSearch');
+    var minEl = document.getElementById('pickTargetMin');
+    var maxEl = document.getElementById('pickTargetMax');
+    var q = ((search && search.value) || '').toLowerCase().trim();
+    var min = parseFloat(minEl && minEl.value) || 0;
+    var max = parseFloat(maxEl && maxEl.value) || Infinity;
+    var srcP = SD.upSource ? (SD.upSource.received ? Number(SD.upSource.p) * 0.8 : Number(SD.upSource.p)) : 0;
+    var list = ALL_SKINS.filter(function(s){ return s.p > srcP && s.p >= min && s.p <= max; });
+    if(q) list = list.filter(function(s){ return (s.w + ' ' + s.s).toLowerCase().indexOf(q) !== -1; });
+    list = list.slice(0, 80);
+    if(!list.length){
+      grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🔍</div>Ничего не найдено</div>';
+      return;
+    }
+    grid.innerHTML = list.map(function(s){
+      return '<div class="inv-card" style="--rc:' + rarityColor(s.r) + '" data-w="' + s.w + '" data-s="' + s.s + '">' +
+        skinImgTag(s, 'width:100%;height:90px;object-fit:contain;margin-bottom:6px') +
+        '<div class="ic-rar">' + rarityName(s.r) + '</div>' +
+        '<div class="ic-name">' + s.w + ' | ' + s.s + '</div>' +
+        '<div class="ic-price">' + fmtPrice(s.p) + ' G</div>' +
+      '</div>';
+    }).join('');
+    grid.querySelectorAll('.inv-card').forEach(function(c){
+      c.onclick = function(){
+        var found = null;
+        for(var i = 0; i < ALL_SKINS.length; i++){
+          if(ALL_SKINS[i].w === c.dataset.w && ALL_SKINS[i].s === c.dataset.s){ found = ALL_SKINS[i]; break; }
+        }
+        if(found){
+          SD.upTarget = found;
+          SD.upAddPercent = 0;
+          if(typeof closeModal === 'function') closeModal('pickTargetModal');
+          if(typeof renderUpgrade === 'function') renderUpgrade();
+        }
+      };
+    });
+  };
+
+  console.log('✅ [SD] Block 6 applied (precise prices, no rounding to zero)');
+})();
+</script>
+<!-- ============ /SD BLOCK 6 ============ -->
 </body>
 </html>
