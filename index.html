@@ -3898,5 +3898,222 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 4 ============ -->
+<!-- ============ SD BLOCK 5: 10 вертикальных мини-рулеток ============ -->
+<style id="sd-block5-style">
+  /* --- Общий контейнер мульти-спина --- */
+  .spin-window.sd-multi{
+    height: auto !important;
+    padding: 10px 6px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+  /* Убираем декоративные линии центра и стрелку */
+  .spin-window.sd-multi::before,
+  .spin-window.sd-multi::after{ display: none !important; }
+
+  /* Скрываем обычный трек */
+  .spin-window.sd-multi .spin-track{ display: none !important; }
+
+  /* Сетка 5×2 */
+  #sdMultiSpin{
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px 6px;
+    width: 100%;
+  }
+
+  /* Колонка = одна вертикальная рулетка */
+  .sd-ms-col{
+    position: relative;
+    height: 130px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #14151f 0%, #0d0e15 100%);
+    border: 1px solid rgba(255,255,255,.08);
+    overflow: hidden;
+    box-sizing: border-box;
+    transition: border-color .25s ease, box-shadow .25s ease;
+  }
+  .sd-ms-col::before{
+    content:""; position: absolute; top: 0; left: 0; right: 0; height: 18px;
+    background: linear-gradient(180deg, rgba(8,8,13,.92), rgba(8,8,13,0));
+    z-index: 3; pointer-events: none;
+  }
+  .sd-ms-col::after{
+    content:""; position: absolute; bottom: 0; left: 0; right: 0; height: 18px;
+    background: linear-gradient(0deg, rgba(8,8,13,.92), rgba(8,8,13,0));
+    z-index: 3; pointer-events: none;
+  }
+  .sd-ms-col.sd-stopped{
+    border-color: var(--accent, #ff2e63);
+    box-shadow: 0 0 14px rgba(var(--accent-rgb, 255,46,99), .5);
+  }
+
+  /* Полоса внутри колонки */
+  .sd-ms-strip{
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; flex-direction: column;
+    will-change: transform;
+  }
+
+  /* Один предмет в колонке */
+  .sd-ms-item{
+    height: 130px; flex: 0 0 130px; width: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 6px 3px; box-sizing: border-box; overflow: hidden;
+  }
+  .sd-ms-item img{
+    max-width: 100%; max-height: 76px; object-fit: contain;
+    margin-bottom: 3px; display: block;
+    pointer-events: none; user-select: none; -webkit-user-drag: none;
+  }
+  .sd-ms-item b{
+    font-size: 9px; font-weight: 800; color: #b9bcc8;
+    text-align: center; line-height: 1.15;
+    max-height: 22px; overflow: hidden; padding: 0 2px;
+  }
+
+  /* Мобильная адаптация */
+  @media (max-width: 430px){
+    .sd-ms-col{ height: 100px; }
+    .sd-ms-item{ height: 100px; flex-basis: 100px; padding: 5px 2px; }
+    .sd-ms-item img{ max-height: 58px; margin-bottom: 2px; }
+    .sd-ms-item b{ font-size: 7px; max-height: 16px; }
+    #sdMultiSpin{ gap: 6px 4px; }
+  }
+  @media (max-width: 360px){
+    .sd-ms-col{ height: 90px; }
+    .sd-ms-item{ height: 90px; flex-basis: 90px; }
+    .sd-ms-item img{ max-height: 52px; }
+  }
+</style>
+
+<script id="sd-block5-script">
+(function(){
+'use strict';
+
+  /* ==========================================================
+     Переопределяем ТОЛЬКО spinMultiple.
+     spinSingle, doOpenCase, showMultiResult, sellSkin, звуки —
+     остаются нетронутыми (используются как есть).
+     ========================================================== */
+  window.spinMultiple = function(c, wins, onFinish){
+    if(!wins || !wins.length){ if(onFinish) onFinish(); return; }
+
+    var area = document.getElementById('spinArea');
+    var winEl = area && area.querySelector('.spin-window');
+    if(!area || !winEl){ if(onFinish) onFinish(); return; }
+
+    /* Показываем область спина */
+    area.classList.add('show');
+
+    /* Делаем .spin-window мульти-контейнером */
+    winEl.classList.add('sd-multi');
+
+    /* Создаём (или пересоздаём) сетку */
+    var multi = document.getElementById('sdMultiSpin');
+    if(!multi){
+      multi = document.createElement('div');
+      multi.id = 'sdMultiSpin';
+      winEl.appendChild(multi);
+    }
+    multi.innerHTML = '';
+
+    /* Готовим список предметов для каждой колонки */
+    var n = wins.length;
+    var ITEM_H = window.innerWidth <= 430 ? 100 : 130;
+    var WINNER_IDX = 15;       /* индекс победителя внутри полосы */
+    var TAIL = 3;              /* ещё 3 рандомных после победителя */
+    var CDN = window.SD_CDN || 'https://ggstand.net/public/storage/items/';
+
+    function pickRandom(){
+      if(!c.items || !c.items.length) return { w:'?', s:'?', r:0, file:'', p:0 };
+      var it = c.items[Math.floor(Math.random() * c.items.length)];
+      return { w:it[0], s:it[1], r:it[2], file:it[3], p:it[4] };
+    }
+
+    function itemHTML(sk){
+      return '<div class="sd-ms-item">' +
+        '<img src="assets/skins/' + sk.file + '" ' +
+        'onerror="this.onerror=null;this.src=\'' + CDN + sk.file + '\'" alt="">' +
+        '<b>' + sk.w + ' | ' + sk.s + '</b>' +
+        '</div>';
+    }
+
+    /* Строим колонки */
+    var cols = [];
+    for(var i = 0; i < n; i++){
+      var win = wins[i] || { w:'?', s:'?', r:0, file:'', p:0 };
+      var col = document.createElement('div');
+      col.className = 'sd-ms-col';
+
+      var strip = document.createElement('div');
+      strip.className = 'sd-ms-strip';
+
+      var html = '';
+      for(var j = 0; j < WINNER_IDX; j++) html += itemHTML(pickRandom());
+      html += itemHTML(win);
+      for(var t = 0; t < TAIL; t++) html += itemHTML(pickRandom());
+      strip.innerHTML = html;
+
+      col.appendChild(strip);
+      multi.appendChild(col);
+      cols.push({ col: col, strip: strip });
+    }
+
+    /* Итоговая позиция, куда должна приехать каждая полоса */
+    var finalY = -(WINNER_IDX * ITEM_H);
+
+    /* Все стартуют с 0 */
+    for(var k = 0; k < cols.length; k++){
+      cols[k].strip.style.transform = 'translate3d(0,0,0)';
+    }
+
+    /* Тик-звук пока крутятся ВСЕ */
+    var tickTimer = setInterval(function(){
+      try{ if(typeof tickSound === 'function') tickSound(); }catch(e){}
+    }, 100);
+
+    /* Остановка по очереди: колонка i стартует через i*400 мс */
+    var stopped = 0;
+    var baseDur = 2200;
+    var stepDelay = 400;
+
+    cols.forEach(function(cobj, idx){
+      setTimeout(function(){
+        var start = performance.now();
+        var dur = baseDur;
+
+        function frame(now){
+          var t = Math.min(1, (now - start) / dur);
+          /* ease-out-quart — плавное замедление */
+          var e = 1 - Math.pow(1 - t, 4);
+          var y = finalY * e;
+          cobj.strip.style.transform = 'translate3d(0,' + y + 'px,0)';
+
+          if(t < 1){
+            requestAnimationFrame(frame);
+          } else {
+            cobj.col.classList.add('sd-stopped');
+            stopped++;
+            if(stopped === cols.length){
+              clearInterval(tickTimer);
+              try{ if(typeof winSound === 'function') winSound(); }catch(e){}
+              if(typeof onFinish === 'function') onFinish();
+            }
+          }
+        }
+        requestAnimationFrame(frame);
+      }, idx * stepDelay);
+    });
+  };
+
+  console.log('✅ [SD] Block 5 applied (10 vertical mini-roulettes)');
+})();
+</script>
+<!-- ============ /SD BLOCK 5 ============ -->
 </body>
 </html>
