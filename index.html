@@ -4286,5 +4286,639 @@ console.log('✅ [SD] Big patch applied (fix + Block 4 + Block 5)');
 })();
 </script>
 <!-- ============ /SD BIG PATCH ============ -->
+<!-- ============ SD FIX-B4 + BLOCK 6 + BLOCK 7 ============ -->
+<style id="sd-fixb4-b6-b7-style">
+  /* --- BLOCK 4 FIX: убираем 3D-перспективу, оставляем мягкий 2D-эффект --- */
+  #caseModal .modal-sheet{
+    perspective:none !important;
+    transform-style:flat !important;
+  }
+  #caseModal .case-head{
+    transition:transform .9s cubic-bezier(.2,.85,.3,1),
+               opacity .9s ease !important;
+    will-change:transform,opacity;
+    transform-origin:50% 40%;
+  }
+  #caseModal.sd-case-away .case-head{
+    transform:translateY(-6px) scale(.62) !important;
+    opacity:.3 !important;
+    filter:none !important;
+  }
+  #caseModal .spin-area{
+    perspective:none !important;
+    transform-style:flat !important;
+    transition:transform .9s cubic-bezier(.2,.85,.3,1) !important;
+  }
+  #caseModal.sd-spin-fwd .spin-area{
+    transform:translateY(-2px) scale(1.02) !important;
+  }
+
+  /* --- кнопка "назад" поверх всего --- */
+  #caseModal .sheet-head-back{
+    z-index:8 !important;
+    pointer-events:auto !important;
+  }
+
+  /* --- drag-зона (тянуть вниз) --- */
+  #caseModal .sd-drag-zone{
+    position:absolute;top:0;left:0;right:0;height:56px;
+    z-index:4;cursor:grab;touch-action:none;background:transparent;
+  }
+  #caseModal .sd-drag-zone:active{cursor:grabbing;}
+
+  /* --- гарантия pointer-events в модалке --- */
+  #caseModal .modal-sheet *{pointer-events:auto;}
+  #caseModal .sd-ms-col::before,
+  #caseModal .sd-ms-col::after{pointer-events:none !important;}
+
+  /* --- multi-spin: скрыт по умолчанию --- */
+  #sdMultiSpin{display:none !important;}
+  .spin-window.sd-multi #sdMultiSpin{
+    display:grid !important;
+    gap:10px 6px;padding:2px 0;
+    grid-auto-rows:auto;
+  }
+
+  /* --- StatTrak бейдж --- */
+  .sd-st-badge{
+    display:inline-block;font-size:9px;font-weight:1000;letter-spacing:.4px;
+    color:#ff9f43;background:rgba(255,159,67,.12);
+    border:1px solid rgba(255,159,67,.45);
+    padding:1px 5px;border-radius:5px;margin-left:4px;
+    vertical-align:middle;line-height:1.2;
+    text-transform:uppercase;
+  }
+</style>
+
+<script id="sd-fixb4-b6-b7">
+(function(){
+'use strict';
+
+/* ==========================================================
+   HELPERS
+   ========================================================== */
+function round2(v){
+  var n = Number(v);
+  if(!isFinite(n)) n = 0;
+  return Math.round(n * 100) / 100;
+}
+window.round2 = round2;
+
+function fmtPrice(v){
+  var n = round2(v);
+  if(Number.isInteger(n)) return String(n);
+  return n.toFixed(2);
+}
+window.fmtPrice = fmtPrice;
+
+var NON_WEAPON = [
+  'charm','подвес','sticker','стикер','graffiti','граффити',
+  'chibi','чиби','badge','значок','fragment','фрагмент','spray',
+  'kunai','кунай','tanto','танто','stiletto','стилетто',
+  'dual daggers','karambit','карамбит','jkommando','jkommando',
+  'bayonet','m9','flip','kukri','butterfly','falchion','huntsman',
+  'gloves','перчатк','wraps','hand wraps','hands'
+];
+function isWeapon(name){
+  var n = String(name||'').toLowerCase();
+  for(var i=0;i<NON_WEAPON.length;i++){
+    if(n.indexOf(NON_WEAPON[i]) !== -1) return false;
+  }
+  return true;
+}
+window.isWeapon = isWeapon;
+
+function stBadge(sk){
+  return (sk && sk.st) ? '<span class="sd-st-badge">ST™</span>' : '';
+}
+window.stBadge = stBadge;
+
+/* ==========================================================
+   BLOCK 4 FIX — переделываем back и drag-зону
+   ========================================================== */
+function fixCaseModal4(){
+  var modal = document.getElementById('caseModal');
+  if(!modal || modal.__sdFixB4) return;
+  modal.__sdFixB4 = true;
+
+  var sheet = modal.querySelector('.modal-sheet');
+  if(!sheet) return;
+
+  /* ---- Back button: делаем .sheet-close, чтобы поймал существующий
+          capture-обработчик, и добавляем свой onclick на всякий ---- */
+  var back = sheet.querySelector('.sheet-head-back');
+  if(!back){
+    back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'sheet-close sheet-head-back';
+    back.setAttribute('aria-label','Назад');
+    back.setAttribute('data-close','caseModal');
+    back.textContent = '←';
+    sheet.insertBefore(back, sheet.firstChild);
+  } else {
+    back.classList.add('sheet-close');
+    back.setAttribute('data-close','caseModal');
+  }
+  back.onclick = function(){ if(typeof closeModal === 'function') closeModal('caseModal'); };
+
+  /* ---- drag-зона: тянем вниз за верхние 56px шторки ---- */
+  if(!sheet.querySelector('.sd-drag-zone')){
+    var dz = document.createElement('div');
+    dz.className = 'sd-drag-zone';
+    sheet.insertBefore(dz, sheet.firstChild);
+
+    var startY = 0, curY = 0, dragging = false;
+
+    function resetSheet(){
+      sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1),opacity .28s ease';
+      sheet.style.transform = '';
+      sheet.style.opacity = '';
+      setTimeout(function(){ sheet.style.transition = ''; }, 300);
+    }
+    function closeByDrag(){
+      sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1),opacity .28s ease';
+      sheet.style.transform = 'translateY(100%)';
+      sheet.style.opacity = '0';
+      setTimeout(function(){
+        if(typeof closeModal === 'function') closeModal('caseModal');
+        sheet.style.transform = ''; sheet.style.opacity = ''; sheet.style.transition = '';
+      }, 260);
+    }
+    function begin(y){ startY = y; curY = y; dragging = true; sheet.style.transition = 'none'; }
+    function move(y){
+      if(!dragging) return;
+      curY = y;
+      var dy = Math.max(0, curY - startY);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+      sheet.style.opacity = String(Math.max(.4, 1 - dy/500));
+    }
+    function end(){
+      if(!dragging) return;
+      dragging = false;
+      if(curY - startY > 110) closeByDrag(); else resetSheet();
+    }
+
+    dz.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;
+      begin(e.touches[0].clientY);
+    }, {passive:true});
+    dz.addEventListener('touchmove', function(e){
+      if(e.touches.length !== 1) return;
+      move(e.touches[0].clientY);
+    }, {passive:true});
+    dz.addEventListener('touchend', end);
+    dz.addEventListener('touchcancel', end);
+
+    dz.addEventListener('mousedown', function(e){
+      begin(e.clientY);
+      function mm(ev){ move(ev.clientY); }
+      function mu(){
+        document.removeEventListener('mousemove', mm);
+        document.removeEventListener('mouseup', mu);
+        end();
+      }
+      document.addEventListener('mousemove', mm);
+      document.addEventListener('mouseup', mu);
+      e.preventDefault();
+    });
+  }
+
+  /* ---- сброс 3D-флагов при закрытии и старте спина ---- */
+  if(!modal.__sdFixB4Obs){
+    modal.__sdFixB4Obs = true;
+    new MutationObserver(function(){
+      if(!modal.classList.contains('show')){
+        modal.classList.remove('sd-case-away','sd-spin-fwd');
+      }
+    }).observe(modal, {attributes:true, attributeFilter:['class']});
+  }
+  var spinArea = modal.querySelector('#spinArea');
+  if(spinArea && !spinArea.__sdFixB4Obs){
+    spinArea.__sdFixB4Obs = true;
+    new MutationObserver(function(){
+      if(spinArea.classList.contains('show')){
+        modal.classList.add('sd-case-away');
+        setTimeout(function(){ modal.classList.add('sd-spin-fwd'); }, 220);
+      } else {
+        modal.classList.remove('sd-case-away','sd-spin-fwd');
+      }
+    }).observe(spinArea, {attributes:true, attributeFilter:['class']});
+  }
+}
+
+/* ==========================================================
+   BLOCK 6 — StatTrak 15% (только оружие, цена ×1.5)
+   ========================================================== */
+if(typeof window.pickSkin === 'function' && !window.__sdPickSkinPatched){
+  window.__sdPickSkinPatched = true;
+  var _origPickSkin = window.pickSkin;
+  window.pickSkin = function(caseObj){
+    var sk = _origPickSkin(caseObj);
+    if(!sk) return sk;
+    if(isWeapon(sk.w) && Math.random() < 0.15){
+      sk = Object.assign({}, sk, {
+        st: true,
+        p: round2(sk.p * 1.5)
+      });
+    }
+    return sk;
+  };
+}
+
+/* ==========================================================
+   BLOCK 7 — doOpenCase: сохраняем точную цену и флаг st
+   ========================================================== */
+if(window.SD){
+  var SD = window.SD;
+  SD.doOpenCase = async function(){
+    var c = SD.currentCase;
+    if(!c || !SD.profile || SD._opening) return;
+    var total = c.price * SD.caseCount;
+    if(SD.profile.balance < total){ SD.err('Ошибка','Недостаточно баланса'); return; }
+    SD._opening = true;
+    var openBtn = document.getElementById('caseOpenBtn');
+    openBtn.disabled = true;
+    try{
+      var balRef = fb.dbMod.ref(fb.db, 'users/' + SD.uid + '/balance');
+      var tx = await fb.dbMod.runTransaction(balRef, function(cur){
+        var b = Number(cur||0);
+        return b >= total ? b - total : undefined;
+      });
+      if(!tx.committed){ SD.err('Ошибка','Недостаточно баланса'); return; }
+      var nb = Number(tx.snapshot.val() || 0);
+      SD.updateBalanceUI(nb, true);
+
+      var statsRef = fb.dbMod.ref(fb.db, 'users/' + SD.uid + '/stats/cases');
+      await fb.dbMod.runTransaction(statsRef, function(cur){ return Number(cur||0) + SD.caseCount; });
+
+      openBtn.style.display = 'none';
+      var wins = [];
+      for(var i=0;i<SD.caseCount;i++) wins.push(window.pickSkin(c));
+
+      var inv = toArr(SD.profile.inventory);
+      wins.forEach(function(w){
+        if(!w) return;
+        inv.push({
+          w:w.w, s:w.s, r:w.r, file:w.file,
+          p: round2(w.p),
+          st: !!w.st,
+          id:'inv-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
+          received:false
+        });
+      });
+      SD.profile.inventory = inv;
+      await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), {inventory: inv});
+
+      if(SD.caseCount === 1) spinSingle(c, wins[0], function(){ window.showSingleResult(wins[0], c); });
+      else spinMultiple(c, wins, function(){ window.showMultiResult(wins, c); });
+    }catch(e){
+      console.error(e);
+      SD.err('Ошибка','Не удалось открыть');
+      openBtn.style.display = '';
+    }finally{
+      SD._opening = false;
+    }
+  };
+}
+
+/* ==========================================================
+   BLOCK 7 — showSingleResult (2 знака, ST)
+   ========================================================== */
+window.showSingleResult = function(win, c){
+  if(!win) return;
+  var box = document.getElementById('spinResult');
+  box.classList.add('show');
+  var imgTag = (typeof skinImgTag === 'function') ? skinImgTag(win, 'width:150px;height:110px;object-fit:contain;margin:0 auto 8px;display:block') : '';
+  var rName = (typeof rarityName === 'function') ? rarityName(win.r) : '';
+  var rColor = (typeof rarityColor === 'function') ? rarityColor(win.r) : '#fff';
+  box.innerHTML =
+    '<div class="sr-label">ВЫПАЛО</div>' +
+    imgTag +
+    '<div class="sr-rar" style="color:'+rColor+'">'+rName+stBadge(win)+'</div>' +
+    '<div class="sr-name">'+win.w+' | '+win.s+'</div>' +
+    '<div class="sr-price">'+fmtPrice(win.p)+' G</div>' +
+    '<div class="sr-actions">' +
+      '<button class="sr-inv">В инвентарь</button>' +
+      '<button class="sr-again">Открыть ещё<br><span style="font-size:11px;opacity:.85">'+(c.price*SD.caseCount)+' G</span></button>' +
+      '<button class="sr-sell">Продать<br><span style="font-size:11px">'+fmtPrice(win.p)+' G</span></button>' +
+    '</div>';
+
+  SD.info('Добавлено в инвентарь', win.w+' | '+win.s + (win.st?' • StatTrak™':''));
+
+  box.querySelector('.sr-inv').onclick = function(){
+    if(typeof closeModal === 'function') closeModal('caseModal');
+    SD.go('inventory');
+  };
+  box.querySelector('.sr-again').onclick = function(){
+    box.classList.remove('show');
+    document.getElementById('spinArea').classList.remove('show');
+    document.getElementById('caseOpenBtn').style.display = '';
+    if(typeof updateOpenButton === 'function') updateOpenButton();
+  };
+  box.querySelector('.sr-sell').onclick = function(){
+    window.sellSkin(win);
+    if(typeof closeModal === 'function') closeModal('caseModal');
+  };
+};
+
+/* ==========================================================
+   BLOCK 7 — showMultiResult (2 знака, ST)
+   ========================================================== */
+window.showMultiResult = function(wins, c){
+  var box = document.getElementById('spinResult');
+  box.classList.add('show');
+  var total = 0;
+  for(var i=0;i<wins.length;i++){ if(wins[i]) total += Number(wins[i].p)||0; }
+  total = round2(total);
+
+  var cells = wins.map(function(w){
+    if(!w) return '';
+    var rColor = (typeof rarityColor === 'function') ? rarityColor(w.r) : '#fff';
+    var rName = (typeof rarityName === 'function') ? rarityName(w.r) : '';
+    var imgTag = (typeof skinImgTag === 'function') ? skinImgTag(w, 'width:100%;height:50px;object-fit:contain') : '';
+    return '<div style="padding:6px;background:var(--surface-2);border-radius:8px;text-align:center">' +
+      imgTag +
+      '<div style="font-size:9px;margin-top:2px;color:'+rColor+'">'+rName+(w.st?' • ST™':'')+'</div>' +
+      '<div style="font-size:9px;color:var(--gold);font-weight:900">'+fmtPrice(w.p)+' G</div>' +
+    '</div>';
+  }).join('');
+
+  box.innerHTML =
+    '<div class="sr-label">'+wins.length+' КЕЙСОВ</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0">'+cells+'</div>' +
+    '<div class="sr-price">+'+fmtPrice(total)+' G</div>' +
+    '<div class="sr-actions">' +
+      '<button class="sr-inv">В инвентарь</button>' +
+      '<button class="sr-again">Открыть ещё</button>' +
+      '<button class="sr-sell">Продать всё</button>' +
+    '</div>';
+
+  SD.info('Добавлено в инвентарь', wins.length + ' скинов');
+  box.querySelector('.sr-inv').onclick = function(){
+    if(typeof closeModal === 'function') closeModal('caseModal');
+    SD.go('inventory');
+  };
+  box.querySelector('.sr-again').onclick = function(){
+    box.classList.remove('show');
+    document.getElementById('spinArea').classList.remove('show');
+    var winEl = document.querySelector('#spinArea .spin-window');
+    if(winEl) winEl.classList.remove('sd-multi');
+    var ms = document.getElementById('sdMultiSpin');
+    if(ms) ms.innerHTML = '';
+    document.getElementById('caseOpenBtn').style.display = '';
+    if(typeof updateOpenButton === 'function') updateOpenButton();
+  };
+  box.querySelector('.sr-sell').onclick = function(){
+    wins.forEach(function(w){ if(w) window.sellSkin(w); });
+    if(typeof closeModal === 'function') closeModal('caseModal');
+  };
+};
+
+/* ==========================================================
+   BLOCK 7 — sellSkin: 2 знака, без integer-округления
+   ========================================================== */
+window.sellSkin = async function(skin){
+  if(!SD.profile) return;
+  var inv = toArr(SD.profile.inventory);
+  var idx = -1;
+  for(var i=0;i<inv.length;i++){
+    if(inv[i].w === skin.w && inv[i].s === skin.s &&
+       (inv[i].st||false) === (skin.st||false)){
+      idx = i; break;
+    }
+  }
+  if(idx === -1){
+    for(var j=0;j<inv.length;j++){
+      if(inv[j].w === skin.w && inv[j].s === skin.s){ idx = j; break; }
+    }
+  }
+  if(idx === -1) return;
+  var item = inv[idx];
+  inv.splice(idx,1);
+  var base = Number(item.p) || 0;
+  var price = round2(item.received ? base * 0.8 : base);
+  var nb = round2((SD.profile.balance||0) + price);
+  SD.profile.inventory = inv;
+  SD.profile.balance = nb;
+  await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), {inventory: inv, balance: nb});
+  SD.updateBalanceUI(nb, true);
+  SD.ok('Скин продан', item.w+' | '+item.s + (item.st?' • ST™':'') + ' • +'+fmtPrice(price)+' G');
+};
+
+/* ==========================================================
+   BLOCK 7 — renderInventory: 2 знака + ST
+   ========================================================== */
+window.renderInventory = function(){
+  var grid = document.getElementById('inventoryGrid');
+  var cnt = document.getElementById('invCountLabel');
+  if(!grid) return;
+  var inv = toArr(SD.profile.inventory);
+  var list = inv;
+  if(SD.invFilter === 'cheap') list = inv.filter(function(s){ return Number(s.p) <= 100; });
+  if(SD.invFilter === 'mid')   list = inv.filter(function(s){ return Number(s.p) > 100 && Number(s.p) <= 1000; });
+  if(SD.invFilter === 'high')  list = inv.filter(function(s){ return Number(s.p) > 1000; });
+  if(cnt) cnt.textContent = list.length + ' шт.';
+
+  if(!list.length){
+    grid.innerHTML = '<div class="inv-empty"><div class="ie-emoji">🎒</div><div>Инвентарь пуст</div><div class="muted mt-8">Открой первый кейс</div></div>';
+    return;
+  }
+
+  grid.innerHTML = list.map(function(s){
+    var realIdx = inv.indexOf(s);
+    var price = s.received ? round2(Number(s.p)*0.8) : round2(Number(s.p));
+    var rColor = (typeof rarityColor === 'function') ? rarityColor(s.r) : '#fff';
+    var rName = (typeof rarityName === 'function') ? rarityName(s.r) : '';
+    var imgTag = (typeof skinImgTag === 'function') ? skinImgTag(s, 'width:100%;height:90px;object-fit:contain;margin-bottom:6px') : '';
+    return '<div class="inv-card" style="--rc:'+rColor+'" data-idx="'+realIdx+'">' +
+      imgTag +
+      '<div class="ic-rar">'+rName+(s.st?' <span class="sd-st-badge" style="font-size:8px;padding:0 4px">ST™</span>':'')+'</div>' +
+      '<div class="ic-name">'+s.w+' | '+s.s+'</div>' +
+      '<div class="ic-price">'+fmtPrice(price)+' G</div>' +
+    '</div>';
+  }).join('');
+
+  grid.querySelectorAll('.inv-card').forEach(function(card){
+    card.onclick = function(){
+      var idx = +card.dataset.idx;
+      if(inv[idx]) window.openSkinCard(inv[idx]);
+    };
+  });
+};
+
+/* ==========================================================
+   BLOCK 7 — openSkinCard: 2 знака + ST
+   ========================================================== */
+window.openSkinCard = function(skin){
+  var price = skin.received ? round2(Number(skin.p)*0.8) : round2(Number(skin.p));
+  var rColor = (typeof rarityColor === 'function') ? rarityColor(skin.r) : '#fff';
+  var rName = (typeof rarityName === 'function') ? rarityName(skin.r) : '';
+  var imgTag = (typeof skinImgTag === 'function') ? skinImgTag(skin, 'width:220px;height:160px;object-fit:contain;margin:0 auto 8px;display:block') : '';
+  document.getElementById('skinCardBody').innerHTML =
+    '<div style="text-align:center;padding:14px 0">' +
+      imgTag +
+      '<div style="font-size:12px;font-weight:1000;letter-spacing:1px;color:'+rColor+';text-transform:uppercase;margin-bottom:6px">'+rName+stBadge(skin)+'</div>' +
+      '<div style="font-size:20px;font-weight:900;margin-bottom:4px">'+skin.w+' | '+skin.s+'</div>' +
+      '<div style="font-size:22px;font-weight:1000;color:var(--gold);margin-bottom:18px">'+fmtPrice(price)+' G</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">' +
+        '<button class="btn btn-gold" id="scSellBtn">💰 Продать</button>' +
+        '<button class="btn btn-primary" id="scUpgradeBtn">⚡ В апгрейд</button>' +
+      '</div>' +
+      '<button class="btn btn-ghost btn-block" id="scCloseBtn">← Назад</button>' +
+    '</div>';
+  document.getElementById('scSellBtn').onclick = function(){
+    window.sellSkin(skin);
+    if(typeof closeModal === 'function') closeModal('skinCardModal');
+  };
+  document.getElementById('scUpgradeBtn').onclick = function(){
+    SD.upSource = skin;
+    if(typeof closeModal === 'function') closeModal('skinCardModal');
+    SD.go('upgrade');
+    if(typeof renderUpgrade === 'function') renderUpgrade();
+  };
+  document.getElementById('scCloseBtn').onclick = function(){
+    if(typeof closeModal === 'function') closeModal('skinCardModal');
+  };
+  if(typeof openModal === 'function') openModal('skinCardModal');
+};
+
+/* ==========================================================
+   BLOCK 6/7 — Upgrade: наследует ST, цена 2 знака
+   ========================================================== */
+if(window.SD){
+  SD.runUpgrade = function(){
+    if(!SD.upSource || !SD.upTarget){ SD.err('Ошибка','Сначала выберите предмет'); return; }
+    if(Number(SD.upTarget.p) <= Number(SD.upSource.p)){ SD.err('Ошибка','Цель должна быть дороже'); return; }
+
+    var d = computeChance();
+    if(d.addG > ((SD.profile && SD.profile.balance) || 0)){ SD.err('Ошибка','Недостаточно средств'); return; }
+
+    var btn = document.getElementById('upgradeBtn');
+    if(btn) btn.disabled = true;
+
+    var nb = ((SD.profile && SD.profile.balance) || 0) - d.addG;
+    var inv = toArr(SD.profile.inventory);
+    var srcWasST = !!(SD.upSource && SD.upSource.st);
+    var srcIdx = -1;
+    for(var i=0;i<inv.length;i++){ if(inv[i].id === SD.upSource.id){ srcIdx = i; break; } }
+    if(srcIdx > -1) inv.splice(srcIdx,1);
+
+    SD.profile.balance = nb;
+    SD.profile.inventory = inv;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), {balance: nb, inventory: inv});
+    SD.updateBalanceUI(nb, true);
+
+    var prev = (SD.profile.stats && SD.profile.stats.upgrades) || 0;
+    fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid + '/stats'), {upgrades: prev + 1});
+
+    var roll = Math.random() * 100;
+    var isWin = SD.devMode ? true : (roll < d.chance);
+    var halfWidth = d.chance * 1.8;
+    var finalAngle;
+
+    if(isWin){
+      var safe = halfWidth * 0.9;
+      finalAngle = 180 + (Math.random() * 2 - 1) * safe;
+    } else {
+      var margin = 5;
+      var zoneEnd = 180 + halfWidth + margin;
+      var loseSize = 360 - 2*halfWidth - 2*margin;
+      finalAngle = zoneEnd + Math.random() * Math.max(1, loseSize);
+      if(finalAngle >= 360) finalAngle -= 360;
+    }
+
+    var spins = 3 + Math.floor(Math.random() * 3);
+    var arrow = document.getElementById('upArrow');
+    if(arrow){
+      arrow.style.transition = 'none';
+      arrow.style.transform = 'translateX(-50%) rotate(0deg)';
+      void arrow.offsetWidth;
+      arrow.style.transition = 'transform 6.5s cubic-bezier(.15,.75,.2,1)';
+      arrow.style.transform = 'translateX(-50%) rotate(' + (spins * 360 + finalAngle) + 'deg)';
+    }
+
+    setTimeout(function(){
+      if(isWin){
+        var target = SD.upTarget;
+        var newInv = toArr(SD.profile.inventory);
+        newInv.push({
+          w: target.w, s: target.s, r: target.r, file: target.file,
+          p: round2(target.p),
+          st: srcWasST,
+          id: 'inv-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+          received: false
+        });
+        SD.profile.inventory = newInv;
+        fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), {inventory: newInv});
+        if(typeof winSound === 'function') winSound();
+        SD.ok('Апгрейд выполнен!', target.w+' | '+target.s + (srcWasST ? ' • StatTrak™' : ''));
+        SD.upSource = Object.assign({}, target, {st: srcWasST});
+        SD.upTarget = null;
+        SD.upAddPercent = 0;
+      } else {
+        SD.err('Апгрейд не удался', 'Скин сгорел');
+        SD.upSource = null; SD.upTarget = null; SD.upAddPercent = 0;
+      }
+      if(btn) btn.disabled = false;
+      try{ renderUpgrade(); }catch(e){}
+      try{ renderInventory(); }catch(e){}
+    }, 6700);
+  };
+}
+
+/* ==========================================================
+   BLOCK 6 — acceptTransfer: сохраняем st
+   ========================================================== */
+window.acceptTransfer = async function(tr){
+  try{
+    var inv = toArr(SD.profile.inventory);
+    var recv = tr.skins.map(function(s){
+      return {
+        w: s.w, s: s.s, r: s.r, file: s.file,
+        p: round2(s.p),
+        st: !!s.st,
+        id: 'inv-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
+        received: true
+      };
+    });
+    var newInv = inv.concat(recv);
+    var transfers = toArr(SD.profile.incomingTransfers).filter(function(x){
+      return x.transferId !== tr.transferId;
+    });
+    await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/'+SD.uid), {
+      inventory: newInv, incomingTransfers: transfers
+    });
+    SD.profile.inventory = newInv;
+    SD.profile.incomingTransfers = transfers;
+    SD.ok('Передано', tr.skins.length + ' скинов');
+    if(typeof renderIncomingTransfers === 'function') renderIncomingTransfers();
+    if(typeof renderInventory === 'function') renderInventory();
+  }catch(e){ console.error(e); }
+};
+
+/* ==========================================================
+   BOOT
+   ========================================================== */
+function runAll(){
+  fixCaseModal4();
+}
+runAll();
+
+var tries = 0;
+var iv = setInterval(function(){
+  tries++;
+  runAll();
+  if(tries > 20) clearInterval(iv);
+}, 300);
+
+/* Гарантировать фикс после полной загрузки модалки */
+setTimeout(fixCaseModal4, 500);
+setTimeout(fixCaseModal4, 1500);
+setTimeout(fixCaseModal4, 3000);
+
+console.log('✅ [SD] Fix-B4 + Block 6 (StatTrak 15%) + Block 7 (prices 2 decimals)');
+})();
+</script>
+<!-- ============ /SD FIX-B4 + BLOCK 6 + BLOCK 7 ============ -->
 </body>
 </html>
