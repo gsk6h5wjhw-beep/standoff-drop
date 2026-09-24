@@ -4115,5 +4115,47 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 5 ============ -->
+<!-- ============ SD FIX: single spin after multi ============ -->
+<script id="sd-fix-single-after-multi">
+(function(){
+'use strict';
+
+  if(window.__sdFixSingleAfterMulti) return;
+  window.__sdFixSingleAfterMulti = true;
+
+  var origSingle = window.spinSingle;
+  if(typeof origSingle !== 'function'){
+    /* Если оригинал ещё не поднялся — попробуем позже */
+    setTimeout(arguments.callee, 400);
+    return;
+  }
+
+  window.spinSingle = function(c, win, onFinish){
+    /* 1. Убираем остатки мульти-спина */
+    var spinArea = document.getElementById('spinArea');
+    if(spinArea){
+      var winEl = spinArea.querySelector('.spin-window');
+      if(winEl){
+        winEl.classList.remove('sd-multi');
+      }
+      var ms = document.getElementById('sdMultiSpin');
+      if(ms){
+        ms.innerHTML = '';
+        /* Не удаляем сам узел — но полностью прячем */
+        ms.style.display = 'none';
+      }
+      /* Точно показываем обычный трек */
+      var track = spinArea.querySelector('.spin-track');
+      if(track) track.style.display = '';
+    }
+
+    /* 2. Вызываем оригинальный spinSingle */
+    return origSingle(c, win, onFinish);
+  };
+
+  console.log('✅ [SD] Fix: single spin cleans multi state');
+})();
+</script>
+<!-- ============ /SD FIX ============ -->
 </body>
 </html>
