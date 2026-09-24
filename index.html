@@ -3494,5 +3494,195 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 
+<!-- ============ SD HOME SLIDER PATCH (Block 1) ============ -->
+<script id="sd-home-slider-patch">
+(function(){
+  'use strict';
+
+  var STYLE_ID = 'sd-slider-style';
+  var SLIDER_ID = 'sdSlider';
+
+  function injectStyles(){
+    if(document.getElementById(STYLE_ID)) return;
+    var css = [
+      '#sdSlider{position:relative;width:calc(100% + 28px);margin:8px -14px 14px;aspect-ratio:2/1;max-height:340px;overflow:hidden;border-radius:18px;background:#08080d;isolation:isolate;touch-action:pan-y}',
+      '#sdSlider .sd-slider-track{position:absolute;inset:0;display:flex;transition:transform .55s cubic-bezier(.2,.9,.3,1);will-change:transform}',
+      '#sdSlider .sd-slide{position:relative;flex:0 0 100%;width:100%;height:100%;overflow:hidden}',
+      '#sdSlider .sd-slide > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none;-webkit-user-drag:none;display:block}',
+      '#sdSlider .sd-slide-hit{position:absolute;left:4%;bottom:22%;width:42%;height:16%;z-index:20;padding:0;margin:0;border:0;border-radius:14px;background:transparent;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}',
+      '#sdSlider .sd-slide-shade{position:absolute;inset:0;z-index:10;background:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.75) 100%);pointer-events:none}',
+      '#sdSlider .sd-slide-content{position:absolute;left:0;right:0;bottom:0;z-index:15;padding:0 6% 9%;display:flex;flex-direction:column;align-items:flex-start;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}',
+      '#sdSlider .sd-slide-content > *{pointer-events:auto}',
+      '#sdSlider .sd-slide-tag{display:inline-block;font-size:10px;font-weight:1000;letter-spacing:2px;color:#000;background:var(--accent,#ff2e63);padding:4px 9px;border-radius:99px;margin-bottom:6px;line-height:1;font-family:inherit}',
+      '#sdSlider .sd-slide-title{font-size:20px;font-weight:1000;color:#fff;letter-spacing:-.02em;line-height:1.1;text-shadow:0 2px 12px rgba(0,0,0,.9);margin-bottom:2px;font-family:inherit}',
+      '#sdSlider .sd-slide-sub{font-size:12px;font-weight:800;color:rgba(255,255,255,.88);margin-bottom:10px;text-shadow:0 2px 8px rgba(0,0,0,.9);font-family:inherit}',
+      '#sdSlider .sd-slide-btn{padding:11px 22px;min-height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent,#ff2e63),#8a002a);color:#fff;font-size:12px;font-weight:1000;letter-spacing:1.2px;border:0;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.5);touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-family:inherit}',
+      '#sdSlider .sd-slide-btn:active{transform:scale(.96)}',
+      '#sdSlider .sd-slide-fury{background:radial-gradient(420px 240px at 78% 42%,rgba(255,46,99,.45),transparent 62%),linear-gradient(160deg,#1a1024 0%,#0a0b12 100%)}',
+      '#sdSlider .sd-fury-img{position:absolute;right:0;top:0;height:100%;width:56%;object-fit:contain;object-position:center;padding:5% 4% 5% 0;filter:drop-shadow(0 10px 30px rgba(0,0,0,.75));z-index:12;pointer-events:none;user-select:none;-webkit-user-drag:none}',
+      '#sdSlider .sd-slide-content-left{position:absolute;left:0;top:0;bottom:0;width:56%;z-index:15;padding:7% 2% 7% 6%;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;pointer-events:none}',
+      '#sdSlider .sd-slide-content-left > *{pointer-events:auto}',
+      '#sdSlider .sd-slide-bonus-bg{background:radial-gradient(500px 260px at 30% 0%,rgba(255,46,99,.4),transparent 62%),linear-gradient(160deg,#1a1024 0%,#0a0b12 100%)}',
+      '#sdSlider .sd-slide-bonus-content{inset:0;align-items:center;justify-content:center;text-align:center;padding:0 6%}',
+      '#sdSlider .sd-bonus-emoji{font-size:42px;line-height:1;margin-bottom:6px}',
+      '#sdSlider .sd-slider-dots{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);z-index:25;display:flex;gap:6px;padding:5px 10px;border-radius:99px;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}',
+      '#sdSlider .sd-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.35);transition:all .3s ease;cursor:pointer;display:block}',
+      '#sdSlider .sd-dot.active{width:20px;border-radius:99px;background:var(--accent,#ff2e63)}',
+      '@media(max-width:430px){#sdSlider{border-radius:14px}#sdSlider .sd-slide-title{font-size:17px}#sdSlider .sd-slide-sub{font-size:11px}#sdSlider .sd-slide-btn{padding:9px 18px;min-height:38px;font-size:11px}}'
+    ].join('\n');
+    var st = document.createElement('style');
+    st.id = STYLE_ID;
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
+
+  function buildSliderHTML(){
+    return [
+      '<div class="sd-slider-track" id="sdSliderTrack">',
+        '<div class="sd-slide">',
+          '<img src="heroo.JPEG" alt="">',
+          '<button type="button" class="sd-slide-hit" data-sd-go="cases" aria-label="Открыть кейсы"></button>',
+        '</div>',
+        '<div class="sd-slide sd-slide-fury">',
+          '<img class="sd-fury-img" src="cases/fury.PNG" alt="">',
+          '<div class="sd-slide-content-left">',
+            '<span class="sd-slide-tag">NEW</span>',
+            '<div class="sd-slide-title">НОВЫЙ КЕЙС</div>',
+            '<div class="sd-slide-sub">СКОРЕЕ ОТКРЫВАЙ!</div>',
+            '<button type="button" class="sd-slide-btn" data-sd-go="fury">ОТКРЫТЬ</button>',
+          '</div>',
+        '</div>',
+        '<div class="sd-slide sd-slide-bonus-bg">',
+          '<div class="sd-slide-content sd-slide-bonus-content">',
+            '<div class="sd-bonus-emoji">🎁</div>',
+            '<div class="sd-slide-title">ЕЖЕДНЕВНЫЙ БОНУС</div>',
+            '<div class="sd-slide-sub">Заходи каждый день и получай награды</div>',
+            '<button type="button" class="sd-slide-btn" data-sd-go="bonus">ЗАБРАТЬ</button>',
+          '</div>',
+        '</div>',
+      '</div>',
+      '<div class="sd-slider-dots" id="sdSliderDots">',
+        '<span class="sd-dot active" data-idx="0"></span>',
+        '<span class="sd-dot" data-idx="1"></span>',
+        '<span class="sd-dot" data-idx="2"></span>',
+      '</div>'
+    ].join('');
+  }
+
+  function installSlider(){
+    var sd = window.SD;
+    if(!sd) return false;
+    if(document.getElementById(SLIDER_ID)) return true;
+
+    var oldHero = document.getElementById('sdHero');
+    if(!oldHero) return false;
+
+    oldHero.style.setProperty('display','none','important');
+
+    var slider = document.createElement('div');
+    slider.id = SLIDER_ID;
+    slider.innerHTML = buildSliderHTML();
+    oldHero.parentNode.insertBefore(slider, oldHero.nextSibling);
+
+    var track = document.getElementById('sdSliderTrack');
+    var dots = slider.querySelectorAll('.sd-dot');
+    var current = 0;
+    var total = 3;
+    var autoTimer = null;
+
+    function goTo(idx){
+      current = ((idx % total) + total) % total;
+      track.style.transform = 'translateX(-' + (current * 100) + '%)';
+      for(var i = 0; i < dots.length; i++){
+        dots[i].classList.toggle('active', i === current);
+      }
+    }
+    function next(){ goTo(current + 1); }
+    function startAuto(){ stopAuto(); autoTimer = setInterval(next, 5000); }
+    function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer = null; } }
+
+    for(var i = 0; i < dots.length; i++){
+      (function(d){
+        d.addEventListener('click', function(){
+          goTo(parseInt(d.getAttribute('data-idx'), 10) || 0);
+          startAuto();
+        });
+      })(dots[i]);
+    }
+
+    var startX = 0, startY = 0, dragging = false, isHoriz = null;
+    track.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      dragging = true; isHoriz = null;
+      stopAuto();
+    }, {passive:true});
+
+    track.addEventListener('touchmove', function(e){
+      if(!dragging) return;
+      var dx = e.touches[0].clientX - startX;
+      var dy = e.touches[0].clientY - startY;
+      if(isHoriz === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)){
+        isHoriz = Math.abs(dx) > Math.abs(dy);
+      }
+      if(isHoriz === false){ dragging = false; startAuto(); }
+    }, {passive:true});
+
+    track.addEventListener('touchend', function(e){
+      if(!dragging) return;
+      dragging = false;
+      if(isHoriz === false){ startAuto(); return; }
+      var dx = e.changedTouches[0].clientX - startX;
+      if(dx < -50) goTo(current + 1);
+      else if(dx > 50) goTo(current - 1);
+      startAuto();
+    });
+
+    slider.addEventListener('click', function(e){
+      var btn = e.target.closest('[data-sd-go]');
+      if(!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      var dest = btn.getAttribute('data-sd-go');
+
+      if(dest === 'cases'){
+        if(typeof sd.go === 'function') sd.go('cases');
+      } else if(dest === 'bonus'){
+        if(typeof sd.go === 'function') sd.go('bonus');
+      } else if(dest === 'fury'){
+        var cases = window.SD_CASES || [];
+        var fury = null;
+        for(var k = 0; k < cases.length; k++){
+          if(cases[k].id === 'fury'){ fury = cases[k]; break; }
+        }
+        if(fury && typeof sd.openCaseModal === 'function'){
+          sd.openCaseModal(fury);
+        } else if(typeof sd.go === 'function'){
+          sd.go('cases');
+        }
+      }
+    });
+
+    startAuto();
+    console.log('✅ [SD] Home slider installed');
+    return true;
+  }
+
+  injectStyles();
+
+  if(!installSlider()){
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      if(installSlider() || tries > 30){
+        clearInterval(iv);
+      }
+    }, 200);
+  }
+})();
+</script>
+<!-- ============ /SD HOME SLIDER PATCH ============ -->
 </body>
 </html>
