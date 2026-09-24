@@ -3684,5 +3684,122 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD HOME SLIDER PATCH ============ -->
+<!-- ============ SD BLOCKS 1FIX + 2 + 3 PATCH ============ -->
+<script id="sd-blocks-1fix-2-3-patch">
+(function(){
+  'use strict';
+
+  /* ==================================================
+     BLOCK 1 (fix) — первая картинка целиком + тап зона
+     ================================================== */
+  function patchFirstSlide(){
+    var style = document.getElementById('sd-slider-fix-style');
+    if(!style){
+      style = document.createElement('style');
+      style.id = 'sd-slider-fix-style';
+      document.head.appendChild(style);
+    }
+    style.textContent = [
+      /* Картинка целиком, без обрезки краёв */
+      '#sdSlider .sd-slide:first-child > img{',
+        'object-fit:contain !important;',
+        'background:#08080d !important;',
+      '}',
+      /* Чуть меньше высота слайдера */
+      '#sdSlider{max-height:290px !important;}',
+      /* Тап-зона под "ОТКРЫТЬ" — меньше и смещена чуть левее */
+      '#sdSlider .sd-slide:first-child .sd-slide-hit{',
+        'left:3% !important;',
+        'bottom:15.5% !important;',
+        'width:42% !important;',
+        'height:12% !important;',
+        'border-radius:10px !important;',
+      '}'
+    ].join('');
+  }
+
+  /* ==================================================
+     BLOCK 2 — Поддержка в профиле
+     ================================================== */
+  function patchProfileSupport(){
+    var menu = document.querySelector('#screen-profile .profile-menu');
+    if(!menu) return false;
+    if(menu.querySelector('#sdSupportBtn')) return true;
+
+    var a = document.createElement('a');
+    a.id = 'sdSupportBtn';
+    a.className = 'pm-item';
+    a.href = 'https://t.me/dev_so_drop';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.innerHTML =
+      '<div class="pm-icon">💬</div>' +
+      '<div class="pm-text">Поддержка</div>' +
+      '<div class="pm-arrow">›</div>';
+
+    var logout = menu.querySelector('#logoutBtn');
+    if(logout && logout.parentNode){
+      logout.parentNode.insertBefore(a, logout);
+    }else{
+      menu.appendChild(a);
+    }
+    return true;
+  }
+
+  /* ==================================================
+     BLOCK 3 — Цены кейсов
+     Common 19 / Uncommon 39 / Rare 59 / Fury без изменений
+     ================================================== */
+  function patchCasePrices(){
+    if(!window.SD_CASES || !window.SD_CASES.length) return false;
+    for(var i = 0; i < window.SD_CASES.length; i++){
+      var c = window.SD_CASES[i];
+      if(c.id === 'common')   c.price = 19;
+      else if(c.id === 'uncommon') c.price = 39;
+      else if(c.id === 'rare')     c.price = 59;
+      /* fury — оставляем как есть */
+    }
+    return true;
+  }
+
+  function safeRerender(){
+    try{ if(typeof renderHome === 'function') renderHome(); }catch(e){}
+    try{ if(typeof renderAllCases === 'function') renderAllCases(); }catch(e){}
+    try{
+      var sd = window.SD;
+      if(sd && sd.currentScreen === 'home'){
+        var box = document.getElementById('homeCases');
+        if(box && typeof bindCaseCards === 'function') bindCaseCards(box);
+      }
+      if(sd && sd.currentScreen === 'cases'){
+        var box2 = document.getElementById('allCases');
+        if(box2 && typeof bindCaseCards === 'function') bindCaseCards(box2);
+      }
+    }catch(e){}
+  }
+
+  function runAll(){
+    patchFirstSlide();
+    patchProfileSupport();
+    patchCasePrices();
+  }
+
+  /* Мгновенный прогон + ретраи на первые 5 сек (пока DOM/Firebase грузится) */
+  runAll();
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    runAll();
+    if(tries > 16) clearInterval(iv);
+  }, 300);
+
+  /* Перерисовать сетки кейсов после того, как всё собралось */
+  setTimeout(safeRerender, 700);
+  setTimeout(safeRerender, 1800);
+
+  console.log('✅ [SD] Blocks 1fix/2/3 applied');
+})();
+</script>
+<!-- ============ /SD BLOCKS 1FIX + 2 + 3 PATCH ============ -->
 </body>
 </html>
