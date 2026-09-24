@@ -3695,5 +3695,260 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 2+3 ============ -->
+<!-- ============ SD BLOCK 4: iOS HANDLE + DRAG-CLOSE + BACK + SOFT ANIMATION ============ -->
+<style id="sd-block4-style">
+  /* --- iOS grab handle: чуть крупнее и заметнее --- */
+  #caseModal .sheet-handle{
+    width: 48px !important;
+    height: 5px !important;
+    background: #6e7080 !important;
+    opacity: .9 !important;
+    margin: 8px auto 16px !important;
+    border-radius: 99px !important;
+    cursor: grab;
+    touch-action: none;
+    transition: opacity .2s ease, background .2s ease;
+  }
+  #caseModal .sheet-handle:active{
+    cursor: grabbing;
+    opacity: 1;
+    background: #8a8ea0 !important;
+  }
+
+  /* --- Шторка не должна ломать клики: никаких preserve-3d / perspective --- */
+  #caseModal .modal-sheet{
+    perspective: none !important;
+    transform-style: flat !important;
+    will-change: transform, opacity;
+  }
+
+  /* --- Мягкая анимация шапки кейса при старте спина --- */
+  #caseModal .case-head{
+    transform-origin: 50% 40%;
+    transition: transform .9s cubic-bezier(.2,.85,.3,1),
+                opacity .9s ease;
+    will-change: transform, opacity;
+  }
+  #caseModal.sd-case-away .case-head{
+    transform: scale(.62) translateY(-6px);
+    opacity: .3;
+  }
+
+  /* --- Мягкая анимация рулетки --- */
+  #caseModal .spin-area{
+    transform-origin: 50% 40%;
+    transition: transform .9s cubic-bezier(.2,.85,.3,1);
+    will-change: transform;
+  }
+  #caseModal.sd-spin-fwd .spin-area{
+    transform: scale(1.02) translateY(-2px);
+  }
+
+  /* --- Кнопка назад: простая, в потоке, поверх --- */
+  #caseModal .sheet-head-back{
+    position: absolute !important;
+    top: 14px !important;
+    left: 14px !important;
+    z-index: 60 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: var(--surface-2, #1a1b27) !important;
+    border: 1px solid var(--border, rgba(255,255,255,.07)) !important;
+    color: var(--text-2, #b9bcc8) !important;
+    font-size: 20px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  #caseModal .sheet-head-back:active{
+    transform: scale(.92);
+    background: var(--surface-3, #22232f) !important;
+  }
+
+  /* --- Лёгкая тень на рулетке при активном спине (безопасно) --- */
+  #caseModal.sd-spin-fwd .spin-window{
+    box-shadow: 0 20px 60px rgba(var(--accent-rgb, 255,46,99), .25),
+                0 0 0 1px rgba(255,255,255,.06) inset !important;
+  }
+</style>
+
+<script id="sd-block4-script">
+(function(){
+  'use strict';
+
+  function getModal(){ return document.getElementById('caseModal'); }
+
+  /* ==================================================
+     1. Кнопка «←» — простая, с прямым onclick
+     ================================================== */
+  function ensureBackButton(){
+    var modal = getModal();
+    if(!modal) return;
+    var sheet = modal.querySelector('.modal-sheet');
+    if(!sheet) return;
+
+    var back = sheet.querySelector('.sheet-head-back');
+    if(!back){
+      back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'sheet-head-back';
+      back.setAttribute('aria-label', 'Назад');
+      back.textContent = '←';
+      sheet.insertBefore(back, sheet.firstChild);
+    }
+    /* Всегда перезаписываем обработчик — надёжно */
+    back.onclick = function(e){
+      if(e){ e.preventDefault(); e.stopPropagation(); }
+      if(modal) modal.classList.remove('show');
+    };
+  }
+
+  /* ==================================================
+     2. Drag-to-close через iOS-ручку
+     ================================================== */
+  function installDrag(){
+    var modal = getModal();
+    if(!modal || modal.__sdB4DragInstalled) return;
+    var sheet = modal.querySelector('.modal-sheet');
+    var handle = modal.querySelector('.sheet-handle');
+    if(!sheet || !handle) return;
+
+    modal.__sdB4DragInstalled = true;
+
+    var startY = 0;
+    var curY = 0;
+    var dragging = false;
+
+    function resetSheet(){
+      sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s ease';
+      sheet.style.transform = '';
+      sheet.style.opacity = '';
+      setTimeout(function(){ sheet.style.transition = ''; }, 300);
+    }
+    function closeByDrag(){
+      sheet.style.transition = 'transform .28s cubic-bezier(.2,.9,.3,1), opacity .28s ease';
+      sheet.style.transform = 'translateY(100%)';
+      sheet.style.opacity = '0';
+      setTimeout(function(){
+        if(modal) modal.classList.remove('show');
+        sheet.style.transform = '';
+        sheet.style.opacity = '';
+        sheet.style.transition = '';
+      }, 260);
+    }
+
+    function begin(y){
+      startY = y;
+      curY = y;
+      dragging = true;
+      sheet.style.transition = 'none';
+    }
+    function move(y){
+      if(!dragging) return;
+      curY = y;
+      var dy = Math.max(0, curY - startY);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+      sheet.style.opacity = String(Math.max(.45, 1 - dy / 500));
+    }
+    function end(){
+      if(!dragging) return;
+      dragging = false;
+      if(curY - startY > 110) closeByDrag();
+      else resetSheet();
+    }
+
+    /* Touch */
+    handle.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;
+      begin(e.touches[0].clientY);
+    }, { passive: true });
+
+    handle.addEventListener('touchmove', function(e){
+      if(e.touches.length !== 1) return;
+      move(e.touches[0].clientY);
+    }, { passive: true });
+
+    handle.addEventListener('touchend', end);
+    handle.addEventListener('touchcancel', end);
+
+    /* Mouse (desktop) */
+    handle.addEventListener('mousedown', function(e){
+      e.preventDefault();
+      begin(e.clientY);
+
+      function onMove(ev){ move(ev.clientY); }
+      function onUp(){
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        end();
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  /* ==================================================
+     3. Мягкая анимация — case-head уменьшается при старте спина
+     ================================================== */
+  function installAnimation(){
+    var modal = getModal();
+    if(!modal || modal.__sdB4AnimInstalled) return;
+
+    var spinArea = modal.querySelector('#spinArea');
+    if(!spinArea) return;
+
+    modal.__sdB4AnimInstalled = true;
+
+    /* Наблюдаем за классом .show на spinArea */
+    new MutationObserver(function(){
+      if(spinArea.classList.contains('show')){
+        modal.classList.add('sd-case-away');
+        /* Небольшая задержка, чтобы рулетка успела выехать */
+        setTimeout(function(){ modal.classList.add('sd-spin-fwd'); }, 180);
+      } else {
+        modal.classList.remove('sd-case-away', 'sd-spin-fwd');
+      }
+    }).observe(spinArea, { attributes: true, attributeFilter: ['class'] });
+
+    /* Сбрасываем анимацию при закрытии модалки */
+    new MutationObserver(function(){
+      if(!modal.classList.contains('show')){
+        modal.classList.remove('sd-case-away', 'sd-spin-fwd');
+      }
+    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  /* ==================================================
+     4. Boot + ретраи
+     ================================================== */
+  function runAll(){
+    try{ ensureBackButton(); }catch(e){ console.warn('[SD B4 back]', e); }
+    try{ installDrag(); }catch(e){ console.warn('[SD B4 drag]', e); }
+    try{ installAnimation(); }catch(e){ console.warn('[SD B4 anim]', e); }
+  }
+
+  runAll();
+
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    runAll();
+    if(tries > 20) clearInterval(iv);
+  }, 250);
+
+  setTimeout(runAll, 800);
+  setTimeout(runAll, 2000);
+
+  console.log('✅ [SD] Block 4 applied (iOS handle + drag-close + back + soft animation)');
+})();
+</script>
+<!-- ============ /SD BLOCK 4 ============ -->
 </body>
 </html>
