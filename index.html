@@ -3494,5 +3494,113 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 
+<!-- ============ SD BLOCK 1: LOGO TEXT + NO-HEADER-LOGOUT + WIDE BALANCE ============ -->
+<style id="sd-block1-style">
+  /* --- LOGO: возвращаем текст --- */
+  #mainLogo{
+    background: none !important;
+    background-image: none !important;
+    font-size: 22px !important;
+    line-height: 1.1 !important;
+    color: #eef0f4 !important;
+    text-indent: 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    flex: 0 0 auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    font-weight: 1000 !important;
+    letter-spacing: .5px !important;
+    overflow: visible !important;
+    white-space: nowrap !important;
+  }
+  #mainLogo > *{ display: inline !important; }
+  #mainLogo .logo-drop{
+    color: var(--accent, #ff2e63) !important;
+    text-shadow: 0 0 18px rgba(var(--accent-rgb, 255,46,99), .3) !important;
+  }
+
+  /* --- Кнопка выхода из шапки: не отображается --- */
+  #header #sdLogout{
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* --- Баланс шире, чтобы 300 000 не обрезалось --- */
+  #header .balance-pill{
+    width: auto !important;
+    min-width: 0 !important;
+    flex: 0 0 auto !important;
+    padding: 5px 6px 5px 12px !important;
+    gap: 5px !important;
+  }
+  #header .balance-pill .b-num{
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    min-width: 44px !important;
+    font-size: 13px !important;
+    letter-spacing: -.01em !important;
+  }
+</style>
+
+<script id="sd-block1-script">
+(function(){
+  'use strict';
+
+  function applyBlock1(){
+    /* --- 1. Логотип: снять всё, что навесил fixLogo() --- */
+    var logo = document.getElementById('mainLogo');
+    if(logo){
+      logo.style.background = '';
+      logo.style.backgroundImage = '';
+      logo.style.fontSize = '';
+      logo.style.color = '';
+      logo.style.textIndent = '';
+      logo.style.lineHeight = '';
+      logo.style.width = '';
+      logo.style.minWidth = '';
+      logo.style.maxWidth = '';
+      logo.style.height = '';
+      logo.style.flex = '';
+
+      /* показать вложенные span (STANDOFF + DROP) */
+      var kids = logo.querySelectorAll('*');
+      for(var i = 0; i < kids.length; i++) kids[i].style.display = '';
+
+      /* если вдруг разметка потерялась — вернуть */
+      if(!logo.querySelector('.logo-drop')){
+        logo.innerHTML = 'STANDOFF <span class="logo-drop">DROP</span>';
+      }
+    }
+
+    /* --- 2. Удалить кнопку выхода из шапки --- */
+    var out = document.getElementById('sdLogout');
+    if(out && out.parentNode) out.parentNode.removeChild(out);
+  }
+
+  /* Запускаем сразу + ретраи на первые 3 секунды (пока sd-final-script
+     отработал и навесил fixLogo/addLogout) */
+  applyBlock1();
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    applyBlock1();
+    if(tries > 12) clearInterval(iv);
+  }, 250);
+
+  console.log('✅ [SD] Block 1 applied (logo text + no header logout + wide balance)');
+})();
+</script>
+<!-- ============ /SD BLOCK 1 ============ -->
 </body>
 </html>
