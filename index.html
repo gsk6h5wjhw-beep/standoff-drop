@@ -4787,5 +4787,140 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
 })();
 </script>
 <!-- ============ /SD BLOCK 7 ============ -->
+<!-- ============ SD BLOCK 8: АНИМАЦИЯ БАЛАНСА ============ -->
+<script id="sd-block8-balance-anim">
+(function(){
+'use strict';
+
+  var SD = window.SD;
+  if(!SD) return;
+
+  if(window.__sdBalanceAnimInstalled) return;
+  window.__sdBalanceAnimInstalled = true;
+
+  /* Отображаемое сейчас значение (в анимации) */
+  var displayed = {
+    header: null,
+    profile: null
+  };
+
+  /* Активные анимации, чтобы не запускать две на одну цель */
+  var running = {
+    header: null,
+    profile: null
+  };
+
+  function fmt(v){
+    if(typeof window.__sdFmt === 'function') return window.__sdFmt(v);
+    var n = Number(v) || 0;
+    return n.toLocaleString('ru-RU');
+  }
+
+  function animateTo(key, element, from, to){
+    if(!element) return;
+
+    var dur = 700;
+    var start = performance.now();
+
+    if(running[key] && typeof running[key].cancel === 'function'){
+      running[key].cancel();
+    }
+
+    var cancelled = false;
+    running[key] = { cancel: function(){ cancelled = true; } };
+
+    function frame(now){
+      if(cancelled) return;
+      var t = Math.min(1, (now - start) / dur);
+      /* ease-out-cubic — быстро стартует, плавно финиширует */
+      var e = 1 - Math.pow(1 - t, 3);
+      var cur = from + (to - from) * e;
+
+      element.textContent = fmt(cur);
+      displayed[key] = cur;
+
+      if(t < 1){
+        requestAnimationFrame(frame);
+      } else {
+        /* На финише жёстко ставим точное значение */
+        element.textContent = fmt(to);
+        displayed[key] = to;
+        running[key] = null;
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ============================================================
+     Переопределяем SD.updateBalanceUI — вызывается во всех
+     местах, где меняется баланс (кейс, продажа, апгрейд и т.д.).
+     ============================================================ */
+  var _origUpdate = SD.updateBalanceUI;
+
+  SD.updateBalanceUI = function(nb){
+    if(!SD.profile) return;
+    var newVal = Number(nb) || 0;
+    SD.profile.balance = newVal;
+
+    var hb = document.getElementById('headerBalance');
+    var pb = document.getElementById('profileBalance');
+
+    /* header */
+    if(hb){
+      var fromH = (displayed.header === null)
+        ? newVal                              /* первый раз — без анимации */
+        : Number(displayed.header) || 0;
+      animateTo('header', hb, fromH, newVal);
+    }
+
+    /* profile — только если виден */
+    if(pb){
+      var fromP = (displayed.profile === null)
+        ? newVal
+        : Number(displayed.profile) || 0;
+      animateTo('profile', pb, fromP, newVal);
+    }
+  };
+
+  /* ============================================================
+     При старте / при загрузке профиля — выставить текущий баланс
+     без анимации, чтобы не «прыгало» с нуля.
+     ============================================================ */
+  function initBalanceDisplay(){
+    if(!SD.profile) return;
+    var bal = Number(SD.profile.balance) || 0;
+    var hb = document.getElementById('headerBalance');
+    var pb = document.getElementById('profileBalance');
+    if(hb){ hb.textContent = fmt(bal); displayed.header = bal; }
+    if(pb){ pb.textContent = fmt(bal); displayed.profile = bal; }
+  }
+
+  /* Старт через небольшую задержку — чтобы SD.profile успел собраться */
+  setTimeout(initBalanceDisplay, 400);
+  setTimeout(initBalanceDisplay, 1500);
+
+  /* Также подхватываем при смене экрана на профиль */
+  var _origGo = SD.go;
+  if(typeof _origGo === 'function'){
+    SD.go = function(screen){
+      var r = _origGo.apply(this, arguments);
+      if(screen === 'profile'){
+        /* На профиле — сразу синхронизируем без анимации */
+        setTimeout(function(){
+          if(SD.profile){
+            var bal = Number(SD.profile.balance) || 0;
+            var pb = document.getElementById('profileBalance');
+            if(pb){ pb.textContent = fmt(bal); displayed.profile = bal; }
+          }
+        }, 50);
+      }
+      return r;
+    };
+  }
+
+  console.log('✅ [SD] Block 8 applied (balance count-up animation)');
+})();
+</script>
+<!-- ============ /SD BLOCK 8 ============ -->
 </body>
 </html>
