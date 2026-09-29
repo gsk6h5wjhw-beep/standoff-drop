@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "profiles": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        "username": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9._-]{3,24}$/)"
+        }
+      }
+    },
+    "friendRequests": {
+      "$to": {
+        "$from": {
+          ".read": "auth != null && (auth.uid === $to || auth.uid === $from)",
+          ".write": "auth != null && auth.uid === $from"
+        }
+      }
+    },
+    "posts": {
+      ".read": "auth != null",
+      "$post": {
+        ".write": "auth != null && (!data.exists() && newData.child('authorId').val() === auth.uid || data.child('authorId').val() === auth.uid)"
+      }
+    },
+    "chats": {
+      "$chatId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  }
+}
