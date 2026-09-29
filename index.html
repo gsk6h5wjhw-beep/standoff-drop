@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#8b5cf6">
+<title>StandLink</title>
+<style>
+:root{
+  --accent:#8b5cf6;--accent2:#a78bfa;--bg:#0b0d12;--panel:#12151d;--panel2:#181c26;
+  --text:#f7f7fb;--muted:#8e96a8;--line:rgba(255,255,255,.08);--danger:#ff5d6c;
+  --radius:20px;--nav:78px
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;font-family:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;background:var(--bg);color:var(--text)}
+body{overflow-x:hidden}
+button,input,textarea{font:inherit}
+button{border:0;color:inherit;cursor:pointer}
+.app{min-height:100vh;padding-bottom:calc(var(--nav) + env(safe-area-inset-bottom))}
+.top{height:68px;padding:calc(10px + env(safe-area-inset-top)) 18px 10px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20;background:rgba(11,13,18,.82);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+.brand{font-size:24px;font-weight:800;letter-spacing:-1px;background:none}
+.brand span{color:var(--accent)}
+.iconbtn{width:42px;height:42px;border-radius:14px;background:var(--panel);display:grid;place-items:center;font-size:20px}
+.page{max-width:720px;margin:auto;padding:18px}
+.hero{padding:12px 2px 20px}
+.hero h1{font-size:30px;margin:0 0 7px;letter-spacing:-1px}.hero p{margin:0;color:var(--muted)}
+.card{background:linear-gradient(145deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 10px 35px rgba(0,0,0,.15)}
+.post-head{display:flex;gap:11px;align-items:center}.avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#23283a);display:grid;place-items:center;font-size:22px;flex:none}
+.name{font-weight:700}.handle,.time{color:var(--muted);font-size:13px}
+.post-text{font-size:15px;line-height:1.55;margin:14px 0}
+.post-actions{display:flex;gap:8px}.action{background:transparent;color:var(--muted);padding:8px 11px;border-radius:12px}.action:active{background:var(--panel2);color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.tile{min-height:120px;padding:16px;border-radius:20px;background:linear-gradient(145deg,#1a1f2a,var(--panel));border:1px solid var(--line);display:flex;flex-direction:column;justify-content:flex-end;text-align:left}.tile b{font-size:17px}.tile small{color:var(--muted);margin-top:5px}
+.bottom{position:fixed;z-index:30;bottom:0;left:0;right:0;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:rgba(10,12,17,.9);backdrop-filter:blur(22px);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr)}
+.navitem{background:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 2px;font-size:11px}.navitem .ni{font-size:21px;line-height:24px}.navitem.active{color:var(--text)}.navitem.active .ni{filter:drop-shadow(0 0 8px var(--accent))}
+.search{display:flex;gap:9px;margin-bottom:14px}.search input,.field input,.field textarea{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);outline:none;border-radius:15px;padding:13px 14px}.field{margin-bottom:12px}.field label{display:block;color:var(--muted);font-size:13px;margin:0 0 7px}.field textarea{min-height:90px;resize:vertical}
+.primary{width:100%;background:var(--accent);padding:14px 16px;border-radius:15px;font-weight:700}.secondary{background:var(--panel2);padding:12px 15px;border-radius:14px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.row+.row{margin-top:12px}
+.profile{text-align:center}.profile .bigavatar{width:92px;height:92px;margin:5px auto 12px;border-radius:50%;display:grid;place-items:center;font-size:42px;background:linear-gradient(135deg,var(--accent),#272d3c);border:3px solid rgba(255,255,255,.1)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);margin:20px 0}.stat b{display:block;font-size:20px}.stat span{color:var(--muted);font-size:12px}.tabs{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--line);margin:10px -16px -16px}.tab{padding:13px;background:none;color:var(--muted)}.tab.active{color:var(--text);border-bottom:2px solid var(--accent)}
+.listitem{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.listitem:last-child{border:0}
+.badge{font-size:11px;background:rgba(139,92,246,.16);color:var(--accent2);padding:5px 8px;border-radius:999px}
+.settings-section h3{font-size:14px;color:var(--muted);margin:22px 4px 9px}.choicegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.choice{padding:11px;border-radius:13px;background:var(--panel2);border:1px solid var(--line);text-align:center}.choice.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}.swatch{width:25px;height:25px;border-radius:50%;margin:auto auto 5px}
+.auth{min-height:100vh;display:grid;place-items:center;padding:25px;background:radial-gradient(circle at 50% 20%,rgba(139,92,246,.2),transparent 35%)}
+.authbox{width:min(460px,100%);text-align:center}.logo{font-size:42px;font-weight:900;letter-spacing:-2px}.logo span{color:var(--accent)}.authbox p{color:var(--muted);line-height:1.5}.google{margin-top:20px;background:#fff;color:#111;width:100%;padding:15px;border-radius:15px;font-weight:700}.demo{margin-top:10px;background:var(--panel);padding:13px;border-radius:15px;width:100%;color:var(--muted)}
+.modalback{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:grid;place-items:end center;padding:15px}.modal{width:min(600px,100%);background:var(--panel);border:1px solid var(--line);border-radius:25px;padding:20px;max-height:90vh;overflow:auto}.modal h2{margin:0 0 15px}.close{float:right;background:var(--panel2);border-radius:12px;width:36px;height:36px}
+.toast{position:fixed;z-index:200;left:50%;bottom:95px;transform:translateX(-50%) translateY(15px);background:#fff;color:#111;padding:11px 16px;border-radius:14px;font-size:13px;opacity:0;pointer-events:none;transition:.25s}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.light{--bg:#f5f6fa;--panel:#fff;--panel2:#f0f1f6;--text:#171923;--muted:#697083;--line:rgba(0,0,0,.09)} 
+@media(min-width:800px){.bottom{left:50%;right:auto;transform:translateX(-50%);width:620px;border:1px solid var(--line);border-radius:22px;margin-bottom:12px}.app{padding-bottom:110px}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import {getDatabase,ref,set,get,push,onValue} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+
+const firebaseConfig={
+ apiKey:"AIzaSyC79CsYTIjr2lahLJv2U1HX_1laEU7-31E",
+ authDomain:"shursh-messenger.firebaseapp.com",
+ databaseURL:"https://shursh-messenger-default-rtdb.europe-west1.firebasedatabase.app",
+ projectId:"shursh-messenger",
+ storageBucket:"shursh-messenger.firebasestorage.app",
+ messagingSenderId:"1063665415609",
+ appId:"1:1063665415609:web:d5069aef0e640e23f2b268",
+ measurementId:"G-9TSG5MHTJ8"
+};
+
+let fb=null,auth=null,db=null;
+try{fb=initializeApp(firebaseConfig);auth=getAuth(fb);db=getDatabase(fb)}catch(e){console.warn(e)}
+
+const state={
+ user:null,profile:null,page:"home",theme:localStorage.slTheme||"dark",
+ accent:localStorage.slAccent||"#8b5cf6",lang:localStorage.slLang||"ru",
+ posts:[],friends:[],users:[],query:"",devClicks:0
+};
+
+const t=(ru,en)=>state.lang==="ru"?ru:en;
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+function toast(s){const x=document.getElementById("toast");x.textContent=s;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2200)}
+function savePrefs(){localStorage.slTheme=state.theme;localStorage.slAccent=state.accent;localStorage.slLang=state.lang}
+function applyTheme(){document.documentElement.style.setProperty("--accent",state.accent);document.documentElement.style.setProperty("--accent2",state.accent);document.body.classList.toggle("light",state.theme==="light")}
+function avatar(name="S"){return `<div class="avatar">${esc((name[0]||"S").toUpperCase())}</div>`}
+
+function render(){
+ applyTheme();
+ if(!state.user){renderAuth();return}
+ if(!state.profile){renderOnboarding();return}
+ const pages={home:home,friends:friends,chats:chats,communities:communities,profile:profile,settings:settings};
+ document.getElementById("root").innerHTML=`
+ <div class="app">
+  <header class="top">
+   <button class="brand" onclick="go('home')">Stand<span>Link</span></button>
+   ${state.page==="profile"||state.page==="settings"?`<button class="iconbtn" onclick="go('settings')">⚙️</button>`:`<button class="iconbtn" onclick="openSearch()">⌕</button>`}
+  </header>
+  <main class="page">${(pages[state.page]||home)()}</main>
+  ${nav()}
+ </div>`;
+}
+function nav(){return `<nav class="bottom">
+ ${[['home','⌂',t("Главное","Home")],['friends','♙',t("Друзья","Friends")],['chats','☵',t("Чаты","Chats")],['communities','◎',t("Сообщества","Communities")],['profile','◯',t("Профиль","Profile")]].map(x=>`<button class="navitem ${state.page===x[0]?'active':''}" onclick="go('${x[0]}')"><span class="ni">${x[1]}</span>${x[2]}</button>`).join("")}</nav>`}
+
+function renderAuth(){
+ document.getElementById("root").innerHTML=`<div class="auth"><div class="authbox">
+ <div class="logo">Stand<span>Link</span></div>
+ <p>${t("Социальная сеть для игроков Standoff 2","Social network for Standoff 2 players")}</p>
+ <button class="google" onclick="googleLogin()">◉ &nbsp; ${t("Войти с Google","Continue with Google")}</button>
+ <button class="demo" onclick="demoLogin()">${t("Открыть демо-режим","Open demo mode")}</button>
+ </div></div>`;
+}
+async function googleLogin(){
+ if(!auth){toast(t("Firebase пока недоступен","Firebase is unavailable"));return}
+ try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){toast(e.code==="auth/popup-blocked"?t("Разреши всплывающие окна","Allow popups"):e.message)}
+}
+function demoLogin(){state.user={uid:"demo",displayName:"Player"};state.profile=null;renderOnboarding()}
+function renderOnboarding(){
+ document.getElementById("root").innerHTML=`<div class="auth"><div class="authbox" style="text-align:left">
+ <div class="logo" style="text-align:center">Stand<span>Link</span></div>
+ <div class="card">
+ <h2>${t("Добро пожаловать!","Welcome!")}</h2>
+ <p>${t("Создай профиль, чтобы начать пользоваться StandLink.","Create your profile to start using StandLink.")}</p>
+ <div class="field"><label>${t("Имя / ник","Display name")}</label><input id="onName" placeholder="Player"></div>
+ <div class="field"><label>@username</label><input id="onUser" placeholder="username"></div>
+ <div class="field"><label>Standoff 2 ID</label><input id="onGame" placeholder="12345678"></div>
+ <div class="field"><label>${t("О себе","Bio")}</label><textarea id="onBio" placeholder="${t("Расскажи немного о себе","Tell people about yourself")}"></textarea></div>
+ <button class="primary" onclick="finishOnboarding()">${t("Продолжить","Continue")}</button>
+ </div></div></div>`;
+}
+async function finishOnboarding(){
+ const p={displayName:document.getElementById("onName").value.trim()||"Player",username:(document.getElementById("onUser").value.trim().replace(/^@/,"")||"player").toLowerCase(),gameId:document.getElementById("onGame").value.trim(),bio:document.getElementById("onBio").value.trim(),avatar:"🎮",createdAt:Date.now()};
+ state.profile=p;
+ if(db&&state.user.uid!=="demo")try{await set(ref(db,"users/"+state.user.uid),p)}catch(e){console.warn(e)}
+ render();
+}
+
+function home(){return `<div class="hero"><h1>${t("Лента","Feed")}</h1><p>${t("Новости и публикации игроков","Updates and posts from players")}</p></div>
+ <div class="card"><div class="post-head">${avatar("S")}<div><div class="name">StandLink</div><div class="handle">@standlink · ${t("сегодня","today")}</div></div></div><div class="post-text">${t("Добро пожаловать в StandLink! Здесь можно общаться, находить игроков и делиться моментами из Standoff 2.","Welcome to StandLink! Meet players, chat and share your Standoff 2 moments.")}</div><div class="post-actions"><button class="action">♡ 12</button><button class="action">💬 3</button><button class="action">↗</button></div></div>
+ <div class="grid"><button class="tile" onclick="go('friends')"><b>♙ ${t("Друзья","Friends")}</b><small>${t("Найти игроков","Find players")}</small></button><button class="tile" onclick="go('chats')"><b>☵ ${t("Чаты","Chats")}</b><small>${t("Общение","Messages")}</small></button><button class="tile" onclick="go('communities')"><b>◎ ${t("Сообщества","Communities")}</b><small>${t("По интересам","By interests")}</small></button><button class="tile" onclick="go('profile')"><b>◯ ${t("Профиль","Profile")}</b><small>${t("Твой профиль","Your profile")}</small></button></div>`}
+
+function friends(){return `<div class="hero"><h1>${t("Друзья","Friends")}</h1><p>${t("Игроки и заявки","Players and requests")}</p></div><div class="search"><input id="friendQ" value="${esc(state.query)}" oninput="state.query=this.value;renderFriendsList()" placeholder="@username"></div><div id="friendList">${friendList()}</div>`}
+function friendList(){const q=state.query.toLowerCase();const list=[{name:"Demo Player",username:"demoplayer",online:true},{name:"Standoff Player",username:"standoffplayer",online:false}].filter(x=>!q||x.username.includes(q.replace("@",""))||x.name.toLowerCase().includes(q));return list.map(x=>`<div class="card"><div class="listitem">${avatar(x.name)}<div style="flex:1"><b>${esc(x.name)}</b><div class="handle">@${esc(x.username)} · ${x.online?"🟢 online":"offline"}</div></div><button class="secondary" onclick="toast('${t("Заявка отправлена","Request sent")}')">${t("Добавить","Add")}</button></div></div>`).join("")||`<div class="card">${t("Ничего не найдено","Nothing found")}</div>`}
+function renderFriendsList(){document.getElementById("friendList").innerHTML=friendList()}
+
+function chats(){return `<div class="hero"><h1>${t("Чаты","Chats")}</h1><p>${t("Личные сообщения и игровые приглашения","Messages and game invites")}</p></div>
+ <div class="card"><div class="listitem" onclick="openChat()">${avatar("A")}<div style="flex:1"><b>Alex</b><div class="handle">${t("Привет! Давай сыграем?","Hey! Want to play?")}</div></div><span class="badge">2</span></div>
+ <div class="listitem">${avatar("M")}<div><b>Matchmaking</b><div class="handle">${t("Игровая группа","Game group")}</div></div></div></div>
+ <button class="primary" onclick="openChat()">${t("＋ Новый чат","＋ New chat")}</button>`}
+function communities(){return `<div class="hero"><h1>${t("Сообщества","Communities")}</h1><p>${t("Кланы, команды и тематические группы","Clans, teams and communities")}</p></div><div class="search"><input id="commQ" placeholder="${t("Поиск сообществ","Search communities")}"></div><div class="card"><div class="listitem">${avatar("S")}<div style="flex:1"><b>Standoff 2</b><div class="handle">${t("Официальные новости и обсуждения","News and discussions")}</div></div><span class="badge">12K</span></div><div class="listitem">${avatar("P")}<div style="flex:1"><b>Pro Players</b><div class="handle">${t("Поиск тиммейтов","Find teammates")}</div></div><span class="badge">4.2K</span></div></div>`}
+
+function profile(){const p=state.profile;return `<div class="card profile"><div class="bigavatar">${p.avatar||"🎮"}</div><h2 style="margin:0">${esc(p.displayName)}</h2><div class="handle">@${esc(p.username)}</div><p>${esc(p.bio||t("Пока ничего не рассказал о себе.","No bio yet."))}</p><div class="handle">Standoff 2 ID: ${esc(p.gameId||"—")}</div><div class="stats"><div class="stat"><b>0</b><span>${t("Посты","Posts")}</span></div><div class="stat"><b>0</b><span>${t("Подписчики","Followers")}</span></div><div class="stat"><b>0</b><span>${t("Подписки","Following")}</span></div></div><button class="primary" onclick="editProfile()">${t("Редактировать профиль","Edit profile")}</button><div class="grid" style="margin-top:14px"><button class="tile" onclick="toast('${t("История пока пуста","History is empty")}')">🕘<b>${t("История","History")}</b></button><button class="tile" onclick="toast('${t("Сохранённого пока нет","Nothing saved yet")}')">🔖<b>${t("Сохранённое","Saved")}</b></button><button class="tile" onclick="toast('${t("Достижения скоро","Achievements soon")}')">🏆<b>${t("Достижения","Achievements")}</b></button></div><div class="tabs"><button class="tab active">${t("Посты","Posts")}</button><button class="tab">${t("Медиа","Media")}</button><button class="tab">${t("Клипы","Clips")}</button></div></div>`}
+
+function settings(){return `<div class="hero"><h1>${t("Настройки","Settings")}</h1></div>
+ <div class="settings-section"><h3>${t("Внешний вид","Appearance")}</h3><div class="card"><div class="row"><span>${t("Тема","Theme")}</span><div class="choicegrid" style="width:62%">${[['dark','🌙',t("Тёмная","Dark")],['light','☀️',t("Светлая","Light")],['auto','⚙️',t("Авто","Auto")]].map(x=>`<button class="choice ${state.theme===x[0]?'active':''}" onclick="setTheme('${x[0]}')">${x[1]}<br><small>${x[2]}</small></button>`).join("")}</div></div></div>
+ <div class="card"><b>${t("Цвет акцента","Accent color")}</b><div class="choicegrid" style="margin-top:12px">${[['#8b5cf6','🟣'],['#ec4899','🩷'],['#ef4444','🔴'],['#22c55e','🟢'],['#eab308','🟡'],['#3b82f6','🔵']].map(x=>`<button class="choice ${state.accent===x[0]?'active':''}" onclick="setAccent('${x[0]}')">${x[1]}</button>`).join("")}</div></div>
+ <h3>${t("Язык","Language")}</h3><div class="card"><div class="choicegrid"><button class="choice ${state.lang==='ru'?'active':''}" onclick="setLang('ru')">🇷🇺 Русский</button><button class="choice ${state.lang==='en'?'active':''}" onclick="setLang('en')">🇬🇧 English</button></div></div>
+ <h3>${t("Разработчик","Developer")}</h3><div class="card"><button class="secondary" onclick="devClick()" style="width:100%">StandLink · ${t("версия","version")} 0.1.0</button></div>
+ <button class="primary" style="background:var(--danger)" onclick="logout()">${t("Выйти","Log out")}</button></div>`}
+
+function editProfile(){const p=state.profile;document.body.insertAdjacentHTML("beforeend",`<div class="modalback" id="editModal"><div class="modal"><button class="close" onclick="document.getElementById('editModal').remove()">×</button><h2>${t("Редактировать профиль","Edit profile")}</h2><div class="field"><label>${t("Имя","Name")}</label><input id="epName" value="${esc(p.displayName)}"></div><div class="field"><label>Username</label><input id="epUser" value="${esc(p.username)}"></div><div class="field"><label>${t("О себе","Bio")}</label><textarea id="epBio">${esc(p.bio||"")}</textarea></div><button class="primary" onclick="saveProfile()">${t("Сохранить","Save")}</button></div></div>`)}
+async function saveProfile(){state.profile.displayName=document.getElementById("epName").value.trim()||"Player";state.profile.username=document.getElementById("epUser").value.trim().replace(/^@/,"").toLowerCase()||"player";state.profile.bio=document.getElementById("epBio").value.trim();if(db&&state.user.uid!=="demo")try{await set(ref(db,"users/"+state.user.uid),state.profile)}catch(e){}document.getElementById("editModal").remove();render();toast(t("Профиль сохранён","Profile saved"))}
+function openSearch(){document.body.insertAdjacentHTML("beforeend",`<div class="modalback" id="searchModal"><div class="modal"><button class="close" onclick="document.getElementById('searchModal').remove()">×</button><h2>${t("Поиск","Search")}</h2><div class="field"><input id="globalSearch" autofocus placeholder="@username"></div><p class="handle">${t("Поиск по username игроков","Search players by username")}</p></div></div>`)}
+function openChat(){document.body.insertAdjacentHTML("beforeend",`<div class="modalback" id="chatModal"><div class="modal"><button class="close" onclick="document.getElementById('chatModal').remove()">×</button><h2>Alex</h2><div class="card"><div class="post-text">Привет! Давай сыграем?</div></div><div class="search"><input id="msg" placeholder="${t("Сообщение...","Message...")}"><button class="primary" style="width:auto" onclick="sendMsg()">➤</button></div></div></div>`)}
+function sendMsg(){const x=document.getElementById("msg");if(x.value.trim()){toast(t("Сообщение отправлено","Message sent"));x.value=""}}
+function go(p){state.page=p;state.query="";render();scrollTo(0,0)}
+function setTheme(x){state.theme=x==="auto"?(matchMedia("(prefers-color-scheme:light)").matches?"light":"dark"):x;savePrefs();render()}
+function setAccent(x){state.accent=x;savePrefs();render()}
+function setLang(x){state.lang=x;savePrefs();render()}
+async function logout(){if(auth&&state.user.uid!=="demo")try{await signOut(auth)}catch(e){}state.user=null;state.profile=null;render()}
+function devClick(){state.devClicks++;if(state.devClicks>=24){state.devClicks=0;document.body.insertAdjacentHTML("beforeend",`<div class="modalback" id="devModal"><div class="modal"><button class="close" onclick="document.getElementById('devModal').remove()">×</button><h2>${t("Код разработчика","Developer code")}</h2><div class="field"><input id="devCode" inputmode="numeric" placeholder="Введите код"></div><button class="primary" onclick="checkDev()">${t("Сохранить","Save")}</button></div></div>`)}}
+function checkDev(){if(document.getElementById("devCode").value==="5568228666007"){document.getElementById("devModal").remove();toast(t("✓ Разработчик подтверждён","✓ Developer verified"))}else toast(t("Неверный код","Wrong code"))}
+
+window.go=go;window.googleLogin=googleLogin;window.demoLogin=demoLogin;window.finishOnboarding=finishOnboarding;window.editProfile=editProfile;window.saveProfile=saveProfile;window.openSearch=openSearch;window.openChat=openChat;window.sendMsg=sendMsg;window.setTheme=setTheme;window.setAccent=setAccent;window.setLang=setLang;window.logout=logout;window.devClick=devClick;window.checkDev=checkDev;window.state=state;window.renderFriendsList=renderFriendsList;
+
+if(auth){
+ onAuthStateChanged(auth,async u=>{
+  state.user=u;
+  if(u){
+   if(u.uid!=="demo")try{const s=await get(ref(db,"users/"+u.uid));if(s.exists())state.profile=s.val()}catch(e){}
+  }else state.profile=null;
+  render();
+ });
+}else render();
+</script>
+</body>
+</html>
