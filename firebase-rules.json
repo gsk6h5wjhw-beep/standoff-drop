@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "usernames": {
+      "$username": {
+        ".write": "auth != null",
+        ".read": "auth != null"
+      }
+    }
+  }
+}

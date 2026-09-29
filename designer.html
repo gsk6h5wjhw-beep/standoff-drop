@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>StandLink Designer</title>
+<link rel="stylesheet" href="./styles.css">
+<style>
+body{background:#101116}
+.designer{min-height:100vh;color:#fff;padding-bottom:90px}
+.dbar{position:sticky;top:0;z-index:10;height:60px;display:flex;align-items:center;gap:8px;padding:8px 12px;background:#17181f;border-bottom:1px solid #2b2d36}
+.dbar h1{font-size:17px;margin:0;flex:1}.dbar button{height:40px;border-radius:12px;padding:0 13px;background:#272a34;color:#fff;font-weight:750}
+.stage-wrap{padding:18px 12px;display:flex;justify-content:center}
+.phone{position:relative;width:min(390px,calc(100vw - 24px));aspect-ratio:390/844;background:#f6f7fb;color:#15151b;border-radius:30px;overflow:hidden;box-shadow:0 18px 55px #0008;border:5px solid #20222a;touch-action:none}
+.phone.dark{background:#0d0e13;color:#f4f4f6}
+.phone .safe{position:absolute;inset:0}
+.element{position:absolute;min-width:55px;min-height:38px;padding:9px 13px;border-radius:12px;background:#7c3aed;color:#fff;font-weight:800;display:grid;place-items:center;user-select:none;touch-action:none;box-shadow:0 7px 18px #0002}
+.element.selected{outline:2px solid #fff;box-shadow:0 0 0 4px #7c3aed88}
+.element .handle{position:absolute;width:15px;height:15px;right:-7px;bottom:-7px;border-radius:50%;background:#fff;border:2px solid #7c3aed}
+.element.label{background:transparent;color:inherit;box-shadow:none;font-size:21px}
+.element.image{background:#ddd;color:#555}
+.toolbar{position:fixed;z-index:20;left:0;right:0;bottom:0;background:#17181f;border-top:1px solid #2b2d36;padding:10px max(10px,env(safe-area-inset-left)) max(10px,env(safe-area-inset-bottom));display:flex;gap:7px;overflow:auto}
+.tool{flex:0 0 auto;background:#272a34;color:#fff;border-radius:12px;padding:11px 13px;font-weight:750}
+.panel{position:fixed;z-index:25;left:10px;right:10px;bottom:75px;max-height:55vh;overflow:auto;background:#191b22;color:#fff;border:1px solid #30333e;border-radius:18px;padding:14px;box-shadow:0 15px 50px #0009}
+.panel h3{margin:0 0 12px}.panel label{display:block;font-size:12px;color:#aaa;margin:9px 0 5px}.panel input,.panel select{width:100%;height:42px;border:1px solid #343742;background:#101116;color:#fff;border-radius:11px;padding:0 11px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.panel button{height:42px;border-radius:11px;background:#7c3aed;color:#fff;border:0;font-weight:800}.dangerbtn{background:#ef4444!important}.hint{font-size:12px;color:#aaa;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="designer">
+<header class="dbar"><button id="back">‹</button><h1>StandLink Designer</h1><button id="export">Экспорт</button><button id="clear">Очистить</button></header>
+<div class="stage-wrap"><div id="phone" class="phone"><div class="safe"></div></div></div>
+<div id="panel" class="panel hidden"></div>
+<div class="toolbar">
+<button class="tool" data-add="button">＋ Кнопка</button>
+<button class="tool" data-add="label">T Текст</button>
+<button class="tool" data-add="image">▣ Блок</button>
+<button class="tool" id="props">⚙ Свойства</button>
+<button class="tool" id="delete">🗑 Удалить</button>
+</div>
+</div>
+<script>
+const phone=document.querySelector('#phone'), panel=document.querySelector('#panel');
+let items=JSON.parse(localStorage.getItem('sl_designer')||'null')||[
+ {id:1,type:'label',text:'StandLink',x:24,y:28,w:150,h:45},
+ {id:2,type:'button',text:'Главная',x:25,y:120,w:150,h:50},
+ {id:3,type:'button',text:'Профиль',x:215,y:120,w:150,h:50}
+];
+let selected=null, drag=null;
+function save(){localStorage.setItem('sl_designer',JSON.stringify(items))}
+function render(){
+ phone.querySelectorAll('.element').forEach(e=>e.remove());
+ items.forEach(it=>{
+  const e=document.createElement('div');e.className='element '+it.type+(selected===it.id?' selected':'');
+  e.dataset.id=it.id;e.textContent=it.text;
+  e.style.left=it.x+'px';e.style.top=it.y+'px';e.style.width=it.w+'px';e.style.height=it.h+'px';
+  if(selected===it.id){const h=document.createElement('i');h.className='handle';e.appendChild(h)}
+  e.addEventListener('pointerdown',startDrag);e.addEventListener('click',ev=>{ev.stopPropagation();selected=it.id;render();});
+  phone.appendChild(e);
+ });
+}
+function startDrag(ev){
+ ev.preventDefault();ev.stopPropagation();
+ const it=items.find(x=>x.id==ev.currentTarget.dataset.id);selected=it.id;
+ drag={it,startX:ev.clientX,startY:ev.clientY,ox:it.x,oy:it.y};
+ ev.currentTarget.setPointerCapture?.(ev.pointerId);
+ const move=e=>{if(!drag)return;it.x=Math.max(0,Math.min(390-it.w,drag.ox+(e.clientX-drag.startX)));it.y=Math.max(0,Math.min(844-it.h,drag.oy+(e.clientY-drag.startY)));render()};
+ const up=()=>{drag=null;save();phone.removeEventListener('pointermove',move);phone.removeEventListener('pointerup',up)};
+ phone.addEventListener('pointermove',move);phone.addEventListener('pointerup',up);
+}
+phone.onclick=()=>{selected=null;render();panel.classList.add('hidden')};
+document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{
+ const type=b.dataset.add;const id=Date.now();items.push({id,type,text:type==='button'?'Новая кнопка':type==='label'?'Текст':'Изображение',x:25,y:190,w:type==='label'?150:140,h:48});selected=id;save();render();showProps();
+});
+document.querySelector('#delete').onclick=()=>{if(selected==null)return;items=items.filter(x=>x.id!==selected);selected=null;save();render();panel.classList.add('hidden')};
+document.querySelector('#clear').onclick=()=>{if(confirm('Удалить все элементы макета?')){items=[];selected=null;save();render()}};
+document.querySelector('#props').onclick=showProps;
+function showProps(){
+ if(selected==null){panel.innerHTML='<h3>Сначала выбери элемент</h3><div class="hint">Нажми на кнопку или текст внутри макета, затем открой свойства.</div>';panel.classList.remove('hidden');return}
+ const it=items.find(x=>x.id===selected);
+ panel.innerHTML=`<h3>Свойства элемента</h3>
+ <label>Текст</label><input id="ptext" value="${esc(it.text)}">
+ <div class="grid"><div><label>X</label><input id="px" type="number" value="${it.x}"></div><div><label>Y</label><input id="py" type="number" value="${it.y}"></div>
+ <div><label>Ширина</label><input id="pw" type="number" value="${it.w}"></div><div><label>Высота</label><input id="ph" type="number" value="${it.h}"></div></div>
+ <label>Цвет</label><input id="pc" type="color" value="${it.type==='label'?'#15151b':'#7c3aed'}">
+ <button id="apply" style="margin-top:12px;width:100%">Применить</button>
+ <p class="hint">Можно перетаскивать элементы пальцем прямо на экране. Координаты относятся к макету телефона 390×844.</p>`;
+ document.querySelector('#apply').onclick=()=>{
+  it.text=document.querySelector('#ptext').value;it.x=+document.querySelector('#px').value;it.y=+document.querySelector('#py').value;it.w=+document.querySelector('#pw').value;it.h=+document.querySelector('#ph').value;
+  save();render();showProps();
+ };
+ panel.classList.remove('hidden');
+}
+function esc(x){return String(x).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+document.querySelector('#back').onclick=()=>location.href='./index.html';
+document.querySelector('#export').onclick=()=>{
+ const data={version:'0.1.0',canvas:{width:390,height:844},elements:items};
+ const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='standlink-layout.json';a.click();URL.revokeObjectURL(a.href);
+};
+render();
+</script>
+</body>
+</html>
