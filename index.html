@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#050a1c" id="metaTheme">
+<meta name="color-scheme" content="dark light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NOVA">
+<meta name="format-detection" content="telephone=no">
+<title>NOVA</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23070d24'/%3E%3Cpath d='M50 12C53 38 62 47 88 50 62 53 53 62 50 88 47 62 38 53 12 50 38 47 47 38 50 12Z' fill='%23fff'/%3E%3C/svg%3E">
+
+<!-- ============================================================
+     NOVA THEME ENGINE
+     Единственное место, которое знает про конкретные значения
+     акцента. Всё остальное в интерфейсе работает от CSS-переменных.
+     API:  NOVA.theme.setMode('dark'|'light')
+           NOVA.theme.setAccent('blue'|'violet'|'pink'|'red'|'green'|'orange'|'cyan')
+           NOVA.theme.setCustomAccent('#ff7a00')
+     ============================================================ -->
+<script>
+(function () {
+  var KEY = 'nova.theme.v1';
+  var root = document.documentElement;
+  var PRESETS = {
+    blue:   { h: 224, s: 100, l: 63, name: 'Синий' },
+    violet: { h: 263, s: 92,  l: 68, name: 'Фиолетовый' },
+    pink:   { h: 327, s: 92,  l: 66, name: 'Розовый' },
+    red:    { h: 3,   s: 88,  l: 62, name: 'Красный' },
+    green:  { h: 148, s: 68,  l: 50, name: 'Зелёный' },
+    orange: { h: 28,  s: 96,  l: 58, name: 'Оранжевый' },
+    cyan:   { h: 190, s: 92,  l: 54, name: 'Голубой' }
+  };
+  var state = { mode: 'dark', accent: 'blue', custom: null };
+
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      if (saved.mode === 'light' || saved.mode === 'dark') state.mode = saved.mode;
+      if (saved.accent && (PRESETS[saved.accent] || (saved.accent === 'custom' && saved.custom))) {
+        state.accent = saved.accent; state.custom = saved.custom || null;
+      }
+    }
+  } catch (e) {}
+
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+
+  function hexToHsl(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!m) return null;
+    var n = parseInt(m[1], 16);
+    var r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    var h = 0, l = (max + min) / 2, s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    if (d !== 0) {
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60; if (h < 0) h += 360;
+    }
+    return { h: Math.round(h), s: Math.round(clamp(s * 100, 55, 100)), l: Math.round(clamp(l * 100, 52, 68)) };
+  }
+
+  function resolve() {
+    if (state.accent === 'custom' && state.custom) return state.custom;
+    return PRESETS[state.accent] || PRESETS.blue;
+  }
+
+  function apply() {
+    var a = resolve();
+    root.setAttribute('data-theme', state.mode);
+    root.style.setProperty('--accent-h', a.h);
+    root.style.setProperty('--accent-s', a.s + '%');
+    root.style.setProperty('--accent-l-base', a.l + '%');
+    var meta = document.getElementById('metaTheme');
+    if (meta) meta.setAttribute('content', state.mode === 'dark' ? '#050a1c' : '#eef2fb');
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    window.dispatchEvent(new CustomEvent('nova:themechange', { detail: { mode: state.mode, accent: state.accent } }));
+  }
+
+  window.NOVA = window.NOVA || {};
+  window.NOVA.theme = {
+    presets: PRESETS,
+    get: function () { return { mode: state.mode, accent: state.accent, custom: state.custom }; },
+    setMode: function (m) { if (m !== 'dark' && m !== 'light') return; state.mode = m; apply(); },
+    toggleMode: function () { state.mode = state.mode === 'dark' ? 'light' : 'dark'; apply(); },
+    setAccent: function (name) { if (!PRESETS[name]) return; state.accent = name; apply(); },
+    setCustomAccent: function (hex) { var c = hexToHsl(hex); if (!c) return; state.accent = 'custom'; state.custom = c; apply(); }
+  };
+
+  apply();
+})();
+</script>
+
+<style>
+/* =====================================================================
+   1. ТОКЕНЫ — единая система цвета NOVA
+   Ни один компонент ниже не содержит «своих» цветов: всё берётся отсюда.
+   ===================================================================== */
+:root {
+  /* источник акцента (меняется из NOVA.theme) */
+  --accent-h: 224;
+  --accent-s: 100%;
+  --accent-l-base: 63%;
+  /* оттенок базового фона темы (Midnight = сине-чёрный) */
+  --bg-h: 224;
+
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+
+  /* safe areas (на десктопе подменяются рамкой устройства) */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+
+  /* геометрия */
+  --page-gutter: 20px;
+  --nav-h: 76px;
+  --nav-pad: 6px;
+  --nav-ex: 3px;
+  --nav-side: 20px;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* ---------- NOVA Midnight (Dark) ---------- */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent-l: var(--accent-l-base);
+
+  --background:           hsl(var(--bg-h) 62% 4.5%);
+  --background-secondary: hsl(var(--bg-h) 54% 8.5%);
+  --surface:              hsl(var(--bg-h) 44% 13%);
+  --surface-glass:        hsl(var(--bg-h) 80% 78% / .075);
+  --surface-glass-strong: hsl(var(--bg-h) 85% 82% / .14);
+  --glass-hi:             rgb(255 255 255 / .09);
+  --page-bg:              hsl(var(--bg-h) 70% 2.5%);
+
+  --accent:           hsl(var(--accent-h) var(--accent-s) var(--accent-l));
+  --accent-secondary: hsl(calc(var(--accent-h) + 44) 92% calc(var(--accent-l) + 4%));
+  --accent-light:     hsl(var(--accent-h) 100% 84%);
+  --accent-soft:      hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .14);
+  --accent-med:       hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .32);
+  --accent-strong:    hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .60);
+  --on-accent:        #fff;
+
+  --text-primary:   hsl(var(--bg-h) 45% 98%);
+  --text-secondary: hsl(var(--accent-h) 55% 74%);
+  --text-tertiary:  hsl(var(--accent-h) 30% 62% / .9);
+
+  --border:      hsl(var(--accent-h) 90% 78% / .20);
+  --border-soft: hsl(var(--accent-h) 70% 80% / .10);
+  --divider:     hsl(var(--accent-h) 60% 80% / .08);
+  --pressed:     hsl(var(--accent-h) 80% 80% / .08);
+
+  --shadow: hsl(var(--bg-h) 80% 2% / .55);
+  --glow:   hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .38);
+
+  --rim-1: rgb(255 255 255 / .42);
+  --rim-2: hsl(var(--accent-h) 90% 80% / .10);
+  --rim-3: hsl(var(--accent-h) 90% 80% / .08);
+  --rim-4: hsl(var(--accent-h) 100% 72% / .55);
+  --edge-light: rgb(255 255 255 / .16);
+  --edge-dark:  rgb(0 0 0 / .30);
+
+  --blur-glass: blur(24px) saturate(1.7);
+  --blur-nav:   blur(30px) saturate(1.8);
+  --blur-lens:  blur(9px) saturate(2) brightness(1.14);
+
+  --star-from: #fff;
+  --star-to:   hsl(var(--accent-h) 100% 82%);
+
+  --tab-idle:   hsl(var(--accent-h) 45% 74% / .82);
+  --tab-active: #fff;
+
+  --lens-fill:
+    radial-gradient(110% 80% at 28% 4%, rgb(255 255 255 / .26), transparent 58%),
+    radial-gradient(90% 110% at 85% 118%, hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .72), transparent 64%),
+    linear-gradient(180deg, hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .16), rgb(255 255 255 / .03));
+  --lens-shadow:
+    inset 0 1.5px 1px rgb(255 255 255 / .55),
+    inset 0 -1.5px 3px hsl(var(--accent-h) 100% 78% / .55),
+    inset 2px 0 3px rgb(255 255 255 / .14),
+    inset -2px 0 3px rgb(255 255 255 / .10),
+    0 0 0 1px hsl(var(--accent-h) 100% 84% / .30),
+    0 8px 26px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .38),
+    0 2px 10px rgb(0 0 0 / .35);
+  --lens-spec: rgb(255 255 255 / .38);
+
+  --success: hsl(146 72% 50%);
+  --badge-muted-bg: hsl(var(--bg-h) 55% 62% / .30);
+  --scrim: hsl(var(--bg-h) 70% 3% / .55);
+
+  --bg-image:
+    radial-gradient(75% 40% at 14% -6%, hsl(var(--accent-h) 90% 55% / .24), transparent 70%),
+    radial-gradient(60% 36% at 104% 20%, hsl(calc(var(--accent-h) + 44) 90% 58% / .13), transparent 70%),
+    radial-gradient(95% 42% at 50% 114%, hsl(var(--accent-h) 90% 52% / .20), transparent 70%),
+    linear-gradient(180deg, var(--background-secondary) 0%, var(--background) 58%);
+  --star: rgb(205 222 255);
+  --stars-opacity: .55;
+  --ridge: hsl(var(--bg-h) 45% 15%);
+  --ridge-opacity: .55;
+}
+
+/* ---------- NOVA Light ---------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --accent-l: calc(var(--accent-l-base) - 12%);
+
+  --background:           hsl(var(--bg-h) 55% 96.5%);
+  --background-secondary: hsl(var(--bg-h) 65% 92%);
+  --surface:              hsl(0 0% 100% / .9);
+  --surface-glass:        rgb(255 255 255 / .55);
+  --surface-glass-strong: rgb(255 255 255 / .82);
+  --glass-hi:             rgb(255 255 255 / .70);
+  --page-bg:              hsl(var(--bg-h) 28% 80%);
+
+  --text-primary:   hsl(var(--bg-h) 50% 11%);
+  --text-secondary: hsl(var(--accent-h) 34% 34%);
+  --text-tertiary:  hsl(var(--accent-h) 20% 46% / .9);
+
+  --border:      hsl(var(--accent-h) 50% 40% / .16);
+  --border-soft: hsl(var(--accent-h) 40% 40% / .09);
+  --divider:     hsl(var(--accent-h) 40% 30% / .09);
+  --pressed:     hsl(var(--accent-h) 60% 40% / .08);
+
+  --shadow: hsl(var(--bg-h) 45% 30% / .20);
+  --glow:   hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .26);
+
+  --rim-1: rgb(255 255 255 / 1);
+  --rim-2: hsl(var(--accent-h) 60% 50% / .10);
+  --rim-3: hsl(var(--accent-h) 60% 50% / .08);
+  --rim-4: hsl(var(--accent-h) 80% 50% / .34);
+  --edge-light: rgb(255 255 255 / .9);
+  --edge-dark:  hsl(var(--bg-h) 40% 30% / .08);
+
+  --blur-glass: blur(26px) saturate(1.5);
+  --blur-nav:   blur(30px) saturate(1.5);
+  --blur-lens:  blur(8px) saturate(1.6) brightness(1.04);
+
+  --star-from: hsl(var(--accent-h) 100% 78%);
+  --star-to:   var(--accent);
+
+  --tab-idle:   hsl(var(--accent-h) 22% 40% / .85);
+  --tab-active: var(--accent);
+
+  --lens-fill:
+    radial-gradient(110% 80% at 28% 2%, rgb(255 255 255 / .95), transparent 60%),
+    radial-gradient(90% 110% at 85% 118%, hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .26), transparent 62%),
+    linear-gradient(180deg, rgb(255 255 255 / .62), rgb(255 255 255 / .28));
+  --lens-shadow:
+    inset 0 1.5px 1px rgb(255 255 255 / 1),
+    inset 0 -1.5px 3px hsl(var(--accent-h) 80% 50% / .30),
+    inset 2px 0 3px rgb(255 255 255 / .7),
+    inset -2px 0 3px rgb(255 255 255 / .5),
+    0 0 0 1px hsl(var(--accent-h) 60% 45% / .22),
+    0 8px 24px hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .26),
+    0 2px 8px hsl(var(--bg-h) 40% 30% / .14);
+  --lens-spec: rgb(255 255 255 / .9);
+
+  --success: hsl(146 68% 40%);
+  --badge-muted-bg: hsl(var(--bg-h) 40% 40% / .14);
+  --scrim: hsl(var(--bg-h) 40% 20% / .30);
+
+  --bg-image:
+    radial-gradient(75% 40% at 14% -6%, hsl(var(--accent-h) 90% 60% / .22), transparent 70%),
+    radial-gradient(60% 36% at 104% 20%, hsl(calc(var(--accent-h) + 44) 90% 62% / .16), transparent 70%),
+    radial-gradient(95% 42% at 50% 114%, hsl(var(--accent-h) 90% 60% / .18), transparent 70%),
+    linear-gradient(180deg, var(--background-secondary) 0%, var(--background) 58%);
+  --stars-opacity: 0;
+  --ridge-opacity: 0;
+}
+
+/* =====================================================================
+   2. БАЗА
+   ===================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--page-bg); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  overflow: hidden;
+  min-height: 100dvh;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; text-align: inherit; }
+h1, h2, p, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+svg { display: block; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input { font: inherit; color: inherit; }
+
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.ic { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- приложение ---------- */
+.app {
+  position: fixed; inset: 0;
+  overflow: hidden;
+  background: var(--background);
+  isolation: isolate;
+}
+
+/* ---------- атмосфера фона ---------- */
+.bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: var(--bg-image); }
+.bg-stars {
+  position: absolute; inset: 0; opacity: var(--stars-opacity);
+  background-image:
+    radial-gradient(1.2px 1.2px at 24px 38px, var(--star), transparent),
+    radial-gradient(1px 1px at 96px 120px, var(--star), transparent),
+    radial-gradient(1.4px 1.4px at 168px 54px, var(--star), transparent),
+    radial-gradient(1px 1px at 52px 190px, var(--star), transparent),
+    radial-gradient(1.2px 1.2px at 210px 170px, var(--star), transparent),
+    radial-gradient(1px 1px at 140px 226px, var(--star), transparent),
+    radial-gradient(1px 1px at 8px 120px, var(--star), transparent);
+  background-size: 240px 240px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / .5) 45%, transparent 85%);
+          mask-image: linear-gradient(to bottom, #000 0%, rgb(0 0 0 / .5) 45%, transparent 85%);
+}
+.bg-ridge {
+  position: absolute; left: -10px; right: -10px; top: 0; height: 240px;
+  opacity: var(--ridge-opacity); filter: blur(5px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent);
+          mask-image: linear-gradient(to bottom, #000 30%, transparent);
+}
+.bg-ridge path { fill: var(--ridge); }
+
+/* =====================================================================
+   3. LIQUID GLASS — базовый материал
+   ===================================================================== */
+.glass {
+  position: relative;
+  background:
+    linear-gradient(158deg, var(--glass-hi) 0%, transparent 46%),
+    var(--surface-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+          backdrop-filter: var(--blur-glass);
+  box-shadow:
+    inset 0 1px 0 var(--edge-light),
+    inset 0 -1px 0 var(--edge-dark),
+    0 10px 30px var(--shadow);
+}
+/* тонкая светящаяся граница: градиент от блика к акценту */
+.glass::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(150deg, var(--rim-1) 0%, var(--rim-2) 36%, var(--rim-3) 62%, var(--rim-4) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+}
+
+.pressable {
+  transition: transform .42s var(--ease), box-shadow .42s var(--ease), background-color .3s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pressable:active { transform: scale(.95); transition-duration: .12s; }
+
+/* =====================================================================
+   4. СКРОЛЛ-КОНТЕЙНЕР И ШАПКА
+   ===================================================================== */
+.scroll {
+  position: absolute; inset: 0; z-index: 1;
+  overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: calc(var(--nav-h) + max(var(--sab), 10px) + 4px + 30px);
+}
+.scroll::-webkit-scrollbar { display: none; }
+
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: calc(var(--sat) + 10px) var(--page-gutter) 12px;
+}
+.topbar::before {
+  content: ""; position: absolute; inset: 0 0 -16px 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(to bottom, var(--background) 0%, var(--background-secondary) 55%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+          backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
+          mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  opacity: 0; transition: opacity .35s ease;
+}
+.is-scrolled .topbar::before { opacity: .94; }
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark { width: 42px; height: 42px; flex: none; filter: drop-shadow(0 0 10px var(--glow)); }
+.brand-name { font-size: 33px; line-height: 1; font-weight: 700; letter-spacing: .035em; color: var(--text-primary); }
+.brand-tag { margin-top: 4px; font-size: 14px; line-height: 1.1; font-weight: 500; color: var(--text-secondary); }
+
+.me { width: 48px; height: 48px; border-radius: 50%; padding: 3px; display: block; flex: none; }
+.me .avatar { width: 100%; height: 100%; }
+.me .dot {
+  position: absolute; right: -1px; bottom: 1px; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--background), 0 0 10px var(--success);
+}
+
+/* ---------- аватары ---------- */
+.avatar { position: relative; display: block; border-radius: 50%; overflow: hidden; flex: none; background: var(--surface); }
+.avatar svg { width: 100%; height: 100%; }
+.avatar::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--border), inset 0 2px 8px rgb(255 255 255 / .07);
+}
+
+/* =====================================================================
+   5. ПОИСК
+   ===================================================================== */
+.search {
+  display: flex; align-items: center; gap: 12px;
+  height: 50px; margin: 6px var(--page-gutter) 0; padding: 0 18px;
+  border-radius: 25px;
+  transition: box-shadow .4s var(--ease), transform .4s var(--ease), background-color .3s ease;
+}
+.search .ic { width: 22px; height: 22px; color: var(--text-secondary); flex: none; transition: color .3s ease; }
+.search input {
+  flex: 1; min-width: 0; height: 100%;
+  border: 0; outline: 0; background: transparent;
+  font-size: 17px; letter-spacing: -.005em; color: var(--text-primary);
+  -webkit-appearance: none; appearance: none;
+}
+.search input::placeholder { color: var(--text-tertiary); opacity: 1; }
+.search:focus-within {
+  transform: scale(1.012);
+  box-shadow:
+    inset 0 1px 0 var(--edge-light),
+    inset 0 -1px 0 var(--edge-dark),
+    0 0 0 1.5px var(--accent-med),
+    0 0 0 5px var(--accent-soft),
+    0 10px 34px var(--glow);
+}
+.search:focus-within .ic { color: var(--accent); }
+
+/* =====================================================================
+   6. БЫСТРЫЕ РАЗДЕЛЫ
+   ===================================================================== */
+.quick {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px;
+  padding: 20px 14px 0;
+}
+.quick-item { display: flex; flex-direction: column; align-items: center; gap: 9px; min-width: 0; }
+.quick-tile {
+  width: 100%; max-width: 66px; aspect-ratio: 1; border-radius: 50%;
+  display: grid; place-items: center;
+  transition: transform .42s var(--ease), box-shadow .42s var(--ease);
+}
+.quick-tile--add { border-radius: 24px; color: var(--text-secondary); }
+.quick-tile--add .ic { width: 30px; height: 30px; stroke-width: 1.5; }
+.quick-img { width: 78%; height: 78%; border-radius: 50%; overflow: hidden; display: block; box-shadow: inset 0 0 0 1px var(--border-soft); }
+.quick-img svg { width: 100%; height: 100%; }
+.quick-label { font-size: 13px; line-height: 1.15; font-weight: 500; color: var(--text-primary); opacity: .88; text-align: center; max-width: 72px; }
+.quick-item:active .quick-tile { transform: scale(.93); box-shadow: inset 0 1px 0 var(--edge-light), 0 0 0 1.5px var(--accent-med), 0 6px 24px var(--glow); transition-duration: .12s; }
+@media (hover: hover) { .quick-item:hover .quick-tile { box-shadow: inset 0 1px 0 var(--edge-light), 0 8px 26px var(--glow); } }
+
+/* =====================================================================
+   7. СПИСОК ЧАТОВ
+   ===================================================================== */
+.rule { height: 1px; margin: 18px var(--page-gutter) 6px; background: var(--divider); }
+.chats { padding: 0 8px; }
+.chat-item { position: relative; }
+.chat-item:not(:last-child)::after {
+  content: ""; position: absolute; left: 80px; right: 12px; bottom: 0; height: 1px; background: var(--divider); pointer-events: none;
+}
+.chat {
+  width: 100%; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 6px 12px; border-radius: 22px;
+  transition: background-color .3s ease, transform .4s var(--ease);
+}
+.chat:active { background: var(--pressed); transform: scale(.985); transition-duration: .1s; }
+@media (hover: hover) { .chat:hover { background: var(--pressed); } }
+.chat .avatar { width: 56px; height: 56px; box-shadow: 0 4px 14px var(--shadow); }
+
+.chat-main { min-width: 0; display: block; }
+.chat-title { display: flex; align-items: center; gap: 6px; }
+.chat-name { font-size: 17px; line-height: 1.25; font-weight: 600; letter-spacing: -.01em; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.verified { width: 17px; height: 17px; flex: none; color: var(--accent); filter: drop-shadow(0 0 6px var(--glow)); }
+.chat-preview { display: block; margin-top: 2px; }
+.chat-line { display: block; font-size: 14.5px; line-height: 1.32; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.chat-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; align-self: stretch; justify-content: center; }
+.chat-time { font-size: 13px; line-height: 1; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.badge {
+  min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px;
+  display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums;
+  color: var(--on-accent);
+  background: linear-gradient(180deg, hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) + 8%)), var(--accent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), 0 3px 12px var(--glow);
+}
+.badge--muted {
+  color: var(--text-primary);
+  background: var(--badge-muted-bg);
+  box-shadow: inset 0 0 0 1px var(--border-soft), inset 0 1px 0 var(--edge-light);
+}
+.badge:empty { display: none; }
+
+/* =====================================================================
+   8. НИЖНЯЯ СТЕКЛЯННАЯ КАПСУЛА + LIQUID GLASS ПЕРЕКЛЮЧАТЕЛЬ
+   ===================================================================== */
+.bottom-fade {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 20; pointer-events: none;
+  height: calc(var(--nav-h) + max(var(--sab), 10px) + 52px);
+  background: linear-gradient(to top, var(--background) 18%, transparent);
+}
+.nav {
+  position: absolute; z-index: 30;
+  left: var(--nav-side); right: var(--nav-side);
+  bottom: calc(max(var(--sab), 10px) + 4px);
+  height: var(--nav-h);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.nav-bg {
+  position: absolute; inset: 0; border-radius: calc(var(--nav-h) / 2); pointer-events: none;
+  -webkit-backdrop-filter: var(--blur-nav); backdrop-filter: var(--blur-nav);
+  box-shadow:
+    inset 0 1px 0 var(--edge-light),
+    inset 0 -1px 0 var(--edge-dark),
+    0 14px 44px var(--shadow),
+    0 0 36px var(--accent-soft);
+}
+
+/* базовые вкладки — неподвижны */
+.tabs, .lens-tabs {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: var(--nav-pad);
+}
+.tabs { position: absolute; inset: 0; z-index: 0; }
+.tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  min-width: 0; border-radius: 999px;
+  color: var(--tab-idle);
+  font-size: 12px; line-height: 1; font-weight: 600; letter-spacing: .01em;
+}
+.tab .ic { width: 26px; height: 26px; stroke-width: 1.85; }
+.tab:focus-visible { outline-offset: -3px; }
+
+/* активный Liquid Glass — единственный подвижный элемент */
+.lens {
+  position: absolute; left: 0; z-index: 1; pointer-events: none;
+  top: calc(var(--nav-pad) - var(--nav-ex));
+  bottom: calc(var(--nav-pad) - var(--nav-ex));
+  width: 25%;
+  will-change: transform;
+  opacity: 0; transition: opacity .3s ease;
+}
+.ready .lens { opacity: 1; }
+.lens-glass {
+  position: absolute; inset: 0; border-radius: 999px;
+  background: var(--lens-fill);
+  -webkit-backdrop-filter: var(--blur-lens); backdrop-filter: var(--blur-lens);
+  box-shadow: var(--lens-shadow);
+}
+/* зеркальный блик сверху */
+.lens-glass::before {
+  content: ""; position: absolute; left: 14%; right: 14%; top: 5%; height: 36%; border-radius: 50%;
+  background: linear-gradient(to bottom, var(--lens-spec), transparent);
+  opacity: .55; filter: blur(.6px);
+}
+/* каустика снизу */
+.lens-glass::after {
+  content: ""; position: absolute; left: 22%; right: 22%; bottom: 4%; height: 22%; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent-strong), transparent);
+  opacity: .7; filter: blur(3px);
+}
+.lens-flash {
+  position: absolute; inset: 0; border-radius: 999px; pointer-events: none;
+  background: radial-gradient(circle at 50% 38%, var(--lens-spec), transparent 68%);
+  opacity: calc(var(--press, 0) * .5);
+}
+.lens-clip { position: absolute; inset: 0; border-radius: 999px; overflow: hidden; }
+.lens-tabs {
+  position: absolute; left: 0;
+  top: calc(var(--nav-ex) - var(--nav-pad));
+  height: var(--nav-h);
+  will-change: transform;
+}
+.lens-tabs .tab { color: var(--tab-active); }
+.lens-tabs .tab .ic { transform: scale(1.1); filter: drop-shadow(0 0 7px var(--glow)); }
+
+.nav.is-dragging { cursor: grabbing; }
+
+/* =====================================================================
+   9. ПАНЕЛЬ ОФОРМЛЕНИЯ (временный предпросмотр тем)
+      Блок изолирован: можно удалить целиком — остальное не затронется.
+   ===================================================================== */
+.scrim {
+  position: absolute; inset: 0; z-index: 60; background: var(--scrim);
+  opacity: 0; pointer-events: none; transition: opacity .4s ease;
+}
+.scrim.is-open { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: absolute; z-index: 61;
+  left: 12px; right: 12px; bottom: calc(max(var(--sab), 10px) + 4px);
+  padding: 10px 20px 22px; border-radius: 34px;
+  background:
+    linear-gradient(158deg, var(--glass-hi) 0%, transparent 46%),
+    var(--surface-glass-strong);
+  transform: translateY(calc(100% + 60px));
+  transition: transform .55s var(--ease);
+}
+.sheet.is-open { transform: none; }
+.sheet-grab { width: 38px; height: 5px; border-radius: 3px; margin: 0 auto 14px; background: var(--border); }
+.sheet h2 { font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
+.sheet-hint { margin-top: 3px; font-size: 13px; color: var(--text-tertiary); }
+.sheet-label { margin: 18px 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--text-tertiary); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 16px; padding: 4px; border-radius: 16px; background: var(--surface-glass); box-shadow: inset 0 0 0 1px var(--border-soft); }
+.seg button { height: 40px; border-radius: 12px; text-align: center; font-size: 15px; font-weight: 600; color: var(--text-secondary); transition: background-color .3s ease, color .3s ease, box-shadow .3s ease; }
+.seg button[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); box-shadow: 0 4px 16px var(--glow), inset 0 1px 0 rgb(255 255 255 / .3); }
+.swatches { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 4px 4px 0; }
+.swatch {
+  position: relative; width: 36px; height: 36px; border-radius: 50%; flex: none;
+  background: var(--sw, var(--accent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .4), 0 4px 12px var(--shadow);
+  transition: transform .35s var(--ease), box-shadow .35s var(--ease);
+}
+.swatch:active { transform: scale(.9); }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2.5px var(--background), 0 0 0 4.5px var(--sw, var(--accent)), 0 4px 16px var(--glow); }
+.swatch--custom { background: conic-gradient(from 90deg, #ff5a5a, #ffb84d, #6be675, #4dd0ff, #6a7bff, #c55bff, #ff5a5a); overflow: hidden; }
+.swatch--custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.swatch--custom[data-active="true"] { box-shadow: 0 0 0 2.5px var(--background), 0 0 0 4.5px var(--accent), 0 4px 16px var(--glow); }
+
+/* =====================================================================
+   10. ДЕСКТОП-ПРЕВЬЮ: рамка iPhone 16 Pro Max (на телефоне не показывается)
+   ===================================================================== */
+.statusbar, .island, .home-indicator { display: none; }
+
+@media (min-width: 520px) {
+  body { display: grid; place-items: center; }
+  .app {
+    position: relative; inset: auto;
+    width: 440px; height: min(956px, calc(100dvh - 32px));
+    border-radius: 58px;
+    --sat: 56px; --sab: 30px;
+    box-shadow: 0 0 0 10px hsl(var(--bg-h) 30% 7%), 0 0 0 11px rgb(255 255 255 / .09), 0 50px 140px rgb(0 0 0 / .55);
+  }
+  .island { display: block; position: absolute; z-index: 100; top: 11px; left: 50%; width: 124px; height: 36px; margin-left: -62px; border-radius: 20px; background: #000; }
+  .statusbar {
+    display: flex; align-items: center; justify-content: space-between;
+    position: absolute; z-index: 99; top: 0; left: 0; right: 0; height: 56px; padding: 6px 34px 0 40px;
+    font-size: 17px; font-weight: 600; pointer-events: none; color: var(--text-primary);
+  }
+  .statusbar .sb-right { display: flex; align-items: center; gap: 6px; }
+  .statusbar svg { fill: currentColor; }
+  .home-indicator { display: block; position: absolute; z-index: 100; left: 50%; bottom: 8px; width: 140px; height: 5px; margin-left: -70px; border-radius: 3px; background: var(--text-primary); opacity: .55; pointer-events: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- =====================================================================
+     SVG-СПРАЙТ: иконки и иллюстрации аватаров (встроено, без внешних файлов)
+     ===================================================================== -->
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- звезда в шапке: цвета берутся из темы (в светлой теме темнеет) -->
+    <linearGradient id="g-star" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" style="stop-color:var(--star-from)"/>
+      <stop offset="1" style="stop-color:var(--star-to)"/>
+    </linearGradient>
+    <!-- звезда на тёмных иллюстрациях аватаров -->
+    <linearGradient id="g-star-glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" style="stop-color:hsl(var(--accent-h) 100% 82%)"/>
+    </linearGradient>
+    <linearGradient id="g-n" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" style="stop-color:hsl(var(--accent-h) 100% 80%)"/>
+      <stop offset="1" style="stop-color:hsl(var(--accent-h) var(--accent-s) 56%)"/>
+    </linearGradient>
+    <radialGradient id="g-halo">
+      <stop offset="0" style="stop-color:hsl(var(--accent-h) 100% 65% / .55)"/>
+      <stop offset="1" style="stop-color:hsl(var(--accent-h) 100% 65% / 0)"/>
+    </radialGradient>
+
+    <radialGradient id="gb-nova" cx=".5" cy=".4" r=".8">
+      <stop offset="0" style="stop-color:hsl(var(--accent-h) 75% 26%)"/><stop offset="1" stop-color="#050a1c"/>
+    </radialGradient>
+    <linearGradient id="gb-dark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4872"/><stop offset="1" stop-color="#0b0f1e"/></linearGradient>
+    <radialGradient id="gb-news" cx=".5" cy=".35" r=".85">
+      <stop offset="0" style="stop-color:hsl(var(--accent-h) 70% 24%)"/><stop offset="1" stop-color="#060c24"/>
+    </radialGradient>
+    <radialGradient id="gb-cross" cx=".5" cy=".5" r=".8">
+      <stop offset="0" style="stop-color:hsl(var(--accent-h) 60% 22%)"/><stop offset="1" stop-color="#050816"/>
+    </radialGradient>
+    <linearGradient id="gb-social" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17144a"/><stop offset=".6" stop-color="#6d3a9c"/><stop offset="1" stop-color="#f08a6a"/>
+    </linearGradient>
+    <radialGradient id="gb-support" cx=".5" cy=".4" r=".85"><stop offset="0" stop-color="#7a3dff"/><stop offset="1" stop-color="#120726"/></radialGradient>
+    <linearGradient id="gb-games" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f2848"/><stop offset="1" stop-color="#080b16"/></linearGradient>
+    <linearGradient id="gb-me" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" style="stop-color:hsl(var(--accent-h) 70% 40%)"/>
+      <stop offset="1" style="stop-color:hsl(calc(var(--accent-h) + 60) 70% 20%)"/>
+    </linearGradient>
+    <radialGradient id="gb-cat" cx=".5" cy=".45" r=".8"><stop offset="0" stop-color="#14587f"/><stop offset="1" stop-color="#04091a"/></radialGradient>
+    <linearGradient id="gb-city" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1d5c"/><stop offset=".55" stop-color="#8a3d9c"/><stop offset="1" stop-color="#ff9a62"/>
+    </linearGradient>
+  </defs>
+
+  <!-- иконки интерфейса -->
+  <symbol id="ic-star" viewBox="0 0 100 100"><path fill="url(#g-star)" d="M50 4C53 34 66 47 96 50 66 53 53 66 50 96 47 66 34 53 4 50 34 47 47 34 50 4Z"/></symbol>
+  <symbol id="ic-chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01" stroke-width="2.6"/></symbol>
+  <symbol id="ic-radio" viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/></symbol>
+  <symbol id="ic-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="ic-verified" viewBox="0 0 24 24"><path fill="currentColor" d="M12 1.8l2.4 1.7 2.9-.2 1.2 2.7 2.6 1.3-.2 2.9L22.6 12l-1.7 2.4.2 2.9-2.7 1.2-1.3 2.6-2.9-.2L12 22.6l-2.4-1.7-2.9.2-1.2-2.7-2.6-1.3.2-2.9L1.4 12l1.7-2.4-.2-2.9 2.7-1.2 1.3-2.6 2.9.2z"/><path d="M7.7 12.3l3 3 5.6-6" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+
+  <!-- аватары (иллюстрации; позже заменяются фото пользователей) -->
+  <symbol id="av-nova" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-nova)"/>
+    <circle cx="50" cy="50" r="34" fill="url(#g-halo)"/>
+    <path transform="translate(23 23) scale(.54)" fill="url(#g-star-glow)" d="M50 4C53 34 66 47 96 50 66 53 53 66 50 96 47 66 34 53 4 50 34 47 47 34 50 4Z"/>
+  </symbol>
+  <symbol id="av-friends" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-dark)"/>
+    <g fill="#0a0f1d" style="stroke:hsl(var(--accent-h) 85% 80% / .55)" stroke-width="1.4">
+      <circle cx="25" cy="50" r="9"/><path d="M6 100C6 80 14 68 26 68c6 0 10 3 12 8v24Z"/>
+      <circle cx="75" cy="50" r="9"/><path d="M94 100C94 80 86 68 74 68c-6 0-10 3-12 8v24Z"/>
+      <circle cx="50" cy="40" r="12"/><path d="M26 100c0-30 11-42 24-42s24 12 24 42Z"/>
+    </g>
+  </symbol>
+  <symbol id="av-news" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-news)"/>
+    <circle cx="50" cy="50" r="34" fill="url(#g-halo)"/>
+    <path fill="url(#g-n)" d="M27 74V26h14l19 27V26h13v48H60L41 47v27Z"/>
+  </symbol>
+  <symbol id="av-crosshair" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-cross)"/>
+    <circle cx="50" cy="50" r="30" fill="url(#g-halo)"/>
+    <g fill="none" stroke-linecap="round" stroke-width="3" style="stroke:hsl(var(--accent-h) 100% 82%)">
+      <circle cx="50" cy="50" r="22"/>
+      <path d="M50 14v18M50 68v18M14 50h18M68 50h18"/>
+    </g>
+    <circle cx="50" cy="50" r="3.2" style="fill:hsl(var(--accent-h) 100% 88%)"/>
+  </symbol>
+  <symbol id="av-social" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-social)"/>
+    <rect x="38" y="46" width="44" height="32" rx="14" fill="#14103c" opacity=".55"/>
+    <rect x="18" y="24" width="48" height="34" rx="15" fill="#fff" opacity=".93"/>
+    <path d="M28 56l-4 12 14-9Z" fill="#fff" opacity=".93"/>
+    <g fill="#7a47b8"><circle cx="31" cy="41" r="3.2"/><circle cx="42" cy="41" r="3.2"/><circle cx="53" cy="41" r="3.2"/></g>
+  </symbol>
+  <symbol id="av-support" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-support)"/>
+    <g fill="none" stroke="#fff" stroke-linecap="round" opacity=".94">
+      <path d="M26 56V50a24 24 0 0 1 48 0v6" stroke-width="5"/>
+      <path d="M74 70q0 12-17 12" stroke-width="4"/>
+    </g>
+    <g fill="#fff" opacity=".94"><rect x="19" y="52" width="13" height="22" rx="6.5"/><rect x="68" y="52" width="13" height="22" rx="6.5"/><circle cx="54" cy="82" r="3.6"/></g>
+  </symbol>
+  <symbol id="av-anon" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-dark)"/>
+    <path d="M50 12C33 12 25 27 27 42 21 52 13 62 11 100h78C87 62 79 52 73 42 75 27 67 12 50 12Z" fill="#05070d" style="stroke:hsl(var(--accent-h) 85% 82% / .6)" stroke-width="1.5"/>
+    <ellipse cx="50" cy="45" rx="11" ry="14" fill="#000"/>
+  </symbol>
+  <symbol id="av-games" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-games)"/>
+    <g transform="translate(0 -6)">
+      <path d="M28 38h44c12 0 18 12 20 26 1 10-6 14-12 8l-8-8H28l-8 8c-6 6-13 2-12-8 2-14 8-26 20-26Z" fill="#090d19" stroke="#cfd8f5" stroke-opacity=".55" stroke-width="1.5"/>
+      <path d="M30 46v10M25 51h10" stroke="#e6ecff" stroke-width="3.5" stroke-linecap="round"/>
+      <g fill="#e6ecff"><circle cx="68" cy="46" r="3"/><circle cx="76" cy="52" r="3"/><circle cx="68" cy="58" r="3"/><circle cx="60" cy="52" r="3"/></g>
+    </g>
+  </symbol>
+  <symbol id="av-me" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-me)"/>
+    <g fill="#070b18" style="stroke:hsl(var(--accent-h) 100% 85% / .45)" stroke-width="1.3">
+      <circle cx="50" cy="38" r="16"/><path d="M18 100c0-26 14-38 32-38s32 12 32 38Z"/>
+    </g>
+  </symbol>
+  <symbol id="av-cat" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-cat)"/>
+    <path d="M22 42L24 17l16 12q10-3 20 0l16-12 2 25Q88 64 50 86 12 64 22 42Z" fill="#050913" style="stroke:hsl(var(--accent-h) 90% 75% / .55)" stroke-width="1.5"/>
+    <g fill="#8aefff"><ellipse cx="38" cy="53" rx="6.5" ry="7.5"/><ellipse cx="62" cy="53" rx="6.5" ry="7.5"/></g>
+    <g fill="#03202c"><ellipse cx="38" cy="53" rx="1.8" ry="5.6"/><ellipse cx="62" cy="53" rx="1.8" ry="5.6"/></g>
+    <path d="M46 66h8l-4 4.5Z" fill="#ff9ab8"/>
+  </symbol>
+  <symbol id="av-city" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="url(#gb-city)"/>
+    <g fill="#090c22">
+      <rect x="3" y="64" width="14" height="36"/><rect x="19" y="50" width="12" height="50"/>
+      <rect x="33" y="32" width="16" height="68"/><rect x="40.5" y="14" width="2" height="18"/>
+      <rect x="51" y="56" width="14" height="44"/><rect x="67" y="42" width="12" height="58"/><rect x="81" y="60" width="16" height="40"/>
+    </g>
+    <g fill="#ffbf75" opacity=".8">
+      <rect x="36" y="38" width="2.4" height="2.4"/><rect x="42" y="44" width="2.4" height="2.4"/><rect x="36" y="52" width="2.4" height="2.4"/><rect x="42" y="60" width="2.4" height="2.4"/>
+      <rect x="22" y="58" width="2.4" height="2.4"/><rect x="25" y="68" width="2.4" height="2.4"/><rect x="70" y="50" width="2.4" height="2.4"/><rect x="72" y="62" width="2.4" height="2.4"/>
+      <rect x="55" y="66" width="2.4" height="2.4"/><rect x="85" y="70" width="2.4" height="2.4"/><rect x="6" y="74" width="2.4" height="2.4"/>
+    </g>
+  </symbol>
+</svg>
+
+<div class="app" id="app" data-tab="chats">
+
+  <!-- Фон -->
+  <div class="bg" aria-hidden="true">
+    <svg class="bg-ridge" viewBox="0 0 440 240" preserveAspectRatio="none"><path d="M0 170 40 126 92 150 152 74 214 126 266 98 336 158 404 104 440 140V240H0Z"/></svg>
+    <div class="bg-stars"></div>
+  </div>
+
+  <!-- Только для десктоп-превью: имитация системных элементов iPhone -->
+  <div class="statusbar" aria-hidden="true">
+    <span>9:41</span>
+    <span class="sb-right">
+      <svg width="19" height="12" viewBox="0 0 19 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+      <svg width="17" height="12" viewBox="0 0 17 12"><path d="M8.5 2.4c2.3 0 4.4.9 6 2.4l1-1.1A10.4 10.4 0 0 0 8.5.8C5.700.8 3.200 1.900 1.500 3.700l1 1.100a8.600 8.600 0 0 1 6-2.400Zm0 3.700c1.300 0 2.500.5 3.400 1.300l1-1.100A7 7 0 0 0 8.500 4.500c-1.800 0-3.500.7-4.700 1.800l1 1.100c.9-.800 2.100-1.300 3.400-1.300Zm0 3.600c.5 0 1 .2 1.400.5L8.500 11.600 7.100 10.200c.4-.3.9-.5 1.400-.5Z"/></svg>
+      <svg width="28" height="13" viewBox="0 0 28 13"><rect x=".5" y=".5" width="24" height="12" rx="3.800" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="21" height="9" rx="2.600"/><path d="M26 4.500v4c.8-.3 1.500-1.100 1.500-2s-.7-1.700-1.500-2Z" opacity=".45"/></svg>
+    </span>
+  </div>
+  <div class="island" aria-hidden="true"></div>
+
+  <!-- ================= ГЛАВНЫЙ ЭКРАН: ЧАТЫ ================= -->
+  <main class="scroll" id="scroll">
+
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true"><use href="#ic-star"/></svg>
+        <div>
+          <h1 class="brand-name">NOVA</h1>
+          <p class="brand-tag">Твой мир общения</p>
+        </div>
+      </div>
+      <button class="me glass pressable" id="meBtn" type="button" aria-label="Профиль и оформление" aria-haspopup="dialog" style="border-radius:50%">
+        <span class="avatar"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#av-me"/></svg></span>
+        <span class="dot" aria-label="В сети"></span>
+      </button>
+    </header>
+
+    <label class="search glass" for="searchInput">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-search"/></svg>
+      <input id="searchInput" type="search" placeholder="Поиск чатов, каналов, людей…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Поиск чатов, каналов, людей">
+    </label>
+
+    <nav class="quick" id="quick" aria-label="Быстрые разделы"></nav>
+
+    <div class="rule" aria-hidden="true"></div>
+
+    <ul class="chats" id="chats" aria-label="Чаты"></ul>
+  </main>
+
+  <div class="bottom-fade" aria-hidden="true"></div>
+
+  <!-- ================= НИЖНЯЯ КАПСУЛА ================= -->
+  <nav class="nav" id="nav" aria-label="Основная навигация">
+    <div class="nav-bg glass"></div>
+
+    <div class="tabs" id="tabs" role="tablist" aria-label="Разделы NOVA">
+      <button class="tab" type="button" role="tab" data-tab="chats" aria-selected="true">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-chat"/></svg><span>Чаты</span>
+      </button>
+      <button class="tab" type="button" role="tab" data-tab="channels" aria-selected="false" tabindex="-1">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-radio"/></svg><span>Каналы</span>
+      </button>
+      <button class="tab" type="button" role="tab" data-tab="search" aria-selected="false" tabindex="-1">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-search"/></svg><span>Поиск</span>
+      </button>
+      <button class="tab" type="button" role="tab" data-tab="settings" aria-selected="false" tabindex="-1">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-gear"/></svg><span>Настройки</span>
+      </button>
+    </div>
+
+    <!-- подвижный Liquid Glass: сам элемент + «линза» с подсвеченной копией вкладок -->
+    <div class="lens" id="lens" aria-hidden="true">
+      <div class="lens-glass"></div>
+      <div class="lens-flash"></div>
+      <div class="lens-clip"><div class="lens-tabs" id="lensTabs"></div></div>
+    </div>
+  </nav>
+
+  <!-- ===== NOVA_THEME_PANEL_START (временная панель предпросмотра тем) ===== -->
+  <div class="scrim" id="scrim"></div>
+  <section class="sheet glass" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true" inert>
+    <div class="sheet-grab"></div>
+    <h2 id="sheetTitle">Оформление</h2>
+    <p class="sheet-hint">NOVA Midnight · предпросмотр темы</p>
+    <div class="seg" role="group" aria-label="Режим темы">
+      <button type="button" data-mode="dark" aria-pressed="true">Тёмная</button>
+      <button type="button" data-mode="light" aria-pressed="false">Светлая</button>
+    </div>
+    <p class="sheet-label">Акцентный цвет</p>
+    <div class="swatches" id="swatches"></div>
+  </section>
+  <!-- ===== NOVA_THEME_PANEL_END ===== -->
+
+  <div class="home-indicator" aria-hidden="true"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var clamp = function (v, a, b) { return Math.min(b, Math.max(a, v)); };
+
+  /* :active на iOS Safari работает только при наличии touch-слушателя */
+  document.addEventListener('touchstart', function () {}, { passive: true });
+
+  /* ===================================================================
+     ДАННЫЕ
+     Сейчас — статичные примеры для визуальной части.
+     Позже этот объект заменяется ответом Firebase; рендер не меняется.
+     =================================================================== */
+  var data = {
+    quick: [
+      { id: 'create',  label: 'Создать чат', icon: 'ic-plus' },
+      { id: 'friends', label: 'Друзья',      art: 'av-cat' },
+      { id: 'party',   label: 'Тусовка',     art: 'av-city' },
+      { id: 'games',   label: 'Игры',        art: 'av-games' },
+      { id: 'news',    label: 'Новости',     art: 'av-news' }
+    ],
+    chats: [
+      { id: 'nova',    title: 'NOVA',           avatar: 'av-nova',      verified: true,
+        lines: ['Добро пожаловать в NOVA! 👋', 'Здесь ты найдёшь интересных людей…'], time: '09:41', unread: 3, muted: false },
+      { id: 'friends', title: 'Друзья',         avatar: 'av-friends',
+        lines: ['Максим: Сегодня в 18:00?'], time: '08:32', unread: 12, muted: true },
+      { id: 'news',    title: 'Новости',        avatar: 'av-news',
+        lines: ['Новое обновление уже доступно!'], time: 'Вчера', unread: 5, muted: true },
+      { id: 'gaming',  title: 'Игровой чат',    avatar: 'av-crosshair',
+        lines: ['Саня: Кто в кс?'], time: 'Вчера', unread: 7, muted: true },
+      { id: 'social',  title: 'Общение',        avatar: 'av-social',
+        lines: ['Аня: Классный видос 😍'], time: 'Вчера', unread: 0 },
+      { id: 'support', title: 'Техподдержка',   avatar: 'av-support',
+        lines: ['Ваша заявка принята. Мы скоро…'], time: 'Пн', unread: 0 },
+      { id: 'anon',    title: 'Анонимный чат',  avatar: 'av-anon',
+        lines: ['Здесь можно быть собой…'], time: 'Пн', unread: 0 },
+      { id: 'games',   title: 'Игры',           avatar: 'av-games',
+        lines: ['Скоро будет новый турнир! 🎮'], time: 'Пт', unread: 0 }
+    ]
+  };
+
+  /* ===================================================================
+     РЕНДЕР
+     =================================================================== */
+  function renderQuick(items) {
+    $('#quick').innerHTML = items.map(function (q) {
+      var inner = q.icon
+        ? '<span class="quick-tile quick-tile--add glass"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#' + esc(q.icon) + '"/></svg></span>'
+        : '<span class="quick-tile glass"><span class="quick-img"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#' + esc(q.art) + '"/></svg></span></span>';
+      return '<button class="quick-item" type="button" data-id="' + esc(q.id) + '">' + inner +
+             '<span class="quick-label">' + esc(q.label) + '</span></button>';
+    }).join('');
+  }
+
+  function renderChats(items) {
+    $('#chats').innerHTML = items.map(function (c) {
+      var verified = c.verified
+        ? '<svg class="verified" viewBox="0 0 24 24" aria-label="Подтверждённый аккаунт"><use href="#ic-verified"/></svg>' : '';
+      var lines = c.lines.map(function (l) { return '<span class="chat-line">' + esc(l) + '</span>'; }).join('');
+      var badge = c.unread
+        ? '<span class="badge' + (c.muted ? ' badge--muted' : '') + '" aria-label="Непрочитанных: ' + c.unread + '">' + c.unread + '</span>' : '';
+      return '<li class="chat-item"><button class="chat" type="button" data-id="' + esc(c.id) + '">' +
+        '<span class="avatar"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="#' + esc(c.avatar) + '"/></svg></span>' +
+        '<span class="chat-main"><span class="chat-title"><span class="chat-name">' + esc(c.title) + '</span>' + verified + '</span>' +
+        '<span class="chat-preview">' + lines + '</span></span>' +
+        '<span class="chat-meta"><time class="chat-time">' + esc(c.time) + '</time>' + badge + '</span>' +
+        '</button></li>';
+    }).join('');
+  }
+
+  renderQuick(data.quick);
+  renderChats(data.chats);
+
+  /* шапка прилипает и подкрашивается стеклом при скролле */
+  var app = $('#app'), scroller = $('#scroll'), ticking = false;
+  scroller.addEventListener('scroll', function () {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      app.classList.toggle('is-scrolled', scroller.scrollTop > 6);
+      ticking = false;
+    });
+  }, { passive: true });
+
+  /* ===================================================================
+     LIQUID GLASS: физика перемещения активной вкладки
+     Пружина (spring) + «тягучесть» по скорости + реакция на нажатие.
+     Двигается только .lens; капсула и иконки остаются на месте.
+     =================================================================== */
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function Spring(x, k, c) { this.x = x; this.t = x; this.v = 0; this.k = k; this.c = c; }
+  Spring.prototype.step = function (dt) {
+    var a = this.k * (this.t - this.x) - this.c * this.v;
+    this.v += a * dt;
+    this.x += this.v * dt;
+  };
+
+  var nav = $('#nav'), tabsEl = $('#tabs'), lens = $('#lens'), lensTabs = $('#lensTabs');
+  var tabs = Array.prototype.slice.call(tabsEl.querySelectorAll('.tab'));
+
+  /* подсвеченная копия вкладок внутри линзы — выглядит как увеличенный, «преломлённый» контент */
+  lensTabs.innerHTML = tabs.map(function (b) { return '<span class="tab">' + b.innerHTML + '</span>'; }).join('');
+
+  var pos   = reduce ? new Spring(0, 700, 52) : new Spring(0, 170, 19);   /* ~450–500 мс, лёгкая инерция */
+  var press = new Spring(0, 420, 28);
+  var xs = [0, 0, 0, 0], index = 0, running = false, last = 0;
+  var drag = null, swallowClick = false;
+
+  function measure() {
+    var ex = parseFloat(getComputedStyle(nav).getPropertyValue('--nav-ex')) || 3;
+    lens.style.width = (tabs[0].offsetWidth + ex * 2) + 'px';
+    lensTabs.style.width = nav.clientWidth + 'px';
+    xs = tabs.map(function (t) { return t.offsetLeft - ex; });
+  }
+
+  function render() {
+    var x = pos.x, p = press.x;
+    var stretch = Math.min(Math.abs(pos.v) / 7000, 0.14);          /* тянется по ходу движения */
+    var sx = 1 + stretch - 0.045 * p;
+    var sy = 1 - stretch * 0.5 - 0.03 * p;
+    lens.style.transform = 'translate3d(' + x.toFixed(2) + 'px,0,0) scale(' + sx.toFixed(4) + ',' + sy.toFixed(4) + ')';
+    lensTabs.style.transform = 'translate3d(' + (-x).toFixed(2) + 'px,0,0)';
+    lens.style.setProperty('--press', clamp(p, 0, 1).toFixed(3));
+  }
+
+  function tick(now) {
+    var dt = Math.min((now - last) / 1000, 1 / 30);
+    last = now;
+    var dragging = drag && drag.moved;
+    var n = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / n;
+    for (var i = 0; i < n; i++) {
+      if (!dragging) pos.step(h);
+      press.step(h);
+    }
+    if (dragging) pos.v *= 0.86;
+    render();
+    var settled = !dragging &&
+      Math.abs(pos.t - pos.x) < 0.05 && Math.abs(pos.v) < 1 &&
+      Math.abs(press.t - press.x) < 0.002 && Math.abs(press.v) < 0.02;
+    if (settled) {
+      pos.x = pos.t; pos.v = 0; press.x = press.t; press.v = 0;
+      render(); running = false;
+    } else {
+      requestAnimationFrame(tick);
+    }
+  }
+  function kick() {
+    if (running) return;
+    running = true; last = performance.now();
+    requestAnimationFrame(tick);
+  }
+
+  function nearest(x) {
+    var best = 0, d = Infinity;
+    xs.forEach(function (v, i) { var k = Math.abs(v - x); if (k < d) { d = k; best = i; } });
+    return best;
+  }
+
+  function select(i) {
+    if (i < 0 || i >= tabs.length) return;
+    var changed = i !== index;
+    index = i;
+    pos.t = xs[i];
+    tabs.forEach(function (b, j) {
+      b.setAttribute('aria-selected', j === i ? 'true' : 'false');
+      b.tabIndex = j === i ? 0 : -1;
+    });
+    app.setAttribute('data-tab', tabs[i].getAttribute('data-tab'));
+    if (changed) window.dispatchEvent(new CustomEvent('nova:tabchange', { detail: { tab: tabs[i].getAttribute('data-tab'), index: i } }));
+    kick();
+  }
+
+  nav.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    swallowClick = false;
+    drag = { id: e.pointerId, x0: e.clientX, pos0: pos.x, moved: false, lt: e.timeStamp };
+    press.t = 1; kick();
+  });
+  nav.addEventListener('pointermove', function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x0;
+    if (!drag.moved) {
+      if (Math.abs(dx) < 7) return;
+      drag.moved = true;
+      try { nav.setPointerCapture(e.pointerId); } catch (_) {}
+      nav.classList.add('is-dragging');
+    }
+    var nx = clamp(drag.pos0 + dx, xs[0], xs[xs.length - 1]);
+    var dt = Math.max(e.timeStamp - drag.lt, 1) / 1000;
+    pos.v = pos.v * 0.5 + ((nx - pos.x) / dt) * 0.5;
+    pos.x = nx; pos.t = nx; drag.lt = e.timeStamp;
+    kick();
+  });
+  function endPointer(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var d = drag; drag = null; press.t = 0;
+    if (d.moved) {
+      nav.classList.remove('is-dragging');
+      swallowClick = true;
+      select(nearest(pos.x + pos.v * 0.1));
+    }
+    kick();
+  }
+  nav.addEventListener('pointerup', endPointer);
+  nav.addEventListener('pointercancel', endPointer);
+
+  nav.addEventListener('click', function (e) {
+    if (swallowClick) { swallowClick = false; e.stopPropagation(); e.preventDefault(); return; }
+    var b = e.target.closest && e.target.closest('.tab');
+    if (!b || !tabsEl.contains(b)) return;
+    select(tabs.indexOf(b));
+  }, true);
+
+  tabsEl.addEventListener('keydown', function (e) {
+    var k = e.key, i = index;
+    if (k === 'ArrowRight') i = Math.min(tabs.length - 1, index + 1);
+    else if (k === 'ArrowLeft') i = Math.max(0, index - 1);
+    else return;
+    e.preventDefault(); select(i); tabs[i].focus();
+  });
+
+  function layout(snap) {
+    measure();
+    if (snap) { pos.x = pos.t = xs[index]; pos.v = 0; }
+    else pos.t = xs[index];
+    render();
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(function () { layout(true); }).observe(nav);
+  window.addEventListener('resize', function () { layout(true); });
+  window.addEventListener('orientationchange', function () { setTimeout(function () { layout(true); }, 120); });
+
+  layout(true);
+  requestAnimationFrame(function () { layout(true); app.classList.add('ready'); });
+
+  /* ===================================================================
+     ПОИСК: фокус по тапу на любую часть строки
+     =================================================================== */
+  /* (поведение подсветки — в CSS через :focus-within) */
+
+  /* ===================================================================
+     NOVA_THEME_PANEL: временная панель предпросмотра тем
+     Открывается тапом по аватару. Удаляется вместе с блоком в HTML/CSS.
+     =================================================================== */
+  (function themePanel() {
+    var theme = window.NOVA && window.NOVA.theme;
+    var sheet = $('#sheet'), scrim = $('#scrim'), meBtn = $('#meBtn'), swatchesEl = $('#swatches');
+    if (!theme || !sheet) return;
+
+    var html = Object.keys(theme.presets).map(function (k) {
+      var p = theme.presets[k];
+      return '<button class="swatch" type="button" data-accent="' + k + '" aria-label="' + esc(p.name) + '" aria-pressed="false" ' +
+             'style="--sw:hsl(' + p.h + ' ' + p.s + '% ' + p.l + '%)"></button>';
+    }).join('');
+    html += '<label class="swatch swatch--custom" aria-label="Свой цвет"><input type="color" id="customColor" value="#4d8aff"></label>';
+    swatchesEl.innerHTML = html;
+
+    function sync() {
+      var st = theme.get();
+      sheet.querySelectorAll('[data-mode]').forEach(function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-mode') === st.mode ? 'true' : 'false');
+      });
+      swatchesEl.querySelectorAll('[data-accent]').forEach(function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-accent') === st.accent ? 'true' : 'false');
+      });
+      var custom = swatchesEl.querySelector('.swatch--custom');
+      custom.setAttribute('data-active', st.accent === 'custom' ? 'true' : 'false');
+    }
+
+    function open(v) {
+      sheet.classList.toggle('is-open', v);
+      scrim.classList.toggle('is-open', v);
+      sheet.inert = !v;
+      sheet.setAttribute('aria-hidden', v ? 'false' : 'true');
+      if (v) sync();
+    }
+
+    meBtn.addEventListener('click', function () { open(true); });
+    scrim.addEventListener('click', function () { open(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') open(false); });
+
+    sheet.addEventListener('click', function (e) {
+      var m = e.target.closest('[data-mode]');
+      if (m) { theme.setMode(m.getAttribute('data-mode')); return; }
+      var a = e.target.closest('[data-accent]');
+      if (a) theme.setAccent(a.getAttribute('data-accent'));
+    });
+    $('#customColor').addEventListener('input', function (e) { theme.setCustomAccent(e.target.value); });
+    window.addEventListener('nova:themechange', sync);
+    sync();
+  })();
+
+})();
+</script>
+</body>
+</html>
