@@ -6601,6 +6601,272 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   setTimeout(applyPatch, 6000);
 })();
 </script>
+<!-- ============================================================
+     STANDOFF DROP — FINAL CORE FIX v8
+     Вставить ПЕРЕД </body>, ПОСЛЕ <script>patch v7</script>.
+     Исправляет:
+     • Заявки в друзья (тосты принимали .from, а нужно .uid)
+     • Нормализацию массивов из Firebase (friends / requests / transfers)
+     • acceptFriend / declineFriend / removeFriend / addFriendByID
+     • handleRealtimeNotifications (img скина в трейде)
+     ============================================================ -->
+<script>
+(function(){
+  'use strict';
+
+  // Универсальная нормализация Firebase-массива → JS-массив
+  function norm(v){
+    if(!v) return [];
+    if(Array.isArray(v)) return v.filter(Boolean);
+    if(typeof v === 'object'){
+      return Object.keys(v)
+        .filter(function(k){ return k !== '' && !isNaN(Number(k)); })
+        .sort(function(a,b){ return Number(a) - Number(b); })
+        .map(function(k){ return v[k]; })
+        .filter(Boolean);
+    }
+    return [];
+  }
+  window._sdNorm = norm;
+
+  function waitSD(cb){
+    if(typeof window.SD !== 'undefined' && window.SD) return cb();
+    setTimeout(function(){ waitSD(cb); }, 50);
+  }
+
+  waitSD(function(){
+    var SD = window.SD;
+
+    /* ---- 1) subscribeToProfile — нормализуем массивы при каждом апдейте ---- */
+    window.subscribeToProfile = subscribeToProfile = function(){
+      var fb = window.__fb;
+      if(!fb || !SD.uid) return;
+      var ref = fb.dbMod.ref(fb.db, 'users/' + SD.uid);
+      var unsub = fb.dbMod.onValue(ref, function(snap){
+        if(!snap.exists()) return;
+        var data = snap.val();
+        var prev = SD.profile || {};
+
+        data.inventory         = norm(data.inventory);
+        data.friends           = norm(data.friends);
+        data.friendRequests    = norm(data.friendRequests);
+        data.incomingTransfers = norm(data.incomingTransfers);
+
+        SD.profile  = data;
+        SD.playerId = data.playerId;
+        SD.devMode  = !!data.devMode;
+
+        if(data.accent && data.accent !== prev.accent){
+          try{ applyAccent(data.accent); }catch(e){}
+        }
+        if(data.language && data.language !== prev.language){
+          SD.lang = data.language;
+          try{ SD.applyI18n(); }catch(e){}
+        }
+
+        try{ refreshHeaderUI(); }catch(e){}
+        if(SD.currentScreen === 'profile')   try{ renderProfile();   }catch(e){}
+        if(SD.currentScreen === 'inventory') try{ renderInventory(); }catch(e){}
+        if(SD.currentScreen === 'home')      try{ renderHome();      }catch(e){}
+        if(SD.currentScreen === 'players')   try{ renderPlayers();   }catch(e){}
+        try{ refreshDevToggles(); }catch(e){}
+        try{ handleRealtimeNotifications(prev, data); }catch(e){}
+      });
+      SD.listeners.push(unsub);
+    };
+
+    /* ---- 2) handleRealtimeNotifications — фикс .from → .uid и img ---- */
+    window.handleRealtimeNotifications = handleRealtimeNotifications = function(prev, cur){
+      // Друзья
+      var prevReq = norm(prev.friendRequests).length;
+      var curReqArr = norm(cur.friendRequests);
+      if(curReqArr.length > prevReq){
+        var newest = curReqArr[curReqArr.length - 1];
+        if(newest && newest.uid){
+          SD.toast({
+            type:'info',
+            title: SD.lang==='ru' ? 'Заявка в друзья' : 'Friend request',
+            text: (newest.name||'Игрок') + (SD.lang==='ru' ? ' хочет добавить вас' : ' wants to add you'),
+            emoji:'👥', big:true, duration:8000,
+            actions:[
+              { label: SD.lang==='ru'?'Принять':'Accept',   class:'t-accept',  onClick:function(){ acceptFriend(newest.uid); } },
+              { label: SD.lang==='ru'?'Отклонить':'Decline', class:'t-decline', onClick:function(){ declineFriend(newest.uid); } }
+            ]
+          });
+        }
+      }
+      // Трейды
+      var prevTr = norm(prev.incomingTransfers).length;
+      var curTrArr = norm(cur.incomingTransfers);
+      if(curTrArr.length > prevTr){
+        var newestTr = curTrArr[curTrArr.length - 1];
+        if(newestTr && newestTr.transferId){
+          SD.toast({
+            type:'info',
+            title: SD.lang==='ru' ? 'Передача скинов' : 'Skin transfer',
+            text: (newestTr.fromName||'Друг') + (SD.lang==='ru' ? ' передал вам скины' : ' sent you skins'),
+            img: (newestTr.skins && newestTr.skins[0] && newestTr.skins[0].img) || '',
+            big:true, duration:9000,
+            actions:[
+              { label: SD.lang==='ru'?'Принять':'Accept',   class:'t-accept',  onClick:function(){ acceptTransfer(newestTr); } },
+              { label: SD.lang==='ru'?'Отклонить':'Decline', class:'t-decline', onClick:function(){ declineTransfer(newestTr); } }
+            ]
+          });
+        }
+      }
+    };
+
+    /* ---- 3) renderFriendsList / renderFriendRequests — через norm ---- */
+    window.renderFriendsList = renderFriendsList = function(){
+      var box = document.getElementById('friendsList');
+      if(!box) return;
+      var friends = norm(SD.profile && SD.profile.friends);
+      if(!friends.length){
+        box.innerHTML = '<div class="inv-empty"><div class="ie-emoji">👥</div><div>' + SD.t('emptyFriends') + '</div><div class="muted mt-8">' + SD.t('emptyFriendsSub') + '</div></div>';
+        return;
+      }
+      box.innerHTML = friends.map(function(f){
+        var av = (typeof f.avatar === 'number') ? SD.avatars[f.avatar|0] : (f.avatar || SD.avatars[0]);
+        return '<div class="friend-row">' +
+          '<div class="friend-avatar"><img src="' + av + '" alt=""></div>' +
+          '<div class="friend-info"><b>' + (f.name||'Игрок') + '</b><span>ID: ' + (f.playerId||'—') + '</span></div>' +
+          '<button class="btn btn-ghost btn-sm" data-remove-friend="' + f.uid + '">Удалить</button>' +
+        '</div>';
+      }).join('');
+      box.querySelectorAll('[data-remove-friend]').forEach(function(b){
+        b.onclick = function(){ removeFriend(b.dataset.removeFriend); };
+      });
+    };
+
+    window.renderFriendRequests = renderFriendRequests = function(){
+      var box = document.getElementById('friendRequestsBlock');
+      if(!box) return;
+      var reqs = norm(SD.profile && SD.profile.friendRequests);
+      if(!reqs.length){ box.innerHTML = ''; return; }
+      box.innerHTML = '<div class="sectionhead" style="margin-top:14px"><h2>Заявки (' + reqs.length + ')</h2></div>' +
+        reqs.map(function(r){
+          var av = SD.avatars[r.avatar|0] || SD.avatars[0];
+          return '<div class="friend-row">' +
+            '<div class="friend-avatar"><img src="' + av + '" alt=""></div>' +
+            '<div class="friend-info"><b>' + (r.name||'Игрок') + '</b><span>ID: ' + (r.playerId||'—') + '</span></div>' +
+            '<button class="btn btn-primary btn-sm" data-accept="' + r.uid + '">Принять</button>' +
+            '<button class="btn btn-ghost btn-sm" data-decline="' + r.uid + '">✕</button>' +
+          '</div>';
+        }).join('');
+      box.querySelectorAll('[data-accept]').forEach(function(b){ b.onclick = function(){ acceptFriend(b.dataset.accept); }; });
+      box.querySelectorAll('[data-decline]').forEach(function(b){ b.onclick = function(){ declineFriend(b.dataset.decline); }; });
+    };
+
+    /* ---- 4) accept / decline / remove — через norm ---- */
+    window.acceptFriend = acceptFriend = async function(fromUid){
+      if(!SD.profile || !fromUid) return;
+      var fb = window.__fb;
+      try{
+        var fromSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + fromUid));
+        if(!fromSnap.exists()) return;
+        var fromProfile = fromSnap.val();
+        var myProfile = SD.profile;
+
+        var myFriends = norm(myProfile.friends).filter(function(f){ return f.uid !== fromUid; });
+        myFriends.push({ uid: fromUid, name: fromProfile.name || 'Игрок', playerId: fromProfile.playerId, avatar: fromProfile.avatar || 0 });
+
+        var theirFriends = norm(fromProfile.friends).filter(function(f){ return f.uid !== SD.uid; });
+        theirFriends.push({ uid: SD.uid, name: myProfile.name || 'Игрок', playerId: myProfile.playerId, avatar: myProfile.avatar || 0 });
+
+        var myReqs = norm(myProfile.friendRequests).filter(function(r){ return r.uid !== fromUid; });
+
+        await Promise.all([
+          fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), { friends: myFriends, friendRequests: myReqs }),
+          fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + fromUid), { friends: theirFriends })
+        ]);
+        SD.ok(SD.t('friendAccepted'), fromProfile.name || 'Игрок');
+        if(typeof renderPlayers === 'function') renderPlayers();
+      }catch(e){ console.error('acceptFriend', e); }
+    };
+
+    window.declineFriend = declineFriend = async function(fromUid){
+      if(!SD.profile || !fromUid) return;
+      var fb = window.__fb;
+      try{
+        var myReqs = norm(SD.profile.friendRequests).filter(function(r){ return r.uid !== fromUid; });
+        await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), { friendRequests: myReqs });
+        SD.profile.friendRequests = myReqs;
+        if(typeof renderPlayers === 'function') renderPlayers();
+      }catch(e){ console.error('declineFriend', e); }
+    };
+
+    window.removeFriend = removeFriend = async function(uid){
+      if(!uid || !confirm('Удалить друга?')) return;
+      var fb = window.__fb;
+      try{
+        var myFriends = norm(SD.profile.friends).filter(function(f){ return f.uid !== uid; });
+        await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + SD.uid), { friends: myFriends });
+        SD.profile.friends = myFriends;
+
+        var theirSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + uid));
+        if(theirSnap.exists()){
+          var tp = theirSnap.val();
+          var tFriends = norm(tp.friends).filter(function(f){ return f.uid !== SD.uid; });
+          await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + uid), { friends: tFriends });
+        }
+        SD.ok(SD.t('friendRemoved'), '');
+        if(typeof renderPlayers === 'function') renderPlayers();
+      }catch(e){ console.error('removeFriend', e); }
+    };
+
+    /* ---- 5) addFriendByID — через norm + проверка дублей ---- */
+    SD.addFriendByID = async function(){
+      var input = document.getElementById('friendIdInput');
+      if(!input) return;
+      var id = (input.value || '').trim();
+      if(!/^\d{9}$/.test(id)){ SD.err('Ошибка', 'ID должен состоять из 9 цифр'); return; }
+      if(id === SD.playerId){ SD.err('Ошибка', 'Нельзя добавить себя'); return; }
+      var fb = window.__fb;
+      try{
+        var uidSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'playerIds/' + id));
+        if(!uidSnap.exists()){ SD.err('Ошибка', SD.t('idNotFound')); return; }
+        var targetUid = uidSnap.val();
+        if(norm(SD.profile.friends).some(function(f){ return f.uid === targetUid; })){
+          SD.err('Ошибка', 'Уже в друзьях'); return;
+        }
+
+        var targetSnap = await fb.dbMod.get(fb.dbMod.ref(fb.db, 'users/' + targetUid));
+        if(!targetSnap.exists()) return;
+        var targetReqs = norm(targetSnap.val().friendRequests);
+        if(targetReqs.some(function(r){ return r.uid === SD.uid; })){
+          SD.err('Ошибка', 'Заявка уже отправлена'); return;
+        }
+        targetReqs.push({
+          uid: SD.uid, name: SD.profile.name || 'Игрок',
+          playerId: SD.playerId, avatar: SD.profile.avatar || 0, ts: Date.now()
+        });
+        await fb.dbMod.update(fb.dbMod.ref(fb.db, 'users/' + targetUid), { friendRequests: targetReqs });
+        input.value = '';
+        SD.ok(SD.t('friendAdded'), SD.t('friendAddedText'));
+      }catch(e){
+        console.error('addFriendByID', e);
+        SD.err('Ошибка', 'Не удалось отправить заявку');
+      }
+    };
+
+    /* ---- 6) Кнопка × для модалки кейса (если ещё нет) ---- */
+    var caseModal = document.getElementById('caseModal');
+    if(caseModal){
+      var sheet = caseModal.querySelector('.modal-sheet');
+      if(sheet && !sheet.querySelector('.sheet-close')){
+        var x = document.createElement('button');
+        x.className = 'sheet-close';
+        x.textContent = '×';
+        x.style.cssText = 'position:absolute;top:14px;right:14px;z-index:10';
+        x.onclick = function(){ if(typeof SD.closeModal === 'function') SD.closeModal('caseModal'); };
+        sheet.appendChild(x);
+      }
+    }
+
+    console.log('%c✅ SD CORE FIX v8 applied','color:#20d66b;font-weight:900');
+  });
+})();
+</script>
 </body>
 </html>
 
