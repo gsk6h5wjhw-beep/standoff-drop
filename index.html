@@ -6867,6 +6867,314 @@ console.log('%cSTANDOFF DROP','color:#ff2e63;font-weight:900;font-size:20px','v3
   });
 })();
 </script>
+<script id="_megaFixNewDomain">
+(function(){
+  'use strict';
+  console.log('🚑 MEGA FIX для standlink.vercel.app');
+
+  // ═══════════════════════════════════════════════════════
+  // 1. ФИКС КАРТИНОК И ID КЕЙСОВ
+  //    Если локальные картинки не грузятся — ставим старые с ggstand
+  // ═══════════════════════════════════════════════════════
+  function fixCases(){
+    var arr = window.SD_CASES;
+    if (!arr || !arr.length) return;
+
+    var fallbackImgs = {
+      'fury': 'https://ggstand.net/public/storage/cases/7YJOuboRyP4bBBErIRj2CsZniE7hE4ohKRaRdiOb.webp',
+      'common': 'https://ggstand.net/public/storage/seven-keys/iKJjZkXf7uAYYOvTpV0f4aWgicSf8QEnG2isU3vz.png',
+      'uncommon': 'https://ggstand.net/public/storage/seven-keys/NIcnyIi0PPOLbQkH7P0yORmmqNhU9bVYH2E4KFyn.png',
+      'rare': 'https://ggstand.net/public/storage/seven-keys/XBWZeNWSfsV3qlEBLynyJoFX8gPfREpM4O9Dqcac.png'
+    };
+
+    arr.forEach(function(c){
+      if (c.id === 'iphone-duo' || c.name === 'iPhone Duo'){
+        c.id = 'fury';
+        c.name = 'Fury';
+        c.caseImg = 'cases/fury.PNG';
+        c.fallbackImg = fallbackImgs.fury;
+        c.price = 199;
+        c.tag = 'NEW';
+      } else if (c.id === 'common'){
+        c.caseImg = 'cases/734151B4-03BA-4831-929B-47FB355B6FEF.png';
+        c.fallbackImg = fallbackImgs.common;
+        c.price = 19;
+      } else if (c.id === 'uncommon'){
+        c.caseImg = 'cases/070A5351-3469-45C4-8AB7-CB27B2164F3A.png';
+        c.fallbackImg = fallbackImgs.uncommon;
+        c.price = 39;
+      } else if (c.id === 'rare'){
+        c.caseImg = 'cases/D14BFE01-DFC6-4EAF-800A-99E3BAEB8CDA.png';
+        c.fallbackImg = fallbackImgs.rare;
+        c.price = 59;
+      }
+    });
+
+    // Перерисовываем
+    try { if (typeof renderHome === 'function') renderHome(); } catch(e){}
+    try { if (typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+  }
+
+  // Добавляем onerror для картинок кейсов (если локальная 404 — грузим fallback)
+  function patchCaseImgTags(){
+    document.querySelectorAll('.case-card img').forEach(function(img){
+      if (img._patchedError) return;
+      img._patchedError = true;
+      var card = img.closest('.case-card');
+      var cid = card ? card.dataset.caseId : null;
+      if (!cid) return;
+      
+      var c = window.SD_CASES.find(function(x){ return x.id === cid; });
+      if (c && c.fallbackImg){
+        img.onerror = function(){
+          if (img.src !== c.fallbackImg) {
+            img.src = c.fallbackImg;
+          }
+        };
+        // Если картинка уже битая (404), вызываем onerror вручную
+        if (img.complete && img.naturalWidth === 0) {
+          img.src = c.fallbackImg;
+        }
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 2. ФИКС РОУТЕРА (SD.go) — работает даже без профиля
+  // ═══════════════════════════════════════════════════════
+  function fixRouter(){
+    if (typeof window.SD === 'undefined') return;
+    window.SD.go = function(screen){
+      if (!screen) return;
+      if (screen === 'transfer'){ window.SD.playersTab = 'transfer'; screen = 'players'; }
+
+      document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+      var target = document.getElementById('screen-' + screen);
+      if (target) target.classList.add('active');
+      window.SD.currentScreen = screen;
+
+      var navKey = screen;
+      if (['inventory','settings','bonus','topup','players'].indexOf(screen) > -1) navKey = 'profile';
+      if (screen === 'roulette') navKey = 'games';
+      document.querySelectorAll('#bottomNav .nav-item').forEach(function(i){
+        i.classList.toggle('active', i.dataset.nav === navKey);
+      });
+      window.scrollTo({ top:0, behavior:'instant' });
+
+      try { if (screen === 'home' && typeof renderHome === 'function') renderHome(); } catch(e){}
+      try { if (screen === 'cases' && typeof renderAllCases === 'function') renderAllCases(); } catch(e){}
+      try { if (screen === 'inventory' && typeof renderInventory === 'function') renderInventory(); } catch(e){}
+      try { if (screen === 'profile' && typeof renderProfile === 'function') renderProfile(); } catch(e){}
+      try { if (screen === 'settings' && typeof renderSettings === 'function') renderSettings(); } catch(e){}
+      try { if (screen === 'bonus' && typeof renderBonus === 'function') renderBonus(); } catch(e){}
+      try { if (screen === 'players' && typeof renderPlayers === 'function') renderPlayers(); } catch(e){}
+      try { if (screen === 'upgrade' && typeof renderUpgrade === 'function') renderUpgrade(); } catch(e){}
+      try { if (screen === 'roulette' && typeof renderRoulette === 'function') renderRoulette(); } catch(e){}
+      
+      // Дополнительно патчим картинки после смены экрана
+      setTimeout(patchCaseImgTags, 100);
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 3. ГЛОБАЛЬНЫЙ ПЕРЕХВАТ КЛИКОВ (capture: true)
+  // ═══════════════════════════════════════════════════════
+  function onTap(e){
+    var t = e.target;
+    if (!t || !t.closest) return;
+
+    // Нижнее меню
+    var nav = t.closest('#bottomNav .nav-item');
+    if (nav && nav.dataset.nav){
+      e.preventDefault(); e.stopPropagation();
+      var n = nav.dataset.nav;
+      if (['home','cases','games','profile','upgrade'].indexOf(n) > -1 && window.SD && SD.go) SD.go(n);
+      return;
+    }
+
+    // Hero (кнопка открыть кейсы)
+    if (t.closest('#sdHeroHit') || t.closest('#heroOpenBtn') || t.closest('.sd-home-hero-hit')){
+      e.preventDefault(); e.stopPropagation();
+      if (window.SD && SD.go) SD.go('cases');
+      return;
+    }
+
+    // Виджеты (картинка или кнопки)
+    var wdBtn = t.closest('#sdWidgets .sd-wd-overlay button, #sdWO button, .sd-widget-hit');
+    if (wdBtn){
+      e.preventDefault(); e.stopPropagation();
+      var targets = ['upgrade','roulette','games','inventory','players','profile'];
+      var idx = -1;
+      if (wdBtn.dataset.widget){
+        if (window.SD && SD.go) {
+          if (wdBtn.dataset.widget === 'players') SD.playersTab = 'transfer';
+          SD.go(wdBtn.dataset.widget);
+        }
+        return;
+      }
+      var parent = wdBtn.parentNode;
+      var siblings = Array.prototype.filter.call(parent.children, function(el){ return el.tagName === 'BUTTON' || el.classList.contains('sd-widget-hit'); });
+      idx = siblings.indexOf(wdBtn);
+      var target = targets[idx];
+      if (target && window.SD && SD.go){
+        if (target === 'players') SD.playersTab = 'transfer';
+        SD.go(target);
+      }
+      return;
+    }
+
+    // Старые quick-btn
+    var qb = t.closest('.quick-btn[data-go]');
+    if (qb){
+      e.preventDefault(); e.stopPropagation();
+      var g = qb.dataset.go;
+      if (window.SD && SD.go){
+        if (g === 'players') SD.playersTab = 'transfer';
+        SD.go(g);
+      }
+      return;
+    }
+
+    // Кнопки с data-go
+    var dgo = t.closest('button[data-go]');
+    if (dgo){
+      e.preventDefault(); e.stopPropagation();
+      var d = dgo.dataset.go;
+      if (window.SD && SD.go){
+        if (d === 'players') SD.playersTab = 'transfer';
+        SD.go(d);
+      }
+      return;
+    }
+
+    // Плюсик баланса
+    if (t.closest('#headerPlus')){
+      e.preventDefault(); e.stopPropagation();
+      var m = document.getElementById('topupModal');
+      if (m) m.classList.add('show');
+      return;
+    }
+
+    // Google
+    if (t.closest('#googleLoginBtn')){
+      e.preventDefault(); e.stopPropagation();
+      if (window.SD && SD.loginGoogle) SD.loginGoogle();
+      return;
+    }
+
+    // Апгрейд
+    if (t.closest('#upgradeBtn')){
+      e.preventDefault(); e.stopPropagation();
+      if (window.SD && SD.runUpgrade) SD.runUpgrade();
+      return;
+    }
+
+    // Лого
+    if (t.closest('#mainLogo')){
+      e.preventDefault(); e.stopPropagation();
+      var logo = document.getElementById('mainLogo');
+      logo._t = (logo._t || 0) + 1;
+      clearTimeout(logo._tt);
+      logo._tt = setTimeout(function(){ logo._t = 0; }, 1500);
+      if (logo._t >= 17){
+        logo._t = 0;
+        var dm = document.getElementById('devCodeModal');
+        if (dm) dm.classList.add('show');
+      } else if (logo._t === 1){
+        if (window.SD && SD.go) SD.go('home');
+      }
+      return;
+    }
+
+    // Карточка кейса
+    var cc = t.closest('.case-card[data-case-id]');
+    if (cc){
+      e.preventDefault(); e.stopPropagation();
+      var cid = cc.dataset.caseId;
+      if (typeof SD_CASES !== 'undefined'){
+        var c = SD_CASES.filter(function(x){ return x.id === cid; })[0];
+        if (c && window.SD && SD.openCaseModal) SD.openCaseModal(c);
+      }
+      return;
+    }
+
+    // Открыть кейс
+    if (t.closest('#caseOpenBtn')){
+      e.preventDefault(); e.stopPropagation();
+      if (window.SD && SD.doOpenCase) SD.doOpenCase();
+      return;
+    }
+
+    // Кол-во кейсов
+    var cb = t.closest('#caseCountRow .count-btn');
+    if (cb){
+      e.preventDefault(); e.stopPropagation();
+      var v = parseInt(cb.textContent, 10) || 1;
+      if (window.SD) SD.caseCount = v;
+      cb.parentNode.querySelectorAll('.count-btn').forEach(function(x){ x.classList.remove('active'); });
+      cb.classList.add('active');
+      if (typeof updateOpenButton === 'function') updateOpenButton();
+      return;
+    }
+
+    // Выход
+    if (t.closest('#sdLogout') || t.closest('#logoutBtn')){
+      e.preventDefault(); e.stopPropagation();
+      if (confirm('Выйти из аккаунта?')){
+        var fb = window.__fb;
+        if (fb && fb.authMod && fb.auth){
+          fb.authMod.signOut(fb.auth).then(function(){
+            try { localStorage.clear(); } catch(x){}
+            location.reload();
+          });
+        } else {
+          try { localStorage.clear(); } catch(x){}
+          location.reload();
+        }
+      }
+      return;
+    }
+
+    // Модалки закрыть
+    if (t.classList && t.classList.contains('modal-back')){
+      t.classList.remove('show');
+      return;
+    }
+    var sc = t.closest('.sheet-close');
+    if (sc && sc.dataset.close){
+      e.preventDefault(); e.stopPropagation();
+      var mm = document.getElementById(sc.dataset.close);
+      if (mm) mm.classList.remove('show');
+      return;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 4. ЗАПУСК
+  // ═══════════════════════════════════════════════════════
+  function run(){
+    try { fixCases(); } catch(e){}
+    try { fixRouter(); } catch(e){}
+    try { patchCaseImgTags(); } catch(e){}
+
+    if (!window._megaFixInstalled){
+      window._megaFixInstalled = true;
+      document.addEventListener('click', onTap, true);
+      console.log('✅ Capture-перехват установлен');
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+
+  setTimeout(run, 500);
+  setTimeout(run, 1500);
+  setTimeout(run, 3000);
+  setTimeout(run, 5000);
+
+  console.log('✅ MEGA FIX готов');
+})();
+</script>
 </body>
 </html>
 
