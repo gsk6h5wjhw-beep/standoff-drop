@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#080d12" />
+<title>14 ДНЕЙ В ТЕМНОТЕ — интерактивная анимация</title>
+<style>
+  :root { color-scheme: dark; --gold:#d6b37a; --ice:#a9d7e5; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; width:100%; min-height:100%; background:#070b10; color:#eef3f5; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+  body { display:flex; align-items:center; justify-content:center; min-height:100svh; overflow:hidden; }
+  .shell { width:min(100vw, calc(100svh * 16 / 9)); position:relative; }
+  .stage { position:relative; width:100%; aspect-ratio:16/9; overflow:hidden; background:#0a1118; box-shadow:0 18px 70px #000b; }
+  canvas { width:100%; height:100%; display:block; }
+  .topline { position:absolute; top:2.2%; left:2.4%; right:2.4%; display:flex; justify-content:space-between; align-items:center; pointer-events:none; text-shadow:0 2px 9px #000; font-size:clamp(8px,1.05vw,15px); letter-spacing:.13em; text-transform:uppercase; color:#d7e1e6; opacity:.8; }
+  .brand { font-weight:800; letter-spacing:.18em; }
+  .controls { position:absolute; left:2.2%; right:2.2%; bottom:2.1%; display:flex; align-items:center; gap:8px; z-index:5; opacity:0; transform:translateY(8px); transition:.25s; }
+  .stage.playing:hover .controls, .stage.paused .controls { opacity:1; transform:none; }
+  .control-btn { border:1px solid #ffffff30; color:#ecf3f5; background:#0a1119c9; backdrop-filter:blur(12px); border-radius:999px; min-width:38px; height:34px; padding:0 13px; cursor:pointer; font-size:12px; }
+  .control-btn:hover { background:#243440e8; border-color:#a9d7e577; }
+  .progress { height:4px; background:#ffffff30; flex:1; border-radius:9px; overflow:hidden; cursor:pointer; }
+  .progress span { display:block; height:100%; width:0; background:linear-gradient(90deg,#9acbd8,#f0d19b); }
+  .startscreen { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:5%; background:radial-gradient(ellipse at 50% 46%,#263c45aa 0,#0a121be8 58%,#060a0f 100%); z-index:10; }
+  .startscreen.hidden { display:none; }
+  .eyebrow { color:#a9c6ce; letter-spacing:.38em; text-transform:uppercase; font-weight:700; font-size:clamp(8px,1.1vw,14px); }
+  h1 { margin:.3em 0 .15em; line-height:.92; font-size:clamp(28px,6.4vw,92px); letter-spacing:.015em; font-weight:900; text-shadow:0 5px 35px #000; }
+  h1 span { display:block; color:#c4d4d8; }
+  .subtitle { color:#c4d1d5; font-size:clamp(10px,1.35vw,18px); letter-spacing:.07em; margin:1.1em 0 2em; }
+  .start { border:1px solid #e5d2ad99; background:linear-gradient(135deg,#d3b37c,#8e704b); color:#15120d; border-radius:7px; padding:14px 35px; font-weight:900; letter-spacing:.18em; cursor:pointer; box-shadow:0 8px 30px #c39a5340; font-size:clamp(11px,1.3vw,17px); }
+  .start:hover { filter:brightness(1.12); transform:translateY(-1px); }
+  .hint { color:#8b9aa0; font-size:clamp(8px,.9vw,12px); margin-top:15px; max-width:520px; line-height:1.5; }
+  .rotate { display:none; position:fixed; inset:0; z-index:30; align-items:center; justify-content:center; text-align:center; padding:32px; background:#070b10; color:#dbe6e9; }
+  .rotate .phone { font-size:44px; display:block; margin-bottom:15px; }
+  @media (orientation:portrait) and (max-width:700px) { .rotate { display:flex; } }
+  @media (pointer:coarse) { .controls { opacity:.9; transform:none; } .control-btn { height:30px; min-width:32px; padding:0 9px; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="stage" id="stage">
+    <canvas id="movie" width="1920" height="1080" aria-label="Анимация 14 дней в темноте"></canvas>
+    <div class="topline"><div class="brand">14 ДНЕЙ В ТЕМНОТЕ</div><div id="sceneLabel">ПИЛОТНАЯ СЕРИЯ</div></div>
+    <div class="startscreen" id="startscreen">
+      <div class="eyebrow">Анимационный хоррор · серия 01</div>
+      <h1>14 ДНЕЙ <span>В ТЕМНОТЕ</span></h1>
+      <div class="subtitle">ГОЛОС ЗА ДВЕРЬЮ</div>
+      <button class="start" id="startBtn">НАЧАТЬ</button>
+      <div class="hint">Рекомендуется смотреть в горизонтальном режиме и со звуком.<br>Звук и анимация запускаются после нажатия кнопки.</div>
+    </div>
+    <div class="controls" id="controls">
+      <button class="control-btn" id="pauseBtn" aria-label="Пауза">Ⅱ</button>
+      <div class="progress" id="progress"><span id="progressFill"></span></div>
+      <button class="control-btn" id="soundBtn">ЗВУК ВКЛ</button>
+      <button class="control-btn" id="subBtn">СУБТИТРЫ</button>
+      <button class="control-btn" id="restartBtn">↺</button>
+    </div>
+  </div>
+</div>
+<div class="rotate"><div><span class="phone">▱ ↻</span><b>Поверни телефон горизонтально</b><p>Эта серия создана в формате 16:9 для YouTube.</p></div></div>
+<script>
+(() => {
+'use strict';
+const canvas = document.getElementById('movie');
+const ctx = canvas.getContext('2d');
+const W=1920,H=1080;
+const stage=document.getElementById('stage');
+const startScreen=document.getElementById('startscreen');
+const sceneLabel=document.getElementById('sceneLabel');
+const progressFill=document.getElementById('progressFill');
+const pauseBtn=document.getElementById('pauseBtn');
+const soundBtn=document.getElementById('soundBtn');
+const subBtn=document.getElementById('subBtn');
+let running=false, paused=false, muted=false, subtitles=true, lastTs=0, elapsed=0, sceneIndex=-1, audioCtx=null, master=null, ambience=null, gunFired=false;
+let shake=0, flash=0, snow=[], dust=[], staticLevel=0, headphoneMix=0;
+const scenes=[
+ {name:'ПРОЛОГ · ЧЕТЫРНАДЦАТЫЙ ДЕНЬ',dur:13,caption:'На четырнадцатый день под землёй Артём наконец увидел солнечный свет. Но он ещё не знал, что за эти две недели мир изменился навсегда.',kind:'teaser'},
+ {name:'17 ОКТЯБРЯ · 03:17',dur:19,caption:'17 октября. 03:17. Небо над городом внезапно стало белым. Через несколько секунд исчезло электричество.',kind:'city'},
+ {name:'ДЕСЯТЬ СЕКУНД',dur:18,caption:'Радиоприёмники продолжали работать. Но вместо голосов из них шёл непрерывный белый шум.',kind:'radio'},
+ {name:'УБЕЖИЩЕ №17',dur:17,caption:'Артём уже давно находился в убежище №17. Как он туда попал, пока оставалось неизвестным.',kind:'bunker'},
+ {name:'НЕЧТО В КОРИДОРЕ',dur:24,caption:'Сначала он заметил движение в конце коридора. Потом существо исчезло. А через несколько секунд оказалось совсем рядом.',kind:'bunkerMonster'},
+ {name:'ЧЕТЫРНАДЦАТЬ ДНЕЙ',dur:16,caption:'Дни проходили одинаково. Радио молчало. На девятый день из вентиляции раздались три удара…',kind:'montage'},
+ {name:'СИСТЕМА ВЕНТИЛЯЦИИ',dur:19,caption:'На четырнадцатый день система вентиляции вышла из строя. Артёму пришлось чинить её вручную.',kind:'repair'},
+ {name:'БЕЛЫЙ ШУМ',dur:17,caption:'В динамиках раздался белый шум. Артём знал: десяти секунд достаточно, чтобы потерять контроль над собой.',kind:'whiteNoise'},
+ {name:'ГОСТЬ ЗА ДВЕРЬЮ',dur:18,caption:'Три удара по двери. На мониторе появилась знакомая фигура. Это был Денис.',kind:'denisDoor'},
+ {name:'ЭТО НЕ ТЫ',dur:16,caption:'Денис взял кружку правой рукой. Но настоящий Денис всегда был левшой.',kind:'reveal'},
+ {name:'ВЫСТРЕЛ',dur:10,caption:'— Это не ты.',kind:'shot'},
+ {name:'НАСТОЯЩАЯ ФОРМА',dur:15,caption:'Человеческий облик исчез. Перед Артёмом лежало существо, которое лишь притворялось его другом.',kind:'transform'},
+ {name:'ОН ДОЛЖЕН БЫТЬ РЯДОМ',dur:14,caption:'Мимики могли копировать человека, только находясь не дальше двадцати метров от него. Значит, Денис где-то рядом.',kind:'pack'},
+ {name:'ЗАЩИТА ОТ ШУМА',dur:10,caption:'Артём надел защитные наушники, взял оружие и вышел в замёрзший город.',kind:'outside'},
+ {name:'ГОРОД МЁРЗНЕТ',dur:21,caption:'На улице было около минус двадцати. За каждым укрытием могла скрываться опасность.',kind:'search'},
+ {name:'ОНИ НЕ СЛЫШАТ',dur:18,caption:'За спиной Артёма появилось существо. Он не услышал ни шагов, ни дыхания.',kind:'ambush'},
+ {name:'КРЫЛАТЫЙ',dur:19,caption:'На крыше шевельнулась массивная фигура. Существо раскрыло крылья и бросилось вниз.',kind:'winged'},
+ {name:'ПОД ЗЕМЛЁЙ',dur:18,caption:'Следы привели Артёма к метро. Внизу кто-то пытался пережить этот кошмар.',kind:'metro'},
+ {name:'НАКОНЕЦ-ТО',dur:16,caption:'За поворотом горел костёр. Рядом сидел настоящий Денис. — Наконец-то.',kind:'reunion'},
+ {name:'НЕ ОБОРАЧИВАЙСЯ',dur:9,caption:'Из темноты на Артёма летело нечто огромное.',kind:'cliff'}
+];
+const total=scenes.reduce((a,s)=>a+s.dur,0);
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function lerp(a,b,t){return a+(b-a)*t;}
+function smooth(t){t=clamp(t,0,1);return t*t*(3-2*t);}
+function rr(x,y,w,h,r,fill,stroke=null,lw=1){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();}}
+function poly(points,fill,stroke=null,lw=1){ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);ctx.closePath();ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();}}
+function line(x1,y1,x2,y2,color,width=2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
+function circle(x,y,r,fill,stroke=null,lw=1){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();}}
+function text(str,x,y,size,color,align='left',weight=700){ctx.font=`${weight} ${size}px system-ui, sans-serif`;ctx.textAlign=align;ctx.fillStyle=color;ctx.fillText(str,x,y);}
+function gradient(y1,y2,c1,c2){const g=ctx.createLinearGradient(0,y1,0,y2);g.addColorStop(0,c1);g.addColorStop(1,c2);return g;}
+function initParticles(){snow=[];dust=[];for(let i=0;i<150;i++)snow.push({x:Math.random()*W,y:Math.random()*H,r:1+Math.random()*4,v:.6+Math.random()*2.2,a:.15+Math.random()*.55});for(let i=0;i<90;i++)dust.push({x:Math.random()*W,y:Math.random()*H,r:1+Math.random()*3,v:.2+Math.random()*.7,a:.08+Math.random()*.25});}
+initParticles();
+function drawSnow(t,heavy=false){for(const p of snow){p.y+=p.v*(heavy?2:1);p.x+=Math.sin(t*.0005+p.y*.01)*.5;if(p.y>H+5){p.y=-5;p.x=Math.random()*W;}ctx.globalAlpha=p.a*(heavy?1:.6);circle(p.x,p.y,p.r, '#e5f0f2');}ctx.globalAlpha=1;}
+function drawDust(t){for(const p of dust){p.y-=p.v*.35;p.x+=Math.sin(t*.0003+p.y*.01)*.35;if(p.y<0){p.y=H;p.x=Math.random()*W;}ctx.globalAlpha=p.a;circle(p.x,p.y,p.r,'#d9cba8');}ctx.globalAlpha=1;}
+function vignette(amount=.55){const g=ctx.createRadialGradient(W/2,H/2,150,W/2,H/2,1050);g.addColorStop(0,'#0000');g.addColorStop(1,`rgba(0,0,0,${amount})`);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
+function drawTree(x,y,s,col='#172b2b'){poly([[x-s*.25,y],[x,y-s],[x+s*.27,y]],col);poly([[x-s*.35,y-s*.42],[x,y-s*1.2],[x+s*.34,y-s*.42]],col);rr(x-s*.055,y,s*.11,s*.25,2,'#342f29');}
+function drawCity(t,white=false){ctx.fillStyle=gradient(0,H,'#e2e8e5','#798d8f');ctx.fillRect(0,0,W,H);if(white){ctx.fillStyle='#f4f6ef';ctx.fillRect(0,0,W,500);}else{ctx.fillStyle='#15232d';ctx.fillRect(0,0,W,520);circle(1560,180,70,'#d7d6c7');}
+ for(let i=0;i<15;i++){let x=i*145-40;let h=300+(i*71%260);poly([[x,600-h],[x+130,600-h],[x+130,650],[x,650]],i%2?'#253640':'#1c2c35');for(let j=0;j<4;j++)for(let k=0;k<3;k++){rr(x+14+k*34,620-h+j*48,12,22,1,white?'#a9b6b1':'#d3b67755');}}
+ ctx.fillStyle=gradient(580,H,'#687576','#262e31');ctx.fillRect(0,580,W,500);poly([[0,745],[W,700],[W,H],[0,H]],'#596365');line(0,790,W,760,'#aeb5ae55',5);
+ // damaged car
+ poly([[290,740],[365,675],[640,675],[710,735],[745,770],[260,770]],'#303b42');poly([[375,681],[430,635],[575,635],[635,681]],'#87999a');rr(300,745,390,26,8,'#20282d');circle(375,770,34,'#171c20');circle(640,770,34,'#171c20');
+ for(let i=0;i<6;i++)drawTree(90+i*330,680+(i%2)*40,90+(i%3)*25);
+ if(white){ctx.fillStyle='#ffffff';ctx.globalAlpha=.15;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
+}
+function drawBunker(t){ctx.fillStyle=gradient(0,H,'#17242a','#080f14');ctx.fillRect(0,0,W,H);poly([[0,120],[W,120],[1620,780],[300,780]],'#23333a');poly([[0,0],[1920,0],[1620,780],[300,780]],'#18272d');poly([[0,0],[300,0],[300,780],[0,1080]],'#0d171d');poly([[1620,0],[1920,0],[1920,1080],[1620,780]],'#0d171d');poly([[300,780],[1620,780],[1920,1080],[0,1080]],'#364044');
+ for(let i=0;i<7;i++){line(320+i*215,0,530+i*145,780,'#526167',5);line(0,220+i*75,1920,220+i*75,'#101a20',3);}
+ // ceiling pipes
+ for(let i=0;i<4;i++){ctx.strokeStyle='#718087';ctx.lineWidth=16-i*2;ctx.beginPath();ctx.moveTo(0,90+i*45);ctx.bezierCurveTo(500,120+i*40,1100,30+i*70,1920,100+i*30);ctx.stroke();}
+ // lamps
+ for(let x of [500,960,1420]){rr(x-80,135,160,18,8,'#d5d0a0');ctx.fillStyle='#d6d2aa22';ctx.fillRect(x-130,153,260,380);}
+ // door
+ rr(760,285,400,495,13,'#111b20','#718087',12);rr(790,315,340,435,7,'#26343a','#0b1115',8);line(960,315,960,750,'#10191e',5);circle(1085,535,22,'#b8a477');
+ // table + bed
+ rr(250,720,450,25,8,'#4b4237');rr(305,745,18,180,4,'#252a2a');rr(625,745,18,180,4,'#252a2a');rr(1300,720,360,30,6,'#3e494c');rr(1330,750,22,160,4,'#20292e');rr(1580,750,22,160,4,'#20292e');
+ // monitor
+ rr(1370,440,250,150,8,'#0b1217','#637179',5);rr(1388,458,214,112,4,'#233f47');text('CAM 01',1408,490,18,'#9dbac0');text('SIGNAL LOST',1408,530,22,'#d69e85');
+ drawDust(t); vignette(.65);
+}
+function drawPerson(x,y,scale,opts={}){const {jacket='#344c40',pants='#353b3c',skin='#d5a27e',hair='#493d36',backpack=true,pose='walk',facing=1,armUp=false}=opts;ctx.save();ctx.translate(x,y);ctx.scale(scale*facing,scale);let swing=Math.sin(elapsed*5)*.12;
+ // legs
+ let legA=pose==='run'?Math.sin(elapsed*10)*18:pose==='walk'?swing*70:0;line(-18,-100, -28+legA,-15,pants,28);line(20,-100,25-legA,-15,pants,28);poly([[-48,-18],[-10,-18],[-3,0],[-58,0]],'#4b4034');poly([[8,-18],[48,-18],[63,0],[7,0]],'#4b4034');
+ // backpack
+ if(backpack){rr(-58,-270,42,112,12,'#20282c','#657076',3);rr(-51,-260,28,30,6,'#36454b');}
+ // torso
+ poly([[-48,-285],[40,-285],[55,-120],[38,-95],[-35,-95],[-55,-130]],jacket,'#172225',4);line(-38,-260,-46,-140,'#ffffff22',7);
+ // arms
+ let raise=armUp?-70:pose==='run'?-15:Math.sin(elapsed*7)*14;line(-43,-265,-76,-190+raise,'#c38f6f',22);line(39,-265,72,-190-raise,'#c38f6f',22);circle(-76,-190+raise,12,skin);circle(72,-190-raise,12,skin);
+ // neck + head
+ rr(-13,-318,27,38,9,skin);circle(0,-365,58,skin);poly([[-56,-366],[-42,-420],[8,-427],[50,-398],[55,-369],[30,-388],[-5,-391],[-32,-379]],hair);
+ circle(20,-364,5,'#252728');line(13,-342,32,-341,'#704f43',3);if(opts.scar)line(-24,-384,-4,-374,'#9c5d52',4);
+ ctx.restore();}
+function drawDenis(x,y,s,pose='sit'){ctx.save();ctx.translate(x,y);ctx.scale(s, s); // burgundy jacket, seated/simplified
+ if(pose==='sit'){poly([[-74,-205],[62,-205],[100,-80],[38,-50],[-78,-65]],'#693b43','#211f25',5);rr(-31,-246,58,62,16,'#c18b6b');circle(0,-300,55,'#d6a184');poly([[-50,-306],[-40,-353],[15,-368],[50,-340],[51,-310],[15,-330],[-28,-329]],'#44342f');circle(21,-300,5,'#242525');line(12,-279,31,-278,'#875b50',3);line(-45,-165,-120,-104,'#c18b6b',20);line(45,-165,105,-108,'#c18b6b',20);rr(-120,-112,220,35,15,'#35383b');rr(-82,-74,155,18,8,'#453b34');
+ }else{drawPerson(0,0,s,{jacket:'#703d45',pants:'#282e32',hair:'#493630',backpack:false,pose:'idle'});}
+ // cracked watch on left wrist
+ line(-121,-111,-105,-103,'#b2b8b7',9);line(-121,-111,-111,-123,'#d9e0dc',2);ctx.restore();}
+function drawMonster(x,y,s,winged=false,phase=0){ctx.save();ctx.translate(x,y);ctx.scale(s,s);const wob=Math.sin(elapsed*8+phase)*5;
+ if(winged){ // enormous humanoid wings that flap in a heavy, uneven rhythm
+ const flap=Math.sin(elapsed*10+phase)*42;
+ poly([[-38,-270],[-180,-410-flap],[-290,-350-flap*.65],[-245,-210+flap*.2],[-110,-145],[-35,-180]],'#29383c','#0c1519',8);
+ poly([[40,-275],[185,-430-flap],[310,-345-flap*.65],[260,-205+flap*.2],[110,-142],[38,-180]],'#29383c','#0c1519',8);
+ for(let i=0;i<5;i++){line(-120-i*20,-300-i*10-flap*.35,-270-i*8,-365+i*34-flap*.65,'#64777b',5);line(120+i*20,-305-i*8-flap*.35,280+i*9,-365+i*30-flap*.65,'#64777b',5);}
+ }
+ // body distorted humanoid
+ poly([[-54,-285],[48,-292],[77,-135],[37,-92],[-40,-95],[-78,-155]],'#394447','#10191d',6);
+ circle(0,-340,55,'#586267','#11191d',6);poly([[-48,-362],[-25,-407],[24,-402],[52,-361],[22,-374],[-8,-352]],'#20292d');
+ // ribs / eyes
+ for(let i=0;i<4;i++)line(-28,-250+i*25,35,-240+i*25,'#121c20',7);
+ circle(-17,-345,7,'#e6b66c');circle(19,-345,7,'#e6b66c');poly([[-14,-318],[0,-335],[18,-316],[2,-300]],'#111819');
+ line(-62,-270,-120,-160,'#424e52',23);line(-120,-160,-145+wob,-100,'#424e52',17);line(58,-270,110,-180,'#424e52',23);line(110,-180,140+wob,-115,'#424e52',17);
+ for(let i=0;i<4;i++){line(-145+i*7,-100,-158+i*8,-75,'#b6c1bd',5);line(140+i*6,-115,152+i*7,-88,'#b6c1bd',5);}
+ line(-45,-115,-85,-22,'#303b3f',26);line(45,-115,88,-20,'#303b3f',26);poly([[-110,-25],[-62,-25],[-48,0],[-126,0]],'#1d272b');poly([[53,-25],[106,-25],[125,0],[60,0]],'#1d272b');
+ // bone spikes
+ for(let i=0;i<4;i++){poly([[-48+i*28,-278-i%2*12],[-42+i*28,-326-i%2*12],[-22+i*28,-278-i%2*12]],'#a0a8a3');}
+ ctx.restore();}
+function drawGunPOV(t){ // hands and pistol from player's perspective
+ ctx.save();ctx.translate(0,shake*1.4);poly([[720,1080],[790,850],[865,805],[1025,810],[1110,895],[1155,1080]],'#253d39');poly([[1190,1080],[1170,890],[1240,835],[1390,850],[1510,1080]],'#253d39');
+ // pistol body
+ poly([[800,835],[1000,820],[1090,855],[1080,920],[970,932],[930,1010],[865,1000],[875,925],[805,910]],'#141b20','#748087',7);rr(980,835,230,48,10,'#263239','#77828a',5);rr(1180,840,120,30,5,'#171e24');poly([[965,890],[1040,890],[1050,1080],[900,1080]],'#1d272d');
+ // supporting hand
+ poly([[650,900],[780,850],[900,880],[950,970],[860,1015],[715,1005]],'#c38d70');
+ if(flash>0){ctx.globalAlpha=flash;poly([[1240,845],[1410,710],[1360,880],[1500,950],[1310,915],[1270,1080],[1210,925],[1050,970]],'#fff3c2');circle(1290,865,135,'#fff5d2');ctx.globalAlpha=1;}
+ ctx.restore();}
+function drawMetro(t){ctx.fillStyle=gradient(0,H,'#263940','#080f14');ctx.fillRect(0,0,W,H);poly([[0,0],[600,170],[600,820],[0,1080]],'#18292e');poly([[1920,0],[1320,170],[1320,820],[1920,1080]],'#1a2c32');poly([[600,170],[1320,170],[1920,0],[0,0]],'#31474c');poly([[600,820],[1320,820],[1920,1080],[0,1080]],'#202d31');
+ for(let i=0;i<8;i++){let y=200+i*90;line(600,y,1320,y,'#53656a',3);line(600,y,0,y-190,'#35494f',3);line(1320,y,1920,y-190,'#35494f',3);}
+ // tracks
+ line(780,825,550,1080,'#9ca6a3',9);line(1140,825,1380,1080,'#9ca6a3',9);for(let i=0;i<12;i++){let y=850+i*25;line(760-i*15,y,1160+i*22,y,'#3e4a4e',7);}
+ // firelight refuge
+ const glow=ctx.createRadialGradient(960,680,10,960,680,320);glow.addColorStop(0,'#f2a84d99');glow.addColorStop(1,'#f2a84d00');ctx.fillStyle=glow;ctx.fillRect(500,250,920,680);
+}
+function drawScene(kind,t,p){ctx.save();let local=t;
+ if(kind==='teaser'){drawBunker(t);rr(760,285,400,495,13,'#111b20','#718087',12);let q=smooth(p);ctx.save();ctx.translate(0,0);poly([[790,315],[1130,315],[1130,750],[790,750]],gradient(315,750,'#fff8db','#d4e4df'));ctx.globalAlpha=q;circle(970,590,100,'#24343a');poly([[920,640],[1020,640],[1080,750],[860,750]],'#27373b');ctx.restore();drawPerson(630,850,1.05,{jacket:'#344d3e',pose:'run'});}
+ if(kind==='city'){drawCity(t,true);for(let i=0;i<8;i++)line(i*270,0,i*270+100,500,'#ffffff22',2);if(p>.58){ctx.fillStyle='#f5f6ee';ctx.globalAlpha=(p-.58)*.7;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}}
+ if(kind==='radio'){drawCity(t,false);rr(740,510,440,250,25,'#242b2d','#849196',8);rr(780,550,360,130,12,'#11191e');for(let i=0;i<35;i++){let x=790+i*10;line(x,610+Math.sin(i*4+t*.03)*35,x,610+Math.sin(i*4+t*.03)*-22,'#9fc5cb',3);}drawPerson(1330,900,1.18,{jacket:'#55524a',backpack:false,pose:'idle'});if(p>.5){ctx.globalAlpha=p;circle(1330,545,58,'#c9987e');rr(1265,590,140,210,30,'#55524a');ctx.globalAlpha=1;}}
+ if(kind==='bunker'||kind==='bunkerMonster'||kind==='montage'||kind==='repair'||kind==='whiteNoise'||kind==='denisDoor'||kind==='reveal'||kind==='shot'||kind==='transform'){drawBunker(t);if(kind==='bunker'||kind==='montage'||kind==='repair'||kind==='whiteNoise'){drawPerson(960,950,1.1,{jacket:'#354f40',pose:kind==='repair'?'idle':'walk'});}if(kind==='bunkerMonster'){drawPerson(920,950,1,{jacket:'#354f40',pose:'run'});let mx=1280-520*smooth(p);drawMonster(mx,935,1.0,false,t);if(p>.7){flash=0;}}
+ if(kind==='repair'){rr(1230,440,280,250,12,'#11191e','#77838a',6);for(let i=0;i<8;i++)line(1260,480+i*22,1470,480+i*22,i%2?'#bd7957':'#6c9b9a',5);if(p>.62){for(let i=0;i<14;i++){let x=1260+Math.random()*210,y=470+Math.random()*200;circle(x,y,3,'#ffcb69');}}}
+ if(kind==='whiteNoise'){staticLevel=.35+Math.sin(t*.04)*.18;ctx.fillStyle=`rgba(210,225,220,${.08+Math.sin(t*.04)*.05})`;ctx.fillRect(0,0,W,H);if(p>.65){ctx.fillStyle='#05090d';ctx.fillRect(0,0,W,H);drawPerson(960,950,1,{jacket:'#354f40',pose:'idle'});}}
+ if(kind==='denisDoor'){drawPerson(930,945,1.05,{jacket:'#354f40',pose:'idle'});if(p>.27)drawDenis(1270,950,.95,'sit');}
+ if(kind==='reveal'){drawPerson(850,945,1,{jacket:'#354f40',pose:'idle'});drawDenis(1260,950,.95,'sit');if(p>.55){circle(960,505,9,'#d9ae75');}}
+ if(kind==='shot'){drawBunker(t);drawDenis(1000,920,1.15,'sit');drawGunPOV(t);if(p<.1){ctx.fillStyle='#000';ctx.globalAlpha=1-p*10;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;} }
+ if(kind==='transform'){drawPerson(620,950,.95,{jacket:'#354f40',pose:'idle'});let sc=1.05+Math.sin(p*Math.PI)*.15;drawMonster(1190,945,sc,false,t);if(p>.7){ctx.globalAlpha=(p-.7)*2;ctx.fillStyle='#070b0e';ctx.fillRect(1040,870,350,110);ctx.globalAlpha=1;}}
+ }
+ if(kind==='pack'){drawBunker(t);drawPerson(980,950,1.1,{jacket:'#354f40',pose:'walk'});rr(1210,475,270,220,12,'#10191e','#65747b',5);text('20 METРОВ',1345,535,28,'#d8c9a7','center',800);text('МИМИКИ',1345,585,23,'#a9c4c9','center');}
+ if(kind==='outside'||kind==='search'||kind==='ambush'||kind==='winged'){drawCity(t,false);drawSnow(t,true);if(kind==='outside'){drawPerson(960,960,1.15,{jacket:'#354f40',pose:'idle'});rr(1060,610,115,55,18,'#151d22','#94a5a8',4);line(1080,620,1080,655,'#9bbbc3',5);}
+ if(kind==='search'){drawPerson(950+Math.sin(t*.001)*120,960,1.05,{jacket:'#354f40',pose:'walk'});for(let i=0;i<7;i++){circle(310+i*205,860+(i%2)*24,8,'#20292e');} }
+ if(kind==='ambush'){drawPerson(1000,960,1.1,{jacket:'#354f40',pose:'walk'});drawMonster(1110,940,1.0,false,t);if(p>.75){shake=7;}}
+ if(kind==='winged'){drawPerson(800,960,1.05,{jacket:'#354f40',pose:'run'});let xx=1470-750*smooth(p);drawMonster(xx,610+Math.sin(t*.008)*45,1.1,true,t);if(p>.72){shake=9;}}
+ }
+ if(kind==='metro'||kind==='reunion'||kind==='cliff'){drawMetro(t);if(kind==='metro'){drawPerson(950,950,1.0,{jacket:'#354f40',pose:'walk'});}
+ if(kind==='reunion'){drawPerson(650,950,.95,{jacket:'#354f40',pose:'idle'});drawDenis(1120,930,1.0,'sit');rr(880,825,170,18,5,'#534332');for(let i=0;i<9;i++){let yy=815-Math.random()*110;poly([[960+(Math.random()-.5)*25,yy],[930+(Math.random()-.5)*35,yy+40],[980+(Math.random()-.5)*35,yy+25]],'#ffb34f');}circle(960,690,180,'#e59d4a0c');}
+ if(kind==='cliff'){drawDenis(1040,930,1,'sit');drawPerson(600,960,1,{jacket:'#354f40',pose:'idle'});let s=.5+smooth(p)*1.5;drawMonster(1100-s*120,500+s*210,s,true,t);if(p>.7){ctx.fillStyle='#edf3ef';ctx.globalAlpha=(p-.7)*2;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}}
+ }
+ // scene-specific atmosphere
+ if(['city','radio','outside','search','ambush','winged'].includes(kind))vignette(.45);else vignette(.62);
+ // subtle film grain
+ if(['shot','whiteNoise'].includes(kind)){for(let i=0;i<120;i++){ctx.globalAlpha=Math.random()*.12;ctx.fillStyle='#fff';ctx.fillRect(Math.random()*W,Math.random()*H,2,2);}ctx.globalAlpha=1;}
+ ctx.restore();}
+function drawOverlay(s,p,t){ // cinematic title and subtitles
+ if(s.kind==='city'&&p<.25){rr(60,105,410,64,5,'#07101799');text('17 ОКТЯБРЯ  ·  03:17',88,149,30,'#f0eee6','left',800);}
+ if(s.kind==='whiteNoise'){text(`${Math.min(10,Math.floor(p*13)+1)}`,W/2,250,92,'#e8e9df','center',900);}
+ if(s.kind==='shot'){text('POV · АРТЁМ',W-90,125,22,'#bac8cb','right',700);}
+ if(s.kind==='pack'){text('20 М',W/2,300,58,'#d5c5a0','center',900);}
+ if(s.kind==='outside'&&p>.65){text('−20 °C',W-100,160,42,'#d9e7e9','right',800);}
+ if(s.kind==='reunion'){text('НАКОНЕЦ-ТО',W/2,230,54,'#ecd6ae','center',900);}
+ if(subtitles){const caption=captionFor(s,p);if(caption){let lines=wrapText(caption,74);let boxH=lines.length*40+46;rr(210,H-boxH-70,1500,boxH,12,'#05090dd9','#ffffff20',2);lines.forEach((l,i)=>text(l,W/2,H-92-(lines.length-1-i)*40,31,'#f6f7f4','center',700));}}
+ if(flash>0){ctx.fillStyle=`rgba(255,245,218,${flash})`;ctx.fillRect(0,0,W,H);}
+}
+function captionFor(s,p){if(s.kind==='shot'&&p<.48)return '— Это не ты.';if(s.kind==='reunion'&&p>.58)return 'АРТЁМ: «Наконец-то». ';if(s.kind==='denisDoor'&&p>.55)return 'ДЕНИС: «Открой. Это я». ';return s.caption;}
+function wrapText(str,max){const words=str.split(' '),out=[];let line='';for(const w of words){if((line+' '+w).trim().length>max){out.push(line);line=w;}else line=(line+' '+w).trim();}if(line)out.push(line);return out;}
+function sceneAt(t){let acc=0;for(let i=0;i<scenes.length;i++){if(t<acc+scenes[i].dur)return {i,local:t-acc,p:(t-acc)/scenes[i].dur};acc+=scenes[i].dur;}return {i:scenes.length-1,local:scenes.at(-1).dur,p:1};}
+function render(ts){if(!running)return;if(!paused){if(!lastTs)lastTs=ts;let dt=Math.min(.05,(ts-lastTs)/1000);elapsed+=dt;lastTs=ts;}else lastTs=ts;
+ if(elapsed>=total){elapsed=total;paused=true;stage.classList.add('paused');pauseBtn.textContent='▶';}
+ const at=sceneAt(elapsed);if(at.i!==sceneIndex){sceneIndex=at.i;enterScene(scenes[sceneIndex]);}
+ if(scenes[at.i].kind==='shot' && at.local>3.6 && !gunFired){gunFired=true;sfx('gun');shake=18;flash=1;}
+ shake*=.86;if(shake<.15)shake=0;flash*=.84;if(flash<.015)flash=0;
+ ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,W,H);ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);drawScene(scenes[at.i].kind,elapsed,at.p);drawOverlay(scenes[at.i],at.p,elapsed);ctx.restore();
+ sceneLabel.textContent=scenes[at.i].name;progressFill.style.width=(elapsed/total*100)+'%';
+ requestAnimationFrame(render);
+}
+function enterScene(s){staticLevel=0;headphoneMix=0;speakLine(s.caption);switch(s.kind){case'teaser':sfx('metal');break;case'city':sfx('deep');break;case'radio':sfx('static');break;case'bunkerMonster':sfx('scrape');setTimeout(()=>{if(running&&!paused&&scenes[sceneAt(elapsed).i]?.kind==='bunkerMonster')sfx('impact');},6000);break;case'repair':sfx('electric');break;case'whiteNoise':sfx('static');break;case'denisDoor':sfx('knock');break;case'shot':gunFired=false;break;case'transform':sfx('transform');break;case'outside':headphoneMix=1;sfx('windMuffled');break;case'ambush':sfx('thudMuffled');shake=8;break;case'winged':sfx('wingMuffled');shake=7;break;case'metro':sfx('metroMuffled');break;case'reunion':sfx('fire');break;case'cliff':sfx('wingMuffled');shake=12;break;}}
+// Minimal procedural sound design: no external audio files or network requests.
+function ensureAudio(){if(audioCtx)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;audioCtx=new AC();master=audioCtx.createGain();master.gain.value=muted?0:.55;master.connect(audioCtx.destination);}
+function tone(freq,dur,type='sine',vol=.15,slide=0){if(!audioCtx||muted)return;const now=audioCtx.currentTime;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.setValueAtTime(freq,now);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(10,freq+slide),now+dur);g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(vol,now+.025);g.gain.exponentialRampToValueAtTime(.0001,now+dur);o.connect(g);g.connect(master);o.start(now);o.stop(now+dur+.03);}
+function noise(dur,vol=.1,filter=1600){if(!audioCtx||muted)return;const n=Math.floor(audioCtx.sampleRate*dur),buf=audioCtx.createBuffer(1,n,audioCtx.sampleRate),data=buf.getChannelData(0);for(let i=0;i<n;i++)data[i]=Math.random()*2-1;const src=audioCtx.createBufferSource(),f=audioCtx.createBiquadFilter(),g=audioCtx.createGain();src.buffer=buf;f.type='lowpass';f.frequency.value=filter;g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+dur);src.connect(f);f.connect(g);g.connect(master);src.start();}
+function sfx(type){if(!audioCtx||muted)return;switch(type){case'metal':noise(.9,.22,800);tone(75,.8,'sawtooth',.16,-45);break;case'deep':tone(48,2,'sine',.15,-15);break;case'static':noise(2.4,.12,5000);tone(110,.9,'sawtooth',.035,-35);break;case'scrape':noise(1.2,.22,1200);tone(65,.8,'triangle',.12,-20);break;case'impact':tone(58,.45,'sine',.3,-35);noise(.28,.2,500);break;case'electric':tone(180,.15,'square',.08,360);noise(.4,.1,3000);break;case'knock':[0,.32,.64].forEach(v=>setTimeout(()=>{tone(90,.2,'triangle',.28,-35);noise(.13,.12,550);},v*1000));break;case'gun':noise(.5,.5,2400);tone(62,.55,'sawtooth',.42,-40);setTimeout(()=>tone(45,.9,'sine',.18,-25),120);break;case'transform':noise(1.3,.22,900);tone(80,1.2,'sawtooth',.2,110);break;case'windMuffled':noise(2.2,.035,180);break;case'thudMuffled':tone(65,.28,'sine',.12,-24);break;case'wingMuffled':noise(.65,.06,300);tone(42,.5,'triangle',.08,-15);break;case'metroMuffled':tone(55,2,'sine',.08,-10);break;case'fire':noise(2,.07,1200);tone(110,.6,'sine',.04,20);break;}}
+function speakLine(line){
+ if(!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance==='undefined' || muted)return;
+ try{speechSynthesis.cancel();const clean=line.replace(/^ДЕНИС:\s*/,'').replace(/^АРТЁМ:\s*/,'').replace(/[«»]/g,'').replace(/^—\s*/,'');const u=new SpeechSynthesisUtterance(clean);u.lang='ru-RU';u.rate=.94;u.pitch=.88;u.volume=.9;const voices=speechSynthesis.getVoices();const ru=voices.find(v=>v.lang&&v.lang.toLowerCase().startsWith('ru'));if(ru)u.voice=ru;speechSynthesis.speak(u);}catch(e){}
+}
+function start(){ensureAudio();if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();running=true;paused=false;elapsed=0;sceneIndex=-1;lastTs=0;startScreen.classList.add('hidden');stage.classList.add('playing');stage.classList.remove('paused');pauseBtn.textContent='Ⅱ';requestAnimationFrame(render);}
+function togglePause(){if(!running)return;paused=!paused;stage.classList.toggle('paused',paused);pauseBtn.textContent=paused?'▶':'Ⅱ';if(!paused){lastTs=0;requestAnimationFrame(render);}}
+function toggleMute(){muted=!muted;if(master&&audioCtx)master.gain.setTargetAtTime(muted?0:.55,audioCtx.currentTime,.04);if(muted&&'speechSynthesis' in window)speechSynthesis.cancel();soundBtn.textContent=muted?'ЗВУК ВЫКЛ':'ЗВУК ВКЛ';}
+function restart(){running=false;paused=false;elapsed=0;sceneIndex=-1;startScreen.classList.remove('hidden');stage.classList.remove('playing','paused');progressFill.style.width='0%';sceneLabel.textContent='ПИЛОТНАЯ СЕРИЯ';}
+document.getElementById('startBtn').addEventListener('click',start);
+pauseBtn.addEventListener('click',togglePause);
+soundBtn.addEventListener('click',toggleMute);
+subBtn.addEventListener('click',()=>{subtitles=!subtitles;subBtn.textContent=subtitles?'СУБТИТРЫ':'БЕЗ ТЕКСТА';});
+document.getElementById('restartBtn').addEventListener('click',restart);
+document.getElementById('progress').addEventListener('click',e=>{if(!running)return;const r=e.currentTarget.getBoundingClientRect();elapsed=clamp((e.clientX-r.left)/r.width,0,1)*total;sceneIndex=-1;if(paused){paused=false;stage.classList.remove('paused');pauseBtn.textContent='Ⅱ';requestAnimationFrame(render);}lastTs=0;});
+// Draw a quiet poster behind the start button.
+ctx.fillStyle=gradient(0,H,'#20343a','#080d12');ctx.fillRect(0,0,W,H);drawBunker(0);drawPerson(740,950,1.12,{jacket:'#354f40',pose:'idle'});drawMonster(1300,940,1.0,false,0);vignette(.72);
+})();
+</script>
+</body>
+</html>
